@@ -156,46 +156,4 @@ function getNextTimeText(
   }
 }
 
-// 保存API配置到localStorage
-export function saveApiConfigToLocalStorage(config: Partial<Pick<
-  { apiUrl: string, apiKey: string, apiModel: string, apiTimeout: string, saveApiConfig: boolean },
-  'apiUrl' | 'apiKey' | 'apiModel' | 'apiTimeout' | 'saveApiConfig'
->>): void {
-  if (window.localStorage) {
-    localStorage.setItem('apiConfig', JSON.stringify(config));
-  }
-}
 
-// 从localStorage加载API配置
-export function loadApiConfig(): Partial<{ 
-  apiUrl: string, 
-  apiKey: string, 
-  apiModel: string, 
-  apiTimeout: string, 
-  saveApiConfig: boolean 
-}> {
-  if (window.localStorage) {
-    const saved = localStorage.getItem('apiConfig');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('解析保存的API配置出错:', e);
-      }
-    }
-  }
-  return {
-    apiUrl: '',
-    apiKey: '',
-    apiModel: '',
-    apiTimeout: '',
-    saveApiConfig: false
-  };
-}
-
-// 清除API配置
-export function clearApiConfig(): void {
-  if (window.localStorage) {
-    localStorage.removeItem('apiConfig');
-  }
-}

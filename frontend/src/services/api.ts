@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AnalyzeRequest, TestApiRequest, TestApiResponse, SearchResult, LoginRequest, LoginResponse } from '@/types';
+import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse } from '@/types';
 
 // API前缀
 const API_PREFIX = '/api';
@@ -61,6 +61,19 @@ export const apiService = {
     }
   },
 
+  // 全局搜索
+  searchGlobal: async (keyword: string, marketType: string = 'ALL'): Promise<SearchResult[]> => {
+    try {
+      const response = await axiosInstance.get('/search_global', {
+        params: { keyword, market_type: marketType }
+      });
+      return response.data.results || [];
+    } catch (error) {
+      console.error('全局搜索时出错:', error);
+      return [];
+    }
+  },
+
   // 检查认证状态
   checkAuth: async (): Promise<boolean> => {
     try {
@@ -87,22 +100,6 @@ export const apiService = {
     });
   },
 
-  // 测试API连接
-  testApiConnection: async (request: TestApiRequest): Promise<TestApiResponse> => {
-    try {
-      const response = await axiosInstance.post('/test_api_connection', request);
-      return response.data;
-    } catch (error: any) {
-      if (error.response) {
-        return error.response.data;
-      }
-      return {
-        success: false,
-        message: error.message || '连接失败'
-      };
-    }
-  },
-
   // 搜索美股
   searchUsStocks: async (keyword: string): Promise<SearchResult[]> => {
     try {
@@ -116,11 +113,37 @@ export const apiService = {
     }
   },
 
+  // 搜索 A 股
+  searchAShares: async (keyword: string): Promise<SearchResult[]> => {
+    try {
+      const response = await axiosInstance.get('/search_a_shares', {
+        params: { keyword }
+      });
+      return response.data.results || [];
+    } catch (error) {
+      console.error('搜索 A 股时出错:', error);
+      return [];
+    }
+  },
+
+  // 搜索港股
+  searchHKShares: async (keyword: string): Promise<SearchResult[]> => {
+    try {
+      const response = await axiosInstance.get('/search_hk_shares', {
+        params: { keyword }
+      });
+      return response.data.results || [];
+    } catch (error) {
+      console.error('搜索港股时出错:', error);
+      return [];
+    }
+  },
+
   // 搜索基金
-  searchFunds: async (keyword: string): Promise<SearchResult[]> => {
+  searchFunds: async (keyword: string, marketType: string = 'ETF'): Promise<SearchResult[]> => {
     try {
       const response = await axiosInstance.get('/search_funds', {
-        params: { keyword }
+        params: { keyword, market_type: marketType }
       });
       return response.data.results || [];
     } catch (error) {
@@ -128,8 +151,8 @@ export const apiService = {
       return [];
     }
   },
-  
-  // 获取配置
+
+  // 获取公告配置
   getConfig: async () => {
     try {
       const response = await axiosInstance.get('/config');
@@ -137,10 +160,7 @@ export const apiService = {
     } catch (error) {
       console.error('获取配置时出错:', error);
       return {
-        announcement: '',
-        default_api_url: '',
-        default_api_model: '',
-        default_api_timeout: '60'
+        announcement: ''
       };
     }
   },
@@ -154,6 +174,43 @@ export const apiService = {
       console.error('检查是否需要登录时出错:', error);
       // 默认为需要登录，确保安全
       return true;
+    }
+  },
+
+  // 获取K线数据
+  getKlineData: async (code: string, marketType: string = 'A', days: number = 100) => {
+    try {
+      const response = await axiosInstance.get(`/kline/${code}`, {
+        params: { market_type: marketType, days }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('获取K线数据时出错:', error);
+      return { error: '获取K线数据失败' };
+    }
+  },
+
+  // 获取文章列表
+  getArticles: async (limit: number = 20, offset: number = 0, q?: string) => {
+    try {
+      const response = await axiosInstance.get('/articles', {
+        params: { limit, offset, q }
+      });
+      return response.data.articles || [];
+    } catch (error) {
+      console.error('获取文章列表时出错:', error);
+      return [];
+    }
+  },
+
+  // 获取文章详情
+  getArticleDetail: async (articleId: number) => {
+    try {
+      const response = await axiosInstance.get(`/articles/${articleId}`);
+      return response.data;
+    } catch (error) {
+      console.error('获取文章详情时出错:', error);
+      return null;
     }
   }
 };

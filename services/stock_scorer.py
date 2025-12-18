@@ -18,60 +18,85 @@ class StockScorer:
     def calculate_score(self, df: pd.DataFrame) -> int:
         """
         计算股票评分（满分100分）
-        
-        Args:
-            df: 包含技术指标的DataFrame
-            
-        Returns:
-            股票评分（0-100的整数）
+        更加细致地评估技术面状态
         """
         try:
-            # 使用最新的数据点进行评分
             latest = df.iloc[-1]
+            prev = df.iloc[-2] if len(df) > 1 else latest
             
-            # 初始得分为0
             score = 0
             
-            # 移动平均线评分（25分）
-            if latest['MA5'] > latest['MA20'] > latest['MA60']:
-                # 短期、中期和长期均线呈多头排列
-                score += 25
-            elif latest['MA5'] > latest['MA20']:
-                # 短期均线在中期均线之上
-                score += 15
-            elif latest['Close'] > latest['MA20']:
-                # 股价在中期均线之上
-                score += 10
-                
-            # RSI评分（25分）
-            rsi = latest['RSI']
-            if 45 <= rsi <= 55:
-                # RSI在中间区域，可能即将爆发
-                score += 15
-            elif 55 < rsi < 70:
-                # RSI在强势区域但未超买
-                score += 25
-            elif 30 < rsi < 45:
-                # RSI在弱势区域但未超卖
-                score += 10
-            elif rsi >= 70:
-                # RSI超买
-                score += 5
-            elif rsi <= 30:
-                # RSI超卖
-                score += 15
-                
-            # MACD得分（20分）
-            if latest['MACD'] > latest['Signal']:
-                score += 20
-                
-            # 成交量得分（30分）
-            if latest['Volume_Ratio'] > 1.5:
+            # 1. 均线系统评分 (30分) - 趋势强度
+            ma5, ma20, ma60 = latest['MA5'], latest['MA20'], latest['MA60']
+            close = latest['Close']
+            
+            if ma5 > ma20 > ma60: # 多头排列
                 score += 30
-            elif latest['Volume_Ratio'] > 1:
+            elif close > ma5 > ma20: # 股价站上短期均线且排布尚可
+                score += 25
+            elif close > ma20: # 股价站稳中线
                 score += 15
+            elif ma5 > ma20: # 均线金叉
+                score += 10
+            elif close < ma20 < ma60: # 空头趋势
+                score += 0
+            else:
+                score += 5 # 默认分
                 
-            return score
+            # 2. RSI 相对强弱 (20分) - 超买超卖与蓄势
+            rsi = latest['RSI']
+            if 50 <= rsi <= 65: # 强势区域
+                score += 20
+            elif 40 <= rsi < 50: # 蓄势区域
+                score += 15
+            elif 65 < rsi <= 80: # 超买预警
+                score += 10
+            elif rsi < 30: # 严重超卖，可能反弹
+                score += 12
+            elif rsi > 80: # 严重超买，风险极高
+                score += 3
+            else:
+                score += 5
+                
+            # 3. MACD 指标 (20分) - 动力方向
+            macd, signal, hist = latest['MACD'], latest['Signal'], latest['Histogram']
+            prev_hist = prev['Histogram']
+            
+            if macd > 0 and signal > 0 and macd > signal: # 强势区金叉
+                score += 20
+            elif macd > signal: # 普通金叉
+                score += 15
+            elif hist > prev_hist: # 能量柱增长 (动力增强)
+                score += 10
+            elif macd < signal: # 死叉
+                score += 0
+            else:
+                score += 5
+                
+            # 4. 成交量配合 (20分) - 意愿强度
+            vol_ratio = latest['Volume_Ratio']
+            if 1.5 < vol_ratio < 3.0: # 且不过分放量
+                score += 20
+            elif 1.0 < vol_ratio <= 1.5: # 稳步放量
+                score += 15
+            elif vol_ratio > 4.0: # 天量，风险增加
+                score += 5
+            elif vol_ratio < 0.5: # 缩量
+                score += 5
+            else:
+                score += 10
+                
+            # 5. 波动率与位置 (10分) - 风险补偿
+            volatility = latest.get('Volatility', 5)
+            if volatility < 5: # 低波稳健
+                score += 10
+            elif volatility < 10:
+                score += 7
+            else:
+                score += 3
+                
+            # 最终分数修正
+            return min(max(int(score), 0), 100)
             
         except Exception as e:
             logger.error(f"计算评分时出错: {str(e)}")

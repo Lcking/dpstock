@@ -24,10 +24,10 @@ WORKDIR /app
 
 # 安装系统依赖和构建依赖
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    ca-certificates \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+  libgl1 \
+  ca-certificates \
+  build-essential \
+  && rm -rf /var/lib/apt/lists/*
 
 # 复制项目文件
 COPY requirements.txt /app/
@@ -43,9 +43,9 @@ WORKDIR /app
 
 # 安装运行时依赖
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+  libgl1 \
+  ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 # 从构建阶段复制Python依赖
 COPY --from=backend-builder /root/.local /root/.local

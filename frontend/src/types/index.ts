@@ -31,12 +31,12 @@ export interface StockInfo {
   error?: string;
   score?: number;
   recommendation?: string;
-  price_change?: number;
+  priceChange?: number;
   rsi?: number;
-  ma_trend?: string;
-  macd_signal?: string;
-  volume_status?: string;
-  analysis_date?: string;
+  maTrend?: string;
+  macdSignal?: string;
+  volumeStatus?: string;
+  analysisDate?: string;
 }
 
 export interface SearchResult {
@@ -97,11 +97,10 @@ export interface StreamAnalysisUpdate {
   name?: string;
   price?: number;
   change_percent?: number;
-  price_change_value?: number;
+  price_change?: number;
   market_value?: number;
   score?: number;
   recommendation?: string;
-  price_change?: number;
   rsi?: number;
   ma_trend?: string;
   macd_signal?: string;

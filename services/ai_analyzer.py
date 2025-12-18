@@ -18,34 +18,30 @@ class AIAnalyzer:
     负责调用AI API对股票数据进行分析
     """
     
-    def __init__(self, custom_api_url=None, custom_api_key=None, custom_api_model=None, custom_api_timeout=None):
+    def __init__(self):
         """
         初始化AI分析服务
-        
-        Args:
-            custom_api_url: 自定义API URL
-            custom_api_key: 自定义API密钥
-            custom_api_model: 自定义API模型
-            custom_api_timeout: 自定义API超时时间
+        使用环境变量配置
         """
         # 加载环境变量
         load_dotenv()
         
-        # 设置API配置
-        self.API_URL = custom_api_url or os.getenv('API_URL')
-        self.API_KEY = custom_api_key or os.getenv('API_KEY')
-        self.API_MODEL = custom_api_model or os.getenv('API_MODEL', 'gpt-3.5-turbo')
-        self.API_TIMEOUT = int(custom_api_timeout or os.getenv('API_TIMEOUT', 60))
+        # 设置API配置（使用环境变量）
+        self.API_URL = os.getenv('API_URL')
+        self.API_KEY = os.getenv('API_KEY')
+        self.API_MODEL = os.getenv('API_MODEL', 'deepseek-reasoner')
+        self.API_TIMEOUT = int(os.getenv('API_TIMEOUT', 60))
         
         logger.debug(f"初始化AIAnalyzer: API_URL={self.API_URL}, API_MODEL={self.API_MODEL}, API_KEY={'已提供' if self.API_KEY else '未提供'}, API_TIMEOUT={self.API_TIMEOUT}")
     
-    async def get_ai_analysis(self, df: pd.DataFrame, stock_code: str, market_type: str = 'A', stream: bool = False) -> AsyncGenerator[str, None]:
+    async def get_ai_analysis(self, df: pd.DataFrame, stock_code: str, stock_name: str = "", market_type: str = 'A', stream: bool = False) -> AsyncGenerator[str, None]:
         """
         对股票数据进行AI分析
         
         Args:
             df: 包含技术指标的DataFrame
             stock_code: 股票代码
+            stock_name: 股票名称
             market_type: 市场类型，默认为'A'股
             stream: 是否使用流式响应
             
@@ -53,7 +49,8 @@ class AIAnalyzer:
             异步生成器，生成分析结果字符串
         """
         try:
-            logger.info(f"开始AI分析 {stock_code}, 流式模式: {stream}")
+            name_display = f"{stock_name} ({stock_code})" if stock_name else stock_code
+            logger.info(f"开始AI分析 {name_display}, 流式模式: {stream}")
             
             # 提取关键技术指标
             latest_data = df.iloc[-1]
@@ -88,9 +85,12 @@ class AIAnalyzer:
             }
             
             # 根据市场类型调整分析提示
+            base_prompt = f"你是一个专业的股票分析师。请对 **{name_display}** 进行深入的技术分析。"
+            
             if market_type in ['ETF', 'LOF']:
                 prompt = f"""
-                分析基金 {stock_code}：
+                {base_prompt}
+                分析基金 {name_display}：
 
                 技术指标概要：
                 {technical_summary}
@@ -110,7 +110,8 @@ class AIAnalyzer:
                 """
             elif market_type == 'US':
                 prompt = f"""
-                分析美股 {stock_code}：
+                {base_prompt}
+                分析美股 {name_display}：
 
                 技术指标概要：
                 {technical_summary}
@@ -130,7 +131,8 @@ class AIAnalyzer:
                 """
             elif market_type == 'HK':
                 prompt = f"""
-                分析港股 {stock_code}：
+                {base_prompt}
+                分析港股 {name_display}：
 
                 技术指标概要：
                 {technical_summary}
@@ -150,7 +152,8 @@ class AIAnalyzer:
                 """
             else:  # A股
                 prompt = f"""
-                分析A股 {stock_code}：
+                {base_prompt}
+                分析A股 {name_display}：
 
                 技术指标概要：
                 {technical_summary}
@@ -229,75 +232,48 @@ class AIAnalyzer:
                         
                         async for chunk in response.aiter_text():
                             if chunk:
-                                # 分割多行响应（处理某些API可能在一个chunk中返回多行）
                                 lines = chunk.strip().split('\n')
-                                for line in lines:
-                                    line = line.strip()
+                                for raw_line in lines:
+                                    line = raw_line.strip()
                                     if not line:
                                         continue
-                                        
-                                    # 处理以data:开头的行
-                                    if line.startswith("data: "):
-                                        line = line[6:]  # 去除"data: "前缀
-                                     
+
+                                    # 确保统一去除 data: 前缀
+                                    while line.startswith("data: "):
+                                        line = line[len("data: "):]
+
                                     if line == "[DONE]":
                                         logger.debug("收到流结束标记 [DONE]")
                                         continue
-                                        
+
                                     try:
-                                        # 处理特殊错误情况
-                                        if "error" in line.lower():
-                                            error_msg = line
-                                            try:
-                                                error_data = json.loads(line)
-                                                error_msg = error_data.get("error", line)
-                                            except:
-                                                pass
-                                            
-                                            logger.error(f"流式响应中收到错误: {error_msg}")
-                                            yield json.dumps({
-                                                "stock_code": stock_code,
-                                                "error": f"流式响应错误: {error_msg}",
-                                                "status": "error"
-                                            })
-                                            continue
-                                        
-                                        # 尝试解析JSON
                                         chunk_data = json.loads(line)
-                                        
-                                        # 检查是否有finish_reason
+
+                                        # 检查是否有 finish_reason（一般是最后一次标记）
                                         finish_reason = chunk_data.get("choices", [{}])[0].get("finish_reason")
                                         if finish_reason == "stop":
-                                            logger.debug("收到finish_reason=stop，流结束")
+                                            logger.debug("收到 finish_reason=stop，流结束")
                                             continue
-                                        
-                                        # 获取delta内容
+
+                                        # 解析 delta
                                         delta = chunk_data.get("choices", [{}])[0].get("delta", {})
-                                        
-                                        # 检查delta是否为空对象
-                                        if not delta or delta == {}:
-                                            logger.debug("收到空的delta对象，跳过")
-                                            continue
-                                        
                                         content = delta.get("content", "")
-                                        
+
+                                        logger.info(f"AI返回delta内容: {content}")
+
                                         if content:
                                             chunk_count += 1
                                             buffer += content
                                             collected_messages.append(content)
-                                            
-                                            # 直接发送每个内容片段，不累积
+
                                             yield json.dumps({
                                                 "stock_code": stock_code,
                                                 "ai_analysis_chunk": content,
                                                 "status": "analyzing"
                                             })
                                     except json.JSONDecodeError:
-                                        # 记录解析错误并尝试恢复
-                                        logger.error(f"JSON解析错误，块内容: {line}")
-                                        
-                                        # 如果是特定错误模式，处理它
-                                        if "streaming failed after retries" in line.lower():
+                                        logger.error(f"JSON解析错误，块内容: {raw_line}")
+                                        if "streaming failed after retries" in raw_line.lower():
                                             logger.error("检测到流式传输失败")
                                             yield json.dumps({
                                                 "stock_code": stock_code,
@@ -306,6 +282,7 @@ class AIAnalyzer:
                                             })
                                             return
                                         continue
+
                         
                         logger.info(f"AI流式处理完成，共收到 {chunk_count} 个内容片段，总长度: {len(buffer)}")
                         
@@ -326,6 +303,15 @@ class AIAnalyzer:
                         
                         # 计算分析评分
                         score = self._calculate_analysis_score(full_content, technical_summary)
+                        
+                        # 补发完整分析内容，供前端展示
+                        if full_content:
+                            yield json.dumps({
+                                "stock_code": stock_code,
+                                "analysis": full_content,
+                                "status": "completed"
+                                
+                            })
                         
                         # 发送完成状态和评分、建议
                         yield json.dumps({

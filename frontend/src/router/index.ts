@@ -1,8 +1,10 @@
-import { createRouter, createWebHashHistory } from 'vue-router';
+import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 import { apiService } from '@/services/api';
 import StockAnalysisApp from '@/components/StockAnalysisApp.vue';
 import LoginPage from '@/components/LoginPage.vue';
+import AnalysisList from '@/components/AnalysisList.vue';
+import ArticleDetail from '@/components/ArticleDetail.vue';
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -18,42 +20,54 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/analysis',
+    name: 'AnalysisList',
+    component: AnalysisList,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/analysis/:id',
+    name: 'ArticleDetail',
+    component: ArticleDetail,
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }
 ];
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes
 });
 
 // 全局前置守卫
 router.beforeEach(async (to, from, next) => {
   console.log(`路由跳转: 从 ${from.path} 到 ${to.path}`);
-  
+
   // 如果已经在登录页面，直接通过
   if (to.path === '/login') {
     next();
     return;
   }
-  
+
   // 检查路由是否需要认证
   if (to.matched.some(record => record.meta.requiresAuth)) {
     console.log('当前路由需要认证');
-    
+
     try {
       // 先检查系统是否需要登录
       const requireLogin = await apiService.checkNeedLogin();
       console.log('系统是否需要登录:', requireLogin);
-      
+
       if (!requireLogin) {
         // 系统不需要登录，直接通过
         console.log('系统不需要登录，允许访问');
         next();
         return;
       }
-      
+
       // 系统需要登录，检查本地是否有token
       const token = localStorage.getItem('token');
       if (!token) {
@@ -61,10 +75,10 @@ router.beforeEach(async (to, from, next) => {
         next({ name: 'Login' });
         return;
       }
-      
+
       const isAuthenticated = await apiService.checkAuth();
       console.log('认证检查结果:', isAuthenticated);
-      
+
       if (!isAuthenticated) {
         // 未登录，重定向到登录页
         console.log('认证失败，跳转到登录页');

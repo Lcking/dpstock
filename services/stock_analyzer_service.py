@@ -1,11 +1,12 @@
 import json
 from datetime import datetime
-from typing import List, AsyncGenerator
+from typing import List, AsyncGenerator, Dict, Any, Optional
 from utils.logger import get_logger
 from services.stock_data_provider import StockDataProvider
 from services.technical_indicator import TechnicalIndicator
 from services.stock_scorer import StockScorer
 from services.ai_analyzer import AIAnalyzer
+from services.archive_service import ArchiveService
 
 # 获取日志器
 logger = get_logger()
@@ -16,26 +17,17 @@ class StockAnalyzerService:
     作为门面类协调数据提供、指标计算、评分和AI分析等组件
     """
     
-    def __init__(self, custom_api_url=None, custom_api_key=None, custom_api_model=None, custom_api_timeout=None):
+    def __init__(self):
         """
         初始化股票分析服务
-        
-        Args:
-            custom_api_url: 自定义API URL
-            custom_api_key: 自定义API密钥
-            custom_api_model: 自定义API模型
-            custom_api_timeout: 自定义API超时时间
+        使用环境变量配置的API设置
         """
         # 初始化各个组件
         self.data_provider = StockDataProvider()
         self.indicator = TechnicalIndicator()
         self.scorer = StockScorer()
-        self.ai_analyzer = AIAnalyzer(
-            custom_api_url=custom_api_url,
-            custom_api_key=custom_api_key,
-            custom_api_model=custom_api_model,
-            custom_api_timeout=custom_api_timeout
-        )
+        self.ai_analyzer = AIAnalyzer()
+        self.archive_service = ArchiveService()
         
         logger.info("初始化StockAnalyzerService完成")
     
@@ -54,6 +46,12 @@ class StockAnalyzerService:
         try:
             logger.info(f"开始分析股票: {stock_code}, 市场: {market_type}")
             
+            # 解析股票代码和名称
+            resolved_code, stock_name = self.data_provider.resolve_stock_code(stock_code)
+            if resolved_code:
+                stock_code = resolved_code
+                logger.info(f"解析股票: 输入={stock_code}, 名称={stock_name}")
+
             # 获取股票数据
             df = await self.data_provider.get_stock_data(stock_code, market_type)
             
@@ -142,13 +140,13 @@ class StockAnalyzerService:
             # 生成基本分析结果
             basic_result = {
                 "stock_code": stock_code,
+                "name": stock_name,  # 添加股票名称
                 "market_type": market_type,
                 "analysis_date": analysis_date,
                 "score": score,
                 "price": latest_data['Close'],
-                "price_change_value": price_change_value,  # 价格变动绝对值
-                "price_change": change_percent,  # 兼容旧版前端，传递涨跌幅
-                "change_percent": change_percent,  # 涨跌幅百分比，新字段
+                "price_change": price_change_value,  # 涨跌额 (绝对值)
+                "change_percent": change_percent,  # 涨跌幅 (%)
                 "ma_trend": ma_trend,
                 "rsi": latest_data.get('RSI', 0),
                 "macd_signal": macd_signal,
@@ -162,8 +160,42 @@ class StockAnalyzerService:
             yield json.dumps(basic_result)
             
             # 使用AI进行深入分析
-            async for analysis_chunk in self.ai_analyzer.get_ai_analysis(df_with_indicators, stock_code, market_type, stream):
+            full_analysis = ""
+            async for analysis_chunk in self.ai_analyzer.get_ai_analysis(df_with_indicators, stock_code, stock_name, market_type, stream):
+                if stream:
+                    # 尝试从片段中提取纯文本 (如果 ai_analyzer 返回的是 JSON 字符串片段)
+                    try:
+                        chunk_data = json.loads(analysis_chunk)
+                        if "ai_analysis_chunk" in chunk_data:
+                            full_analysis += chunk_data["ai_analysis_chunk"]
+                        elif "analysis" in chunk_data:
+                            full_analysis = chunk_data["analysis"]
+                    except:
+                        pass
+                else:
+                    # 非流式直接就是完整 JSON
+                    try:
+                        chunk_data = json.loads(analysis_chunk)
+                        full_analysis = chunk_data.get("analysis", "")
+                    except:
+                        pass
+                
                 yield analysis_chunk
+            
+            # 分析完成后，自动归档为文章
+            if full_analysis:
+                title = f"{datetime.now().strftime('%Y年%m月%d日')} {stock_name} {stock_code} 股票行情走势异动分析"
+                article_data = {
+                    "title": title,
+                    "stock_code": stock_code,
+                    "stock_name": stock_name,
+                    "market_type": market_type,
+                    "content": full_analysis,
+                    "score": score,
+                    "publish_date": analysis_date
+                }
+                await self.archive_service.save_article(article_data)
+                logger.info(f"文章已自动归档: {title}, 评分: {score}")
                 
             logger.info(f"完成股票分析: {stock_code}")
             
@@ -197,6 +229,20 @@ class StockAnalyzerService:
                 "min_score": min_score
             })
             
+            # 解析所有股票代码
+            resolved_stocks = []
+            for code in stock_codes:
+                r_code, r_name = self.data_provider.resolve_stock_code(code)
+                if r_code:
+                    resolved_stocks.append((r_code, r_name))
+                else:
+                    resolved_stocks.append((code, ""))
+            
+            # 更新代码列表为解析后的代码
+            stock_codes = [s[0] for s in resolved_stocks]
+            # 创建代码到名称的映射
+            code_to_name = {s[0]: s[1] for s in resolved_stocks}
+
             # 批量获取股票数据
             stock_data_dict = await self.data_provider.get_multiple_stocks_data(stock_codes, market_type)
             
@@ -237,12 +283,12 @@ class StockAnalyzerService:
                     # 发送股票基本信息和评分
                     yield json.dumps({
                         "stock_code": code,
+                        "name": code_to_name.get(code, ""),  # 添加股票名称
                         "score": score,
                         "recommendation": rec,
                         "price": float(latest_data.get('Close', 0)),
-                        "price_change_value": float(price_change_value),  # 价格变动绝对值
-                        "price_change": change_percent,  # 兼容旧版前端，传递涨跌幅
-                        "change_percent": change_percent,  # 涨跌幅百分比，新字段
+                        "price_change": float(price_change_value),  # 涨跌额 (绝对值)
+                        "change_percent": change_percent,  # 涨跌幅 (%)
                         "rsi": float(latest_data.get('RSI', 0)) if 'RSI' in latest_data else None,
                         "ma_trend": "UP" if latest_data.get('MA5', 0) > latest_data.get('MA20', 0) else "DOWN",
                         "macd_signal": "BUY" if latest_data.get('MACD', 0) > latest_data.get('MACD_Signal', 0) else "SELL",
@@ -265,7 +311,7 @@ class StockAnalyzerService:
                         })
                         
                         # AI分析
-                        async for analysis_chunk in self.ai_analyzer.get_ai_analysis(df, stock_code, market_type, stream):
+                        async for analysis_chunk in self.ai_analyzer.get_ai_analysis(df, stock_code, code_to_name.get(stock_code, ""), market_type, stream):
                             yield analysis_chunk
             
             # 输出扫描完成信息
@@ -282,3 +328,52 @@ class StockAnalyzerService:
             logger.error(error_msg)
             logger.exception(e)
             yield json.dumps({"error": error_msg})
+
+    async def get_kline_data(self, stock_code: str, market_type: str = 'A', days: int = 100) -> Dict[str, Any]:
+        """获取K线图数据"""
+        try:
+            # 这里的日期处理可以更精确，简单起见获取足够多的数据
+            df = await self.data_provider.get_stock_data(stock_code, market_type)
+            if df.empty or hasattr(df, 'error'):
+                return {"error": "无法获取K线数据"}
+            
+            # 计算指标
+            df = self.indicator.calculate_indicators(df)
+            
+            # 只取最近 N 天
+            df = df.tail(days)
+            
+            # 格式化数据给前端 (ECharts 常用格式)
+            dates = df.index.strftime('%Y-%m-%d').tolist()
+            # K线数据: [开盘, 收盘, 最低, 最高]
+            values = df[['Open', 'Close', 'Low', 'High']].values.tolist()
+            volumes = df['Volume'].tolist()
+            
+            # 均线数据
+            ma5 = df['MA5'].tolist() if 'MA5' in df else []
+            ma20 = df['MA20'].tolist() if 'MA20' in df else []
+            ma60 = df['MA60'].tolist() if 'MA60' in df else []
+            
+            # 副指标
+            rsi = df['RSI'].tolist() if 'RSI' in df else []
+            macd = df['MACD'].tolist() if 'MACD' in df else []
+            macd_signal = df['Signal'].tolist() if 'Signal' in df else []
+            macd_hist = df['Hist'].tolist() if 'Hist' in df else []
+            
+            return {
+                "dates": dates,
+                "values": values,
+                "volumes": volumes,
+                "ma5": ma5,
+                "ma20": ma20,
+                "ma60": ma60,
+                "rsi": rsi,
+                "macd": {
+                    "macd": macd,
+                    "signal": macd_signal,
+                    "hist": macd_hist
+                }
+            }
+        except Exception as e:
+            logger.error(f"获取K线数据出错: {str(e)}")
+            return {"error": str(e)}

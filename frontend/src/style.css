@@ -1,11 +1,56 @@
+/* ========================================
+   Modern Tech Style - Global Styles
+   ======================================== */
+
+/* Import Inter font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* CSS Variables - Modern Tech Theme */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
+  /* Primary Colors - Purple-Blue Gradient */
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --primary-color: #667eea;
+  --primary-light: #8b9cf4;
+  --primary-dark: #5a67d8;
+
+  /* Accent Colors */
+  --accent-cyan: #06b6d4;
+  --accent-purple: #8b5cf6;
+  --accent-pink: #ec4899;
+
+  /* Status Colors */
+  --success-color: #10b981;
+  --success-bg: rgba(16, 185, 129, 0.1);
+  --error-color: #ef4444;
+  --error-bg: rgba(239, 68, 68, 0.1);
+  --warning-color: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.1);
+
+  /* Neutral Colors */
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --border-color: rgba(0, 0, 0, 0.08);
+
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+  --glass-blur: blur(10px);
+
+  /* Spacing */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* Typography */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color-scheme: light;
+  color: var(--text-primary);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,108 +58,278 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
+/* Modern Gradient Background */
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #f5f5f7;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 50%, #f0e6fa 100%);
+  background-attachment: fixed;
+  position: relative;
+}
+
+/* Subtle grid pattern overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(102, 126, 234, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(118, 75, 162, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Links */
+a {
+  font-weight: 500;
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--primary-dark);
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
 }
 
 h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  font-size: 2rem;
+  line-height: 1.2;
 }
 
+/* Buttons - Modern Style */
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
+  border-radius: var(--radius-md);
+  border: none;
+  padding: 0.65em 1.4em;
+  font-size: 0.95em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background: var(--primary-gradient);
+  color: white;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
+
 button:hover {
-  border-color: #646cff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
+
+button:active {
+  transform: translateY(0);
+}
+
 button:focus,
 button:focus-visible {
   outline: none !important;
-  box-shadow: 0 0 0 2px rgba(32, 128, 240, 0.2) !important;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
 }
 
-.card {
-  padding: 2em;
+/* Cards - Glassmorphism */
+.card,
+.n-card {
+  background: var(--glass-bg) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--glass-shadow) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.n-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(31, 38, 135, 0.2) !important;
+}
+
+/* App Container */
 #app {
-  max-width: 1280px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1.5rem;
   width: 100%;
   box-sizing: border-box;
-  text-align: center;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
-
-/* 全局移除黑色边框 */
+/* Focus Styles - Modern */
 *:focus {
   outline: none !important;
 }
 
-/* 输入框和表单元素的焦点样式 */
 input:focus,
 textarea:focus,
-select:focus {
+select:focus,
+.n-input:focus-within,
+.n-input-number:focus-within,
+.n-select:focus-within {
   outline: none !important;
-  box-shadow: 0 0 0 2px rgba(32, 128, 240, 0.2) !important;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
 }
 
-/* 移除移动设备上的点击高亮 */
+/* Remove tap highlight on mobile */
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 修复Firefox特定的焦点样式 */
+/* Firefox fix */
 button::-moz-focus-inner,
 input::-moz-focus-inner {
   border: 0;
 }
 
-/* Naive UI组件的焦点样式 */
+/* Naive UI Component Overrides */
+.n-button--primary-type {
+  background: var(--primary-gradient) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3) !important;
+}
+
+.n-button--primary-type:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4) !important;
+}
+
 .n-button:focus,
 .n-button:focus-visible,
-.n-input:focus-within,
-.n-input-number:focus-within,
-.n-select:focus-within,
 .n-tag:focus {
   outline: none !important;
-  box-shadow: 0 0 0 2px rgba(32, 128, 240, 0.2) !important;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
 }
-/* 组件宽度统一规范 */
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #5a67d8 0%, #6b46a8 100%);
+}
+
+/* Global Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(102, 126, 234, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.8);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Skeleton Loading */
+.skeleton {
+  background: linear-gradient(90deg,
+      rgba(102, 126, 234, 0.1) 25%,
+      rgba(102, 126, 234, 0.2) 50%,
+      rgba(102, 126, 234, 0.1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Modern Tags */
+.n-tag {
+  border-radius: 20px !important;
+  font-weight: 500 !important;
+}
+
+/* Component Width Standards */
 .component-container {
   width: 100%;
   max-width: 1200px;
@@ -139,34 +354,42 @@ input::-moz-focus-inner {
   box-sizing: border-box;
 }
 
-/* 移动端适配 */
+/* Mobile Responsive */
 @media (max-width: 768px) {
   body {
-    background-color: #f5f5f7;
+    background: linear-gradient(180deg, #f5f7fa 0%, #e8ecf4 100%);
     overflow-x: hidden;
     padding: 0;
     margin: 0;
   }
-  
+
   #app {
     width: 100%;
     overflow-x: hidden;
-    padding: 1rem;
+    padding: 0.75rem;
     margin: 0 auto;
   }
-  
+
+  .n-card:hover {
+    transform: none;
+  }
+
+  button:hover {
+    transform: none;
+  }
+
   .component-container {
-    width: calc(100% - 20px);
+    width: calc(100% - 16px);
     max-width: 560px;
   }
-  
+
   .form-container {
-    width: calc(100% - 20px);
+    width: calc(100% - 16px);
     max-width: 480px;
   }
-  
+
   .control-container {
-    width: calc(100% - 16px);
+    width: calc(100% - 12px);
     max-width: 440px;
   }
 }
@@ -175,36 +398,44 @@ input::-moz-focus-inner {
   #app {
     padding: 0.5rem;
   }
-  
+
   .component-container {
-    width: calc(100% - 16px);
+    width: calc(100% - 12px);
     max-width: 360px;
   }
-  
+
   .form-container {
-    width: calc(100% - 12px);
+    width: calc(100% - 8px);
     max-width: 320px;
   }
-  
+
   .control-container {
     width: calc(100% - 8px);
     max-width: 300px;
   }
 }
 
-/* 表单控件统一样式 */
+/* Form Controls */
 .uniform-input,
 .uniform-select,
 .uniform-button {
   width: 100%;
   box-sizing: border-box;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
 }
 
 .button-group {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
   width: 100%;
   justify-content: center;
 }
 
+/* Up/Down Colors (Stock specific) */
+.stock-up {
+  color: var(--error-color) !important;
+}
+
+.stock-down {
+  color: var(--success-color) !important;
+}

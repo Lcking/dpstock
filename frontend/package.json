@@ -13,6 +13,8 @@
     "@vicons/ionicons5": "^0.13.0",
     "@vueuse/core": "^12.8.2",
     "axios": "^1.8.1",
+    "echarts": "^6.0.0",
+    "html2canvas": "^1.4.1",
     "marked": "^15.0.7",
     "naive-ui": "^2.41.0",
     "npm": "^10.8.2",

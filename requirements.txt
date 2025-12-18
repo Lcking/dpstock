@@ -7,7 +7,7 @@ pandas==2.2.2
 scipy==1.15.1
 
 # 数据获取和分析库
-akshare==1.16.35
+akshare==1.16.77
 tqdm==4.67.1
 
 # Web框架与异步处理
@@ -37,3 +37,7 @@ jsonpath==0.82.2
 openpyxl==3.1.5
 python-jose[cryptography]==3.4.0
 passlib==1.7.4
+captcha==0.4
+PyJWT==2.8.0
+Pillow==9.5.0
+pypinyin==0.50.0

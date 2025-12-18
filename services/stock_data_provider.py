@@ -16,6 +16,157 @@ class StockDataProvider:
     def __init__(self):
         """初始化数据提供者服务"""
         logger.debug("初始化StockDataProvider")
+        self._a_share_list_cache = None
+        self._hk_share_list_cache = None
+
+    def get_a_share_list(self) -> List[Dict[str, str]]:
+        """
+        获取A股列表（包含代码、名称和拼音）
+        带缓存机制
+        """
+        if self._a_share_list_cache:
+            return self._a_share_list_cache
+            
+        try:
+            import akshare as ak
+            from pypinyin import pinyin, Style
+            
+            logger.info("正在获取A股股票列表...")
+            # 获取A股代码和名称列表
+            df = ak.stock_info_a_code_name()
+            
+            stock_list = []
+            for _, row in df.iterrows():
+                code = str(row['code'])
+                name = str(row['name'])
+                
+                # 生成拼音首字母
+                try:
+                    py_list = pinyin(name, style=Style.FIRST_LETTER)
+                    py_str = ''.join([item[0] for item in py_list]).lower()
+                    # 处理多音字等异常字符，确保只保留字母数字
+                    py_str = ''.join(c for c in py_str if c.isalnum())
+                except Exception:
+                    py_str = ""
+                
+                stock_list.append({
+                    'code': code,
+                    'name': name,
+                    'pinyin': py_str
+                })
+                
+            self._a_share_list_cache = stock_list
+            logger.info(f"成功加载 {len(stock_list)} 只A股股票信息")
+            return stock_list
+            
+        except Exception as e:
+            logger.error(f"获取A股列表失败: {str(e)}")
+            return []
+
+    def get_hk_share_list(self) -> List[Dict[str, str]]:
+        """
+        获取港股列表（包含代码、名称和拼音）
+        带缓存机制
+        """
+        if self._hk_share_list_cache:
+            return self._hk_share_list_cache
+            
+        try:
+            import akshare as ak
+            from pypinyin import pinyin, Style
+            
+            logger.info("正在获取港股股票列表...")
+            # 获取港股代码和名称列表
+            df = ak.stock_hk_spot_em()
+            
+            stock_list = []
+            for _, row in df.iterrows():
+                code = str(row['代码'])
+                name = str(row['名称'])
+                
+                # 生成拼音首字母
+                try:
+                    py_list = pinyin(name, style=Style.FIRST_LETTER)
+                    py_str = ''.join([item[0] for item in py_list]).lower()
+                    # 处理多音字等异常字符，确保只保留字母数字
+                    py_str = ''.join(c for c in py_str if c.isalnum())
+                except Exception:
+                    py_str = ""
+                
+                stock_list.append({
+                    'code': code,
+                    'name': name,
+                    'pinyin': py_str
+                })
+                
+            self._hk_share_list_cache = stock_list
+            logger.info(f"成功加载 {len(stock_list)} 只港股股票信息")
+            return stock_list
+            
+        except Exception as e:
+            logger.error(f"获取港股列表失败: {str(e)}")
+            return []
+    
+    def resolve_stock_code(self, input_str: str, market_type: str = 'A') -> Tuple[str, str]:
+        """
+        解析股票输入，支持股票代码、中文名称、拼音缩写。
+        智能搜索：如果主市场未找到，会尝试在全球市场中搜索。
+        
+        Args:
+            input_str: 输入字符串
+            market_type: 优先搜索的市场类型 ('A', 'HK', 'US', 'ETF', 'LOF')
+            
+        Returns:
+            (block_code, name) 股票代码和名称的元组
+        """
+        input_str = input_str.strip()
+        if not input_str:
+            return "", ""
+            
+        input_lower = input_str.lower()
+        
+        # 市场映射和搜索顺序
+        all_markets = ['A', 'HK', 'ETF', 'LOF']
+        # 将主市场移到最前面
+        if market_type in all_markets:
+            all_markets.remove(market_type)
+            all_markets.insert(0, market_type)
+        elif market_type == 'US': # 美股暂时不使用本地列表匹配，直接原样返回或后续增强
+            pass
+        else:
+            # 如果是其他奇怪的市场，默认先搜 A 股
+            market_type = 'A'
+
+        def _search_in_market(m_type):
+            if m_type == 'HK':
+                stock_list = self.get_hk_share_list()
+            elif m_type == 'A':
+                stock_list = self.get_a_share_list()
+            else:
+                return None
+
+            # 1. 匹配代码
+            for stock in stock_list:
+                if stock['code'].lower() == input_lower:
+                    return stock['code'], stock['name']
+            
+            # 2. 精确匹配名称或拼音
+            for stock in stock_list:
+                if stock['name'] == input_str or stock['pinyin'].lower() == input_lower:
+                    return stock['code'], stock['name']
+            
+            return None
+
+        # 尝试在所有市场中按序搜寻
+        for m in all_markets:
+            res = _search_in_market(m)
+            if res:
+                return res
+
+        # 如果都没找到，且是美股或者看起来像美股代码 (字母)，则原样返回
+        logger.warning(f"无法在缓存市场中解析股票输入: {input_str}")
+        return input_str, ""
+
     
     async def get_stock_data(self, stock_code: str, market_type: str = 'A', 
                             start_date: Optional[str] = None, 

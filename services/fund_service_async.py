@@ -40,9 +40,11 @@ class FundServiceAsync:
             # 获取基金数据
             df = await self._get_funds_data(market_type)
             
-            # 模糊匹配搜索（同时匹配代码和名称）
+            # 模糊匹配搜索（同时匹配代码、名称和拼音）
+            keyword_lower = keyword.lower()
             mask = (df['name'].str.contains(keyword, case=False, na=False) | 
-                   df['symbol'].str.contains(keyword, case=False, na=False))
+                   df['symbol'].str.contains(keyword, case=False, na=False) |
+                   df['pinyin'].str.contains(keyword_lower, case=False, na=False))
             results = df[mask]
             
             # 格式化返回结果并处理 NaN 值
@@ -121,6 +123,7 @@ class FundServiceAsync:
             包含ETF数据的DataFrame
         """
         import akshare as ak
+        from pypinyin import pinyin, Style
         
         try:
             # 获取ETF基金数据
@@ -139,6 +142,18 @@ class FundServiceAsync:
                 "基金折价率": "discount_rate",
             })
             
+            # 生成拼音首字母
+            def get_pinyin(name):
+                if not name or not isinstance(name, str):
+                    return ""
+                try:
+                    py_list = pinyin(name, style=Style.FIRST_LETTER)
+                    return ''.join([item[0] for item in py_list]).lower()
+                except:
+                    return ""
+            
+            df['pinyin'] = df['name'].apply(get_pinyin)
+            
             return df
             
         except Exception as e:
@@ -154,6 +169,7 @@ class FundServiceAsync:
             包含LOF数据的DataFrame
         """
         import akshare as ak
+        from pypinyin import pinyin, Style
         
         try:
             # 获取LOF基金数据
@@ -171,6 +187,18 @@ class FundServiceAsync:
                 "总市值": "total_value",
                 "基金折价率": "discount_rate",
             })
+            
+            # 生成拼音首字母
+            def get_pinyin(name):
+                if not name or not isinstance(name, str):
+                    return ""
+                try:
+                    py_list = pinyin(name, style=Style.FIRST_LETTER)
+                    return ''.join([item[0] for item in py_list]).lower()
+                except:
+                    return ""
+            
+            df['pinyin'] = df['name'].apply(get_pinyin)
             
             return df
             

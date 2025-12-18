@@ -36,8 +36,11 @@ class USStockServiceAsync:
             # 使用线程池执行同步的akshare调用
             df = await asyncio.to_thread(self._get_us_stocks_data)
             
-            # 模糊匹配搜索
-            mask = df['name'].str.contains(keyword, case=False, na=False)
+            # 模糊匹配搜索 (代码, 名称, 拼音)
+            keyword_lower = keyword.lower()
+            mask = (df['name'].str.contains(keyword, case=False, na=False) | 
+                   df['symbol'].str.contains(keyword, case=False, na=False) |
+                   df['pinyin'].str.contains(keyword_lower, case=False, na=False))
             results = df[mask]
             
             # 格式化返回结果并处理 NaN 值
@@ -70,6 +73,7 @@ class USStockServiceAsync:
             包含美股数据的DataFrame
         """
         import akshare as ak
+        from pypinyin import pinyin, Style
         
         try:
             # 获取美股数据
@@ -94,6 +98,18 @@ class USStockServiceAsync:
                 "换手率": "turnover_rate",
                 "代码": "symbol"
             })
+            
+            # 生成拼音首字母
+            def get_pinyin(name):
+                if not name or not isinstance(name, str):
+                    return ""
+                try:
+                    py_list = pinyin(name, style=Style.FIRST_LETTER)
+                    return ''.join([item[0] for item in py_list]).lower()
+                except:
+                    return ""
+            
+            df['pinyin'] = df['name'].apply(get_pinyin)
             
             return df
             

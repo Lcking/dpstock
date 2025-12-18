@@ -14,14 +14,6 @@
         <!-- 市场时间显示 -->
         <MarketTimeDisplay :is-mobile="isMobile" />
         
-        <!-- API配置面板 -->
-        <ApiConfigPanel
-          :default-api-url="defaultApiUrl"
-          :default-api-model="defaultApiModel"
-          :default-api-timeout="defaultApiTimeout"
-          @update:api-config="updateApiConfig"
-        />
-        
         <!-- 主要内容 -->
         <n-card class="analysis-container mobile-card mobile-card-spacing mobile-shadow">
           
@@ -29,32 +21,37 @@
             <!-- 左侧配置区域 -->
             <n-grid-item span="1 xl:8">
               <div class="config-section">
-                <n-form-item label="选择市场类型">
-                  <n-select
-                    v-model:value="marketType"
-                    :options="marketOptions"
-                    @update:value="handleMarketTypeChange"
-                  />
-                </n-form-item>
-                
-                <n-form-item :label='marketType === "US" ? "股票搜索" : "基金搜索"' v-if="showSearch">
-                  <StockSearch :market-type="marketType" @select="addSelectedStock" />
-                </n-form-item>
-                
-                <n-form-item label="输入代码">
-                  <n-input
-                    v-model:value="stockCodes"
-                    type="textarea"
-                    placeholder="输入股票、基金代码，多个代码用逗号、空格或换行分隔"
-                    :autosize="{ minRows: 3, maxRows: 6 }"
-                  />
-                </n-form-item>
+                <div class="search-config-container">
+                  <n-form-item label="智能搜索与选择">
+                    <n-input-group>
+                      <n-select
+                        v-model:value="marketType"
+                        :options="marketOptions"
+                        style="width: 120px"
+                        @update:value="handleMarketTypeChange"
+                      />
+                      <n-select
+                        v-model:value="selectedStockValues"
+                        multiple
+                        filterable
+                        remote
+                        placeholder="输入名称、拼音或代码"
+                        :options="searchOptions"
+                        :loading="isSearching"
+                        :clearable="true"
+                        :tag="true"
+                        @search="handleSearch"
+                        @update:value="handleUpdateValue"
+                      />
+                    </n-input-group>
+                  </n-form-item>
+                </div>
                 
                 <div class="action-buttons">
                   <n-button
                     type="primary"
                     :loading="isAnalyzing"
-                    :disabled="!stockCodes.trim()"
+                    :disabled="selectedStockValues.length === 0"
                     @click="analyzeStocks"
                   >
                     {{ isAnalyzing ? '分析中...' : '开始分析' }}
@@ -153,6 +150,9 @@
 </template>
 
 <script setup lang="ts">
+
+import HtmlRenderer from './HtmlRenderer';
+import { h } from 'vue';
 import { ref, onMounted, computed, onBeforeUnmount } from 'vue';
 import { 
   NLayout, 
@@ -163,8 +163,8 @@ import {
   NGridItem, 
   NFormItem, 
   NSelect, 
-  NInput, 
   NButton,
+  NInputGroup,
   NEmpty,
   useMessage,
   NSpace,
@@ -180,42 +180,33 @@ import {
 } from '@vicons/ionicons5';
 
 import MarketTimeDisplay from './MarketTimeDisplay.vue';
-import ApiConfigPanel from './ApiConfigPanel.vue';
-import StockSearch from './StockSearch.vue';
 import StockCard from './StockCard.vue';
 import AnnouncementBanner from './AnnouncementBanner.vue';
 
 import { apiService } from '@/services/api';
-import type { StockInfo, ApiConfig, StreamInitMessage, StreamAnalysisUpdate } from '@/types';
-import { loadApiConfig } from '@/utils';
+import type { StockInfo, StreamInitMessage, StreamAnalysisUpdate } from '@/types';
 import { validateMultipleStockCodes, MarketType } from '@/utils/stockValidator';
 
 // 使用Naive UI的组件API
 const message = useMessage();
 const { copy } = useClipboard();
 
-// 从环境变量获取的默认配置
-const defaultApiUrl = ref('');
-const defaultApiModel = ref('');
-const defaultApiTimeout = ref('60');
+// 公告配置
 const announcement = ref('');
 const showAnnouncementBanner = ref(true);
 
 // 股票分析配置
 const marketType = ref('A');
-const stockCodes = ref('');
+const selectedStockValues = ref<string[]>([]); // 存储选中的代码
+const searchOptions = ref<any[]>([]); // 搜索结果选项
+const isSearching = ref(false);
 const isAnalyzing = ref(false);
 const analyzedStocks = ref<StockInfo[]>([]);
-const displayMode = ref<'card' | 'table'>('card');
 
-// API配置
-const apiConfig = ref<ApiConfig>({
-  apiUrl: '',
-  apiKey: '',
-  apiModel: '',
-  apiTimeout: '60',
-  saveApiConfig: false
-});
+// 让控制台可以访问 analyzedStocks
+(window as any).analyzedStocks = analyzedStocks;
+
+const displayMode = ref<'card' | 'table'>('card');
 
 // 移动端检测
 const isMobile = computed(() => {
@@ -239,12 +230,13 @@ const showAnnouncement = (content: string) => {
 
 // 市场选项
 const marketOptions = [
-  { label: 'A股', value: 'A' },
-  { label: '港股', value: 'HK' },
+  { label: 'A股', value: 'A', showSearch: true },
+  { label: '港股', value: 'HK', showSearch: true },
   { label: '美股', value: 'US', showSearch: true },
   { label: 'ETF', value: 'ETF', showSearch: true  },
   { label: 'LOF', value: 'LOF', showSearch: true  }
 ];
+
 
 // 表格列定义
 const stockTableColumns = ref<DataTableColumns<StockInfo>>([
@@ -278,12 +270,12 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
   },
   {
     title: '涨跌额',
-    key: 'price_change',
+    key: 'priceChange',
     width: 100,
     render(row: StockInfo) {
-      if (row.price_change === undefined) return '--';
-      const sign = row.price_change > 0 ? '+' : '';
-      return `${sign}${row.price_change.toFixed(2)}`;
+      if (row.priceChange === undefined) return '--';
+      const sign = row.priceChange > 0 ? '+' : '';
+      return `${sign}${row.priceChange.toFixed(2)}`;
     }
   },
   {
@@ -292,11 +284,11 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
     width: 100,
     render(row: StockInfo) {
       if (row.changePercent === undefined) {
-        // 如果没有changePercent但有price_change和price，尝试计算
-        if (row.price_change !== undefined && row.price !== undefined) {
-          const basePrice = row.price - row.price_change;
+        // 如果没有changePercent但有priceChange和price，尝试计算
+        if (row.priceChange !== undefined && row.price !== undefined) {
+          const basePrice = row.price - row.priceChange;
           if (basePrice !== 0) {
-            const calculatedPercent = (row.price_change / basePrice) * 100;
+            const calculatedPercent = (row.priceChange / basePrice) * 100;
             const sign = calculatedPercent > 0 ? '+' : '';
             return `${sign}${calculatedPercent.toFixed(2)}%`;
           }
@@ -317,7 +309,7 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
   },
   {
     title: '均线趋势',
-    key: 'ma_trend',
+    key: 'maTrend',
     width: 100,
     render(row: StockInfo) {
       const trendMap: Record<string, string> = {
@@ -325,12 +317,12 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
         'DOWN': '下降',
         'NEUTRAL': '平稳'
       };
-      return row.ma_trend ? trendMap[row.ma_trend] || row.ma_trend : '--';
+      return row.maTrend ? trendMap[row.maTrend] || row.maTrend : '--';
     }
   },
   {
     title: 'MACD信号',
-    key: 'macd_signal',
+    key: 'macdSignal',
     width: 100,
     render(row: StockInfo) {
       const signalMap: Record<string, string> = {
@@ -339,7 +331,7 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
         'HOLD': '持有',
         'NEUTRAL': '中性'
       };
-      return row.macd_signal ? signalMap[row.macd_signal] || row.macd_signal : '--';
+      return row.macdSignal ? signalMap[row.macdSignal] || row.macdSignal : '--';
     }
   },
   {
@@ -357,29 +349,29 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
   },
   {
     title: '分析日期',
-    key: 'analysis_date',
+    key: 'analysisDate',
     width: 120,
     render(row: StockInfo) {
-      if (!row.analysis_date) return '--';
+      if (!row.analysisDate) return '--';
       try {
-        const date = new Date(row.analysis_date);
+        const date = new Date(row.analysisDate);
         if (isNaN(date.getTime())) {
-          return row.analysis_date;
+          return row.analysisDate;
         }
         return date.toISOString().split('T')[0];
       } catch (e) {
-        return row.analysis_date;
+        return row.analysisDate;
       }
     }
   },
   {
     title: '分析结果',
     key: 'analysis',
-    ellipsis: {
-      tooltip: true
-    },
     width: 300,
-    className: 'analysis-cell'
+    className: 'analysis-cell',
+    render(row: StockInfo) {
+      return h(HtmlRenderer, { html: row.analysis });
+    }
   }
 ]);
 
@@ -399,31 +391,41 @@ const exportOptions = [
   }
 ];
 
-const showSearch = computed(() => 
-  marketOptions.find(option => option.value === marketType.value)?.showSearch
-);
+// 搜索防抖
+let searchTimer: any = null;
 
-// 更新API配置
-function updateApiConfig(config: ApiConfig) {
-  apiConfig.value = { ...config };
+async function handleSearch(keyword: string) {
+  if (!keyword.trim()) {
+    searchOptions.value = [];
+    return;
+  }
+  
+  isSearching.value = true;
+  if (searchTimer) clearTimeout(searchTimer);
+  
+  searchTimer = setTimeout(async () => {
+    try {
+      // 调用全局搜索 API，同时带上当前选中的市场作为“首选市场”
+      const results = await apiService.searchGlobal(keyword, marketType.value);
+      searchOptions.value = results;
+    } catch (error) {
+      console.error('搜索出错:', error);
+    } finally {
+      isSearching.value = false;
+    }
+  }, 300);
+}
+
+function handleUpdateValue() {
+  // 处理选中值的逻辑，如果需要可以在这里做额外处理
 }
 
 // 处理市场类型变更
 function handleMarketTypeChange() {
-  stockCodes.value = '';
   analyzedStocks.value = [];
-}
-
-// 添加选择的股票
-function addSelectedStock(symbol: string) {
-  // 确保symbol不包含序号或其他不需要的信息
-  const cleanSymbol = symbol.trim().replace(/^\d+\.\s*/, '');
-  
-  if (stockCodes.value) {
-    stockCodes.value += ', ' + cleanSymbol;
-  } else {
-    stockCodes.value = cleanSymbol;
-  }
+  // 切换市场时，如果搜索框有正在进行的操作，可以清空
+  searchOptions.value = [];
+  selectedStockValues.value = []; // 清空已选股票
 }
 
 // 处理流式响应的数据
@@ -482,98 +484,89 @@ function handleStreamInit(data: StreamInitMessage) {
   }
 }
 
-// 处理流式更新消息
+
+// 处理流式更新消息（支持AI分析片段拼接）
 function handleStreamUpdate(data: StreamAnalysisUpdate) {
+  console.log("流片段:", JSON.stringify(data, null, 2));
   const stockIndex = analyzedStocks.value.findIndex((s: StockInfo) => s.code === data.stock_code);
-  
+
   if (stockIndex >= 0) {
     const stock = { ...analyzedStocks.value[stockIndex] };
-    
-    // 确保所有数值类型的字段都有默认值
+
+    // ✅ 确保数值字段有默认值
     stock.price = data.price ?? stock.price ?? undefined;
-    stock.price_change = data.price_change_value ?? data.price_change ?? stock.price_change ?? undefined;
+    stock.priceChange = data.price_change ?? stock.priceChange ?? undefined;
     stock.changePercent = data.change_percent ?? stock.changePercent ?? undefined;
     stock.marketValue = data.market_value ?? stock.marketValue ?? undefined;
     stock.score = data.score ?? stock.score ?? undefined;
     stock.rsi = data.rsi ?? stock.rsi ?? undefined;
 
-    // 更新分析状态
+    // ✅ 更新分析状态
     if (data.status) {
       stock.analysisStatus = data.status;
     }
-    
-    // 如果有分析结果，则更新
+
+    // ✅ 若收到完整分析文本，直接更新
     if (data.analysis !== undefined) {
       stock.analysis = data.analysis;
     }
-    
-    // 处理AI分析片段
+
+    // ✅ 若收到增量片段，则拼接
     if (data.ai_analysis_chunk !== undefined) {
       stock.analysis = (stock.analysis || '') + data.ai_analysis_chunk;
       stock.analysisStatus = 'analyzing';
     }
-    
-    // 如果有错误，则更新
+
+    // ✅ 错误处理
     if (data.error !== undefined) {
       stock.error = data.error;
       stock.analysisStatus = 'error';
     }
-    
-    // 更新其他字段
+
+    // ✅ 其余字段更新
     if (data.name !== undefined) {
       stock.name = data.name;
     }
-    
+
     if (data.recommendation !== undefined) {
       stock.recommendation = data.recommendation;
     }
-    
+
     if (data.ma_trend !== undefined) {
-      stock.ma_trend = data.ma_trend;
+      stock.maTrend = data.ma_trend;
     }
-    
+
     if (data.macd_signal !== undefined) {
-      stock.macd_signal = data.macd_signal;
+      stock.macdSignal = data.macd_signal;
     }
-    
+
     if (data.volume_status !== undefined) {
-      stock.volume_status = data.volume_status;
+      stock.volumeStatus = data.volume_status;
     }
-    
+
     if (data.analysis_date !== undefined) {
-      stock.analysis_date = data.analysis_date;
+      stock.analysisDate = data.analysis_date;
     }
-    
-    // 使用Vue的响应式API更新数组
+
+    // ✅ Vue响应式更新
     analyzedStocks.value[stockIndex] = stock;
   }
 }
 
+
+
 // 分析股票
 async function analyzeStocks() {
-  if (!stockCodes.value.trim()) {
-    message.warning('请输入股票代码');
+  if (selectedStockValues.value.length === 0) {
+    message.warning('请选择要分析的股票');
     return;
   }
   
-  // 解析股票代码
-  const codes = stockCodes.value
-    .split(/[,\s\n]+/)
-    .map((code: string) => code.trim())
-    .filter((code: string) => code);
+  // 去除重复
+  const uniqueCodes = Array.from(new Set(selectedStockValues.value));
   
-  if (codes.length === 0) {
-    message.warning('未找到有效的股票代码');
-    return;
-  }
-  
-  // 去除重复的股票代码
-  const uniqueCodes = Array.from(new Set(codes));
-  
-  // 检查是否有重复代码被移除
-  if (uniqueCodes.length < codes.length) {
-    message.info(`已自动去除${codes.length - uniqueCodes.length}个重复的股票代码`);
-  }
+  isAnalyzing.value = true;
+  analyzedStocks.value = [];
   
   // 在前端验证股票代码
   const marketTypeEnum = marketType.value as keyof typeof MarketType;
@@ -599,22 +592,8 @@ async function analyzeStocks() {
       market_type: marketType.value
     } as any;
     
-    // 添加自定义API配置
-    if (apiConfig.value.apiUrl) {
-      requestData.api_url = apiConfig.value.apiUrl;
-    }
-    
-    if (apiConfig.value.apiKey) {
-      requestData.api_key = apiConfig.value.apiKey;
-    }
-    
-    if (apiConfig.value.apiModel) {
-      requestData.api_model = apiConfig.value.apiModel;
-    }
-    
-    if (apiConfig.value.apiTimeout) {
-      requestData.api_timeout = apiConfig.value.apiTimeout;
-    }
+    // 添加这一行，确保走流式分析分支
+    requestData.stream = true;
     
     // 获取身份验证令牌
     const token = localStorage.getItem('token');
@@ -727,16 +706,16 @@ async function copyAnalysisResults() {
         let result = `【${stock.code} ${stock.name || ''}】\n`;
         
         // 添加分析日期
-        if (stock.analysis_date) {
+        if (stock.analysisDate) {
           try {
-            const date = new Date(stock.analysis_date);
+            const date = new Date(stock.analysisDate);
             if (!isNaN(date.getTime())) {
               result += `分析日期: ${date.toISOString().split('T')[0]}\n`;
             } else {
-              result += `分析日期: ${stock.analysis_date}\n`;
+              result += `分析日期: ${stock.analysisDate}\n`;
             }
           } catch (e) {
-            result += `分析日期: ${stock.analysis_date}\n`;
+            result += `分析日期: ${stock.analysisDate}\n`;
           }
         }
         
@@ -754,39 +733,39 @@ async function copyAnalysisResults() {
           result += `RSI: ${stock.rsi.toFixed(2)}\n`;
         }
         
-        if (stock.price_change !== undefined) {
-          const sign = stock.price_change > 0 ? '+' : '';
-          result += `涨跌额: ${sign}${stock.price_change.toFixed(2)}\n`;
+        if (stock.priceChange !== undefined) {
+          const sign = stock.priceChange > 0 ? '+' : '';
+          result += `涨跌额: ${sign}${stock.priceChange.toFixed(2)}\n`;
         }
         
-        if (stock.ma_trend) {
+        if (stock.maTrend) {
           const trendMap: Record<string, string> = {
             'UP': '上升',
             'DOWN': '下降',
             'NEUTRAL': '平稳'
           };
-          const trend = trendMap[stock.ma_trend] || stock.ma_trend;
+          const trend = trendMap[stock.maTrend] || stock.maTrend;
           result += `均线趋势: ${trend}\n`;
         }
         
-        if (stock.macd_signal) {
+        if (stock.macdSignal) {
           const signalMap: Record<string, string> = {
             'BUY': '买入',
             'SELL': '卖出',
             'HOLD': '持有',
             'NEUTRAL': '中性'
           };
-          const signal = signalMap[stock.macd_signal] || stock.macd_signal;
+          const signal = signalMap[stock.macdSignal] || stock.macdSignal;
           result += `MACD信号: ${signal}\n`;
         }
         
-        if (stock.volume_status) {
+        if (stock.volumeStatus) {
           const statusMap: Record<string, string> = {
             'HIGH': '放量',
             'LOW': '缩量',
             'NORMAL': '正常'
           };
-          const status = statusMap[stock.volume_status] || stock.volume_status;
+          const status = statusMap[stock.volumeStatus] || stock.volumeStatus;
           result += `成交量: ${status}\n`;
         }
         
@@ -808,23 +787,6 @@ async function copyAnalysisResults() {
   } catch (error) {
     message.error('复制失败，请手动复制');
     console.error('复制分析结果时出错:', error);
-  }
-}
-
-// 从本地存储恢复API配置
-function restoreLocalApiConfig() {
-  const savedConfig = loadApiConfig();
-  if (savedConfig && savedConfig.saveApiConfig) {
-    apiConfig.value = {
-      apiUrl: savedConfig.apiUrl || '',
-      apiKey: savedConfig.apiKey || '',
-      apiModel: savedConfig.apiModel || defaultApiModel.value,
-      apiTimeout: savedConfig.apiTimeout || defaultApiTimeout.value,
-      saveApiConfig: savedConfig.saveApiConfig
-    };
-    
-    // 通知父组件配置已更新
-    updateApiConfig(apiConfig.value);
   }
 }
 
@@ -863,12 +825,12 @@ function exportToCSV() {
         stock.price !== undefined ? stock.price.toFixed(2) : '',
         stock.changePercent !== undefined ? `${stock.changePercent > 0 ? '+' : ''}${stock.changePercent.toFixed(2)}%` : '',
         stock.rsi !== undefined ? stock.rsi.toFixed(2) : '',
-        stock.ma_trend ? getChineseTrend(stock.ma_trend) : '',
-        stock.macd_signal ? getChineseSignal(stock.macd_signal) : '',
-        stock.volume_status ? getChineseVolumeStatus(stock.volume_status) : '',
+        stock.maTrend ? getChineseTrend(stock.maTrend) : '',
+        stock.macdSignal ? getChineseSignal(stock.macdSignal) : '',
+        stock.volumeStatus ? getChineseVolumeStatus(stock.volumeStatus) : '',
         stock.score !== undefined ? stock.score : '',
         `"${stock.recommendation || ''}"`,
-        stock.analysis_date || ''
+        stock.analysisDate || ''
       ];
       
       csvContent += row.join(',') + '\n';
@@ -930,37 +892,22 @@ function getChineseVolumeStatus(status: string): string {
   return statusMap[status] || status;
 }
 
-// 页面加载时获取默认配置和公告
+// 页面加载时获取公告
 onMounted(async () => {
   try {
     // 添加窗口大小变化监听
     window.addEventListener('resize', handleResize);
     
-    // 从API获取配置信息
+    // 从 API 获取公告信息
     const config = await apiService.getConfig();
-    
-    if (config.default_api_url) {
-      defaultApiUrl.value = config.default_api_url;
-    }
-    
-    if (config.default_api_model) {
-      defaultApiModel.value = config.default_api_model;
-    }
-    
-    if (config.default_api_timeout) {
-      defaultApiTimeout.value = config.default_api_timeout;
-    }
     
     if (config.announcement) {
       announcement.value = config.announcement;
       // 使用通知显示公告
       showAnnouncement(config.announcement);
     }
-    
-    // 初始化后恢复本地保存的配置
-    restoreLocalApiConfig();
   } catch (error) {
-    console.error('获取默认配置时出错:', error);
+    console.error('获取配置时出错:', error);
   }
 });
 
@@ -973,324 +920,190 @@ onBeforeUnmount(() => {
 function handleAnnouncementClose() {
   showAnnouncementBanner.value = false;
 }
+
+//analyzedStocks 控制台调试代码
+(window as any).analyzedStocks = analyzedStocks.value;
+
 </script>
 
 <style scoped>
+/* Main Layout - Transparent to show body gradient */
 .app-container {
   min-height: 100vh;
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  padding-bottom: 20px; /* 增加底部内边距 */
+  padding-bottom: 40px;
   box-sizing: border-box;
 }
 
 .main-layout {
-  background-color: #f6f6f6;
+  background: transparent !important; /* Allow body gradient to show */
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  min-height: calc(100vh - 20px); /* 确保至少占满视口高度减去底部空间 */
 }
 
 .main-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 1.5rem 1rem;
   width: 100%;
   box-sizing: border-box;
+  background: transparent !important;
 }
 
-.card-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
+/* Glassmorphism Analysis Card */
 .analysis-container {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  border-radius: 20px !important;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.65) !important; /* Slightly more opaque for main content */
 }
 
-/* 修改卡片内容区域的内边距 */
-.analysis-container :deep(.n-card__content) {
-  padding: 16px;
-}
-
+/* Config Section */
 .config-section {
   padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  height: 100%;
 }
 
 .action-buttons {
   display: flex;
-  gap: 0.75rem;
-  margin-top: 1rem;
+  gap: 1rem;
+  margin-top: 1.5rem;
 }
 
+.action-buttons .n-button {
+  flex: 1;
+}
+
+/* Results Section */
 .results-section {
   padding: 0.5rem;
-  min-height: 200px;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
 }
 
 .results-header {
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.n-data-table .analysis-cell {
-  max-width: 300px;
-  white-space: normal;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Analysis HTML Content */
+.analysis-html {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
   word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  color: #374151;
 }
 
-/* 表格容器基础样式 */
+/* Highlighted Terms in Analysis */
+.analysis-html :deep(strong) { color: #2563eb; font-weight: 600; }
+.analysis-html :deep(.buy) { color: #dc2626; font-weight: 700; background: rgba(220, 38, 38, 0.1); padding: 0 4px; border-radius: 4px; }
+.analysis-html :deep(.sell) { color: #059669; font-weight: 700; background: rgba(5, 150, 105, 0.1); padding: 0 4px; border-radius: 4px; }
+.analysis-html :deep(.up) { color: #dc2626; }
+.analysis-html :deep(.down) { color: #059669; }
+
+/* Table Styles Override */
 .table-container {
   width: 100%;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch; /* 支持iOS的滚动惯性 */
-  position: relative;
-  border-radius: 0.5rem;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.4);
 }
 
-/* 表格横向滚动指示器 */
+:deep(.n-data-table) {
+  background: transparent !important;
+}
+
+:deep(.n-data-table-th) {
+  background: rgba(255, 255, 255, 0.5) !important;
+  font-weight: 600 !important;
+  color: #4b5563 !important;
+}
+
+:deep(.n-data-table-td) {
+  background: transparent !important;
+}
+
+/* Scroll Indicator for Mobile Tables */
 .table-container::after {
-  content: '←→';
+  content: '← 滑动查看更多 →';
   position: absolute;
-  bottom: 10px;
-  right: 10px;
-  color: rgba(32, 128, 240, 0.6);
-  font-size: 14px;
+  bottom: 12px;
+  right: 50%;
+  transform: translateX(50%);
+  color: rgba(107, 114, 128, 0.6);
+  font-size: 12px;
   pointer-events: none;
-  z-index: 2;
-  animation: fadeInOut 2s infinite;
-  display: none; /* 默认隐藏，只在移动端显示 */
+  background: rgba(255, 255, 255, 0.8);
+  padding: 2px 8px;
+  border-radius: 10px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
 }
 
-/* 移动端适配的媒体查询 */
+/* Mobile Responsive */
 @media (max-width: 768px) {
   .main-content {
-    padding: 0.5rem;
-    max-width: 100%;
-    width: 100%;
+    padding: 1rem 0.75rem;
   }
   
-  /* 显示滚动指示器 */
-  .table-container::after {
-    display: block;
+  .analysis-container {
+    border-radius: 16px !important;
   }
   
-  /* 减少移动端卡片内容区域的内边距 */
   .analysis-container :deep(.n-card__content) {
-    padding: 12px 8px;
-  }
-  
-  /* 确保卡片内部没有多余边距 */
-  :deep(.n-card > .n-card__content) {
-    padding: 12px 8px;
-  }
-  
-  /* 减少结果区域的内边距 */
-  .results-section {
-    padding: 0.25rem 0.125rem;
+    padding: 1rem !important;
   }
   
   .action-buttons {
     flex-direction: column;
-    gap: 0.5rem;
   }
   
-  .action-buttons .n-button {
-    width: 100%;
-  }
-  
-  .card-title {
-    font-size: 1.1rem;
-  }
-  
-  .analysis-container {
-    margin-bottom: 0.75rem;
-    border-radius: 0.75rem;
-    overflow: hidden;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  
-  .config-section {
-    padding: 0.25rem;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  
-  /* 移动端表格样式优化 */
-  .table-container {
-    margin: 0 -4px; /* 抵消父容器的padding */
-    padding: 0 4px;
-  }
-
-  /* 表格组件移动端优化 */
-  :deep(.n-data-table-wrapper) {
-    border-radius: 0.5rem;
-  }
-
-  :deep(.n-data-table-base-table-header, .n-data-table-base-table-body) {
-    min-width: 100%;
-  }
-
-  :deep(.n-pagination) {
-    flex-wrap: wrap;
-    justify-content: center;
-    margin-top: 8px;
-  }
-  
-  /* 保留原有移动端优化样式 */
-  :deep(.n-form-item) {
-    margin-bottom: 0.75rem;
-  }
-
-  :deep(.n-grid) {
-    width: 100% !important;
-  }
-
-  :deep(.n-grid-item) {
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-
-  :deep(.n-grid[cols="1 m\\:24"]) {
-    gap: 8px !important;
-  }
-
-  :deep(.n-grid[cols="1 l\\:2"]) {
-    gap: 6px !important;
-  }
-
-  :deep(.n-grid-item) > * {
-    margin-bottom: 8px;
-  }
-
-  :deep(.n-dropdown-menu) {
-    max-width: 90vw;
-  }
-  
-  .app-container {
-    padding-bottom: 30px; /* 增加移动端底部内边距 */
-  }
-}
-
-/* 小屏幕手机适配 */
-@media (max-width: 480px) {
-  .main-content {
-    padding: 0.25rem;
-  }
-  
-  /* 进一步减少小屏幕卡片内容区域的内边距 */
-  .analysis-container :deep(.n-card__content) {
-    padding: 6px 4px;
-  }
-  
-  /* 使用更精确的选择器确保覆盖 */
-  :deep(.n-card) > :deep(.n-card__content),
-  :deep(.n-card-header) {
-    padding: 6px 4px !important;
-  }
-  
-  /* 减少网格间距到最小 */
-  :deep(.n-grid[cols="1 l\\:2"]) {
-    gap: 4px !important;
-  }
-  
-  .results-section {
-    padding: 0.15rem 0.05rem;
+  /* Show table scroll hint on mobile */
+  .table-container::after {
+    opacity: 1;
+    animation: fadeHint 3s 2 forwards;
   }
   
   .results-header {
     flex-direction: column;
-    align-items: stretch;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
+    align-items: flex-start;
+    gap: 0.75rem;
   }
   
-  :deep(.n-space) {
-    flex-wrap: wrap;
+  .results-header :deep(.n-space) {
     width: 100%;
     justify-content: space-between;
   }
-  
-  :deep(.n-space .n-button) {
-    margin-right: 0 !important;
-  }
-  
+}
+
+@keyframes fadeHint {
+  0%, 10% { opacity: 0; }
+  20%, 80% { opacity: 1; }
+  90%, 100% { opacity: 0; }
+}
+
+/* Animations */
+@media (prefers-reduced-motion: no-preference) {
   .analysis-container {
-    border-radius: 0.625rem;
-    margin-bottom: 0.5rem;
-  }
-  
-  /* 小屏幕下进一步优化n-grid */
-  :deep(.n-grid) {
-    gap: 4px !important;
-  }
-  
-  :deep(.n-grid-item) {
-    padding: 0 !important;
-  }
-  
-  /* 确保n-grid-item内容在小屏幕下有更紧凑的间距 */
-  :deep(.n-grid-item) > * {
-    margin-bottom: 4px;
-  }
-  
-  /* 小屏幕表格样式调整 */
-  .table-container {
-    margin: 0 -2px;
-    padding: 0 2px;
-  }
-  
-  /* 小屏幕分页控件优化 */
-  :deep(.n-pagination .n-pagination-item) {
-    margin: 0 2px;
-  }
-  
-  .app-container {
-    padding-bottom: 40px; /* 增加小屏幕底部内边距 */
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   }
 }
 
-/* 超小屏幕适配 */
-@media (max-width: 375px) {
-  /* 超小屏幕卡片内容区域几乎无内边距 */
-  .analysis-container :deep(.n-card__content) {
-    padding: 4px 2px;
-  }
-  
-  /* 使用更精确的选择器确保覆盖 */
-  :deep(.n-card) > :deep(.n-card__content),
-  :deep(.n-card-header) {
-    padding: 3px 2px !important;
-  }
-  
-  /* 网格间距最小化 */
-  :deep(.n-grid[cols="1 l\\:2"]),
-  :deep(.n-grid[cols="1 m\\:24"]) {
-    gap: 3px !important;
-  }
-  
-  /* 极简边距 */
-  .results-section {
-    padding: 0.1rem 0.025rem;
-  }
-  
-  /* 进一步调整超小屏幕的间距和尺寸 */
-  .main-content {
-    padding: 0.15rem;
-  }
-  
-  .config-section {
-    padding: 0.15rem;
-  }
-  
-  /* 确保StockCard组件最大化利用空间 */
-  :deep(.stock-card) {
-    margin: 2px 0 !important;
-    border-radius: 4px !important;
-  }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

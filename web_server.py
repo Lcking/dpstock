@@ -9,6 +9,7 @@ from services.stock_analyzer_service import StockAnalyzerService
 from services.us_stock_service_async import USStockServiceAsync
 from services.fund_service_async import FundServiceAsync
 import os
+import asyncio
 import httpx
 from utils.logger import get_logger
 from utils.api_utils import APIUtils
@@ -18,6 +19,7 @@ import json
 import secrets
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
+from routes import captcha, auth
 
 load_dotenv()
 
@@ -42,6 +44,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# 用户注册接口,到Fastapi应用中 - 区别于上述密码用户体系    
+app.include_router(captcha.router)
+app.include_router(auth.router) 
+
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,
@@ -59,16 +65,6 @@ fund_service = FundServiceAsync()
 class AnalyzeRequest(BaseModel):
     stock_codes: List[str]
     market_type: str = "A"
-    api_url: Optional[str] = None
-    api_key: Optional[str] = None
-    api_model: Optional[str] = None
-    api_timeout: Optional[str] = None
-
-class TestAPIRequest(BaseModel):
-    api_url: str
-    api_key: str
-    api_model: Optional[str] = None
-    api_timeout: Optional[int] = 10
 
 class LoginRequest(BaseModel):
     password: str
@@ -163,14 +159,10 @@ async def check_auth(username: str = Depends(verify_token)):
 @app.get("/api/config")
 async def get_config():
     """返回系统配置信息"""
-    config = {
-        'announcement': os.getenv('ANNOUNCEMENT_TEXT') or '',
-        'default_api_url': os.getenv('API_URL', ''),
-        'default_api_model': os.getenv('API_MODEL', ''),
-        'default_api_timeout': os.getenv('API_TIMEOUT', '60')
+    return {
+        'announcement': os.getenv('ANNOUNCEMENT_TEXT') or ''
     }
-    return config
-
+    
 # AI分析股票
 @app.post("/api/analyze")
 async def analyze(request: AnalyzeRequest, username: str = Depends(verify_token)):
@@ -187,21 +179,8 @@ async def analyze(request: AnalyzeRequest, username: str = Depends(verify_token)
         
         logger.debug(f"接收到分析请求: stock_codes={stock_codes}, market_type={market_type}")
         
-        # 获取自定义API配置
-        custom_api_url = request.api_url
-        custom_api_key = request.api_key
-        custom_api_model = request.api_model
-        custom_api_timeout = request.api_timeout
-        
-        logger.debug(f"自定义API配置: URL={custom_api_url}, 模型={custom_api_model}, API Key={'已提供' if custom_api_key else '未提供'}, Timeout={custom_api_timeout}")
-        
-        # 创建新的分析器实例，使用自定义配置
-        custom_analyzer = StockAnalyzerService(
-            custom_api_url=custom_api_url,
-            custom_api_key=custom_api_key,
-            custom_api_model=custom_api_model,
-            custom_api_timeout=custom_api_timeout
-        )
+        # 创建分析器实例（使用服务端环境变量配置）
+        analyzer = StockAnalyzerService()
         
         if not stock_codes:
             logger.warning("未提供股票代码")
@@ -209,29 +188,49 @@ async def analyze(request: AnalyzeRequest, username: str = Depends(verify_token)
         
         # 定义流式生成器
         async def generate_stream():
+            import asyncio
+            
             if len(stock_codes) == 1:
                 # 单个股票分析流式处理
-                stock_code = stock_codes[0].strip()
-                logger.info(f"开始单股流式分析: {stock_code}")
+                input_code = stock_codes[0].strip()
+                logger.info(f"开始单股流式分析: {input_code}")
                 
-                stock_code_json = json.dumps(stock_code)
+                # 在发送init消息前解析代码
+                try:
+                    resolved_code, resolved_name = await asyncio.to_thread(analyzer.data_provider.resolve_stock_code, input_code, market_type)
+                    target_code = resolved_code if resolved_code else input_code
+                    logger.info(f"解析结果: {input_code} -> {target_code} ({resolved_name})")
+                except Exception as e:
+                    logger.error(f"解析股票代码出错: {e}")
+                    target_code = input_code
+
+                stock_code_json = json.dumps(target_code)
                 init_message = f'{{"stream_type": "single", "stock_code": {stock_code_json}}}\n'
                 yield init_message
                 
-                logger.debug(f"开始处理股票 {stock_code} 的流式响应")
+                logger.debug(f"开始处理股票 {target_code} 的流式响应")
                 chunk_count = 0
                 
                 # 使用异步生成器
-                async for chunk in custom_analyzer.analyze_stock(stock_code, market_type, stream=True):
+                async for chunk in analyzer.analyze_stock(target_code, market_type, stream=True):
                     chunk_count += 1
                     yield chunk + '\n'
                 
-                logger.info(f"股票 {stock_code} 流式分析完成，共发送 {chunk_count} 个块")
+                logger.info(f"股票 {target_code} 流式分析完成，共发送 {chunk_count} 个块")
             else:
                 # 批量分析流式处理
                 logger.info(f"开始批量流式分析: {stock_codes}")
                 
-                stock_codes_json = json.dumps(stock_codes)
+                # 解析所有代码
+                resolved_codes = []
+                for code in stock_codes:
+                    try:
+                        r_code, r_name = await asyncio.to_thread(analyzer.data_provider.resolve_stock_code, code.strip(), market_type)
+                        resolved_codes.append(r_code if r_code else code.strip())
+                    except:
+                        resolved_codes.append(code.strip())
+                
+                stock_codes_json = json.dumps(resolved_codes)
                 init_message = f'{{"stream_type": "batch", "stock_codes": {stock_codes_json}}}\n'
                 yield init_message
                 
@@ -239,8 +238,8 @@ async def analyze(request: AnalyzeRequest, username: str = Depends(verify_token)
                 chunk_count = 0
                 
                 # 使用异步生成器
-                async for chunk in custom_analyzer.scan_stocks(
-                    [code.strip() for code in stock_codes], 
+                async for chunk in analyzer.scan_stocks(
+                    resolved_codes, 
                     min_score=0, 
                     market_type=market_type,
                     stream=True
@@ -268,25 +267,140 @@ async def search_us_stocks(keyword: str = "", username: str = Depends(verify_tok
         
         # 直接使用异步服务的异步方法
         results = await us_stock_service.search_us_stocks(keyword)
+        # 为前端统一格式，将 symbol 映射为 symbol
         return {"results": results}
         
     except Exception as e:
         logger.error(f"搜索美股代码时出错: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# 搜索基金代码
-@app.get("/api/search_funds")
-async def search_funds(keyword: str = "", market_type: str = "", username: str = Depends(verify_token)):
+# 搜索 A 股代码
+@app.get("/api/search_a_shares")
+async def search_a_shares(keyword: str = "", username: str = Depends(verify_token)):
     try:
         if not keyword:
             raise HTTPException(status_code=400, detail="请输入搜索关键词")
         
-        # 直接使用异步服务的异步方法
-        results = await fund_service.search_funds(keyword, market_type)
+        analyzer = StockAnalyzerService()
+        stock_list = await asyncio.to_thread(analyzer.data_provider.get_a_share_list)
+        
+        # 模糊匹配搜索
+        keyword_lower = keyword.lower()
+        results = []
+        for stock in stock_list:
+            if (keyword_lower in stock['code'].lower() or 
+                keyword_lower in stock['name'].lower() or 
+                keyword_lower in stock['pinyin'].lower()):
+                results.append({
+                    'symbol': stock['code'],
+                    'name': stock['name'],
+                    'market': 'A'
+                })
+                if len(results) >= 10:
+                    break
+                    
         return {"results": results}
         
     except Exception as e:
-        logger.error(f"搜索基金代码时出错: {str(e)}")
+        logger.error(f"搜索 A 股代码时出错: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 搜索港股代码
+@app.get("/api/search_hk_shares")
+async def search_hk_shares(keyword: str = "", username: str = Depends(verify_token)):
+    try:
+        if not keyword:
+            raise HTTPException(status_code=400, detail="请输入搜索关键词")
+        
+        analyzer = StockAnalyzerService()
+        stock_list = await asyncio.to_thread(analyzer.data_provider.get_hk_share_list)
+        
+        # 模糊匹配搜索
+        keyword_lower = keyword.lower()
+        results = []
+        for stock in stock_list:
+            if (keyword_lower in stock['code'].lower() or 
+                keyword_lower in stock['name'].lower() or 
+                keyword_lower in stock['pinyin'].lower()):
+                results.append({
+                    'symbol': stock['code'],
+                    'name': stock['name'],
+                    'market': 'HK'
+                })
+                if len(results) >= 10:
+                    break
+                    
+        return {"results": results}
+        
+    except Exception as e:
+        logger.error(f"搜索港股代码时出错: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 全局搜索接口 (A股, 港股, 美股, 基金)
+@app.get("/api/search_global")
+async def search_global(keyword: str = "", market_type: str = "ALL", username: str = Depends(verify_token)):
+    try:
+        if not keyword:
+            return {"results": []}
+        
+        keyword_lower = keyword.lower()
+        tasks = []
+        
+        # 1. A 股搜寻 (如果 market_type 为 ALL 或 A)
+        if market_type in ["ALL", "A"]:
+            async def search_a():
+                analyzer = StockAnalyzerService()
+                stock_list = await asyncio.to_thread(analyzer.data_provider.get_a_share_list)
+                res = []
+                for s in stock_list:
+                    if keyword_lower in s['code'].lower() or keyword_lower in s['name'].lower() or keyword_lower in s['pinyin'].lower():
+                        res.append({"label": f"{s['name']} ({s['code']})", "value": s['code'], "market": "A", "name": s['name']})
+                        if len(res) >= 5: break
+                return res
+            tasks.append(search_a())
+
+        # 2. 港股搜寻 (如果 market_type 为 ALL 或 HK)
+        if market_type in ["ALL", "HK"]:
+            async def search_hk():
+                analyzer = StockAnalyzerService()
+                stock_list = await asyncio.to_thread(analyzer.data_provider.get_hk_share_list)
+                res = []
+                for s in stock_list:
+                    if keyword_lower in s['code'].lower() or keyword_lower in s['name'].lower() or keyword_lower in s['pinyin'].lower():
+                        res.append({"label": f"{s['name']} ({s['code']})", "value": s['code'], "market": "HK", "name": s['name']})
+                        if len(res) >= 5: break
+                return res
+            tasks.append(search_hk())
+
+        # 3. 美股搜寻 (如果 market_type 为 ALL 或 US)
+        if market_type in ["ALL", "US"]:
+            async def search_us():
+                us_stocks = await us_stock_service.search_us_stocks(keyword)
+                return [{"label": f"{s['name']} ({s['symbol']})", "value": s['symbol'], "market": "US", "name": s['name']} for s in us_stocks[:5]]
+            tasks.append(search_us())
+
+        # 4. 基金搜寻 (如果 market_type 为 ALL, ETF 或 LOF)
+        if market_type in ["ALL", "ETF", "LOF"]:
+            async def search_f(m_type):
+                funds = await fund_service.search_funds(keyword, m_type)
+                return [{"label": f"{s['name']} ({s['symbol']})", "value": s['symbol'], "market": m_type, "name": s['name']} for s in funds[:5]]
+            
+            if market_type == "ALL":
+                tasks.append(search_f("ETF"))
+                tasks.append(search_f("LOF"))
+            else:
+                tasks.append(search_f(market_type))
+
+        # 并发执行所有搜索任务
+        search_results = await asyncio.gather(*tasks)
+        
+        # 合并结果
+        flat_results = [item for sublist in search_results for item in sublist]
+        
+        return {"results": flat_results}
+        
+    except Exception as e:
+        logger.error(f"全局搜索出错: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # 获取美股详情
@@ -319,74 +433,43 @@ async def get_fund_detail(symbol: str, market_type: str = "ETF", username: str =
         logger.error(f"获取基金详情时出错: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# 测试API连接
-@app.post("/api/test_api_connection")
-async def test_api_connection(request: TestAPIRequest, username: str = Depends(verify_token)):
-    """测试API连接"""
+# 获取K线数据
+@app.get("/api/kline/{code}")
+async def get_kline(code: str, market_type: str = "A", days: int = 100, username: str = Depends(verify_token)):
     try:
-        logger.info("开始测试API连接")
-        api_url = request.api_url
-        api_key = request.api_key
-        api_model = request.api_model
-        api_timeout = request.api_timeout
-        
-        logger.debug(f"测试API连接: URL={api_url}, 模型={api_model}, API Key={'已提供' if api_key else '未提供'}, Timeout={api_timeout}")
-        
-        if not api_url:
-            logger.warning("未提供API URL")
-            raise HTTPException(status_code=400, detail="请提供API URL")
-            
-        if not api_key:
-            logger.warning("未提供API Key")
-            raise HTTPException(status_code=400, detail="请提供API Key")
-            
-        # 构建API URL
-        test_url = APIUtils.format_api_url(api_url)
-        logger.debug(f"完整API测试URL: {test_url}")
-        
-        # 使用异步HTTP客户端发送测试请求
-        async with httpx.AsyncClient(timeout=float(api_timeout)) as client:
-            response = await client.post(
-                test_url,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": api_model or "",
-                    "messages": [
-                        {"role": "user", "content": "Hello, this is a test message. Please respond with 'API connection successful'."}
-                    ],
-                    "max_tokens": 20
-                }
-            )
-        
-        # 检查响应
-        if response.status_code == 200:
-            logger.info(f"API 连接测试成功: {response.status_code}")
-            return {"success": True, "message": "API 连接测试成功"}
-        else:
-            error_data = response.json()
-            error_message = error_data.get('error', {}).get('message', '未知错误')
-            logger.warning(f"API连接测试失败: {response.status_code} - {error_message}")
-            return JSONResponse(
-                status_code=400,
-                content={"success": False, "message": f"API 连接测试失败: {error_message}", "status_code": response.status_code}
-            )
-            
-    except httpx.RequestError as e:
-        logger.error(f"API 连接请求错误: {str(e)}")
-        return JSONResponse(
-            status_code=400,
-            content={"success": False, "message": f"请求错误: {str(e)}"}
-        )
+        analyzer = StockAnalyzerService()
+        data = await analyzer.get_kline_data(code, market_type, days)
+        return data
     except Exception as e:
-        logger.error(f"测试 API 连接时出错: {str(e)}")
-        logger.exception(e)
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": f"API 测试连接时出错: {str(e)}"}
-        )
+        logger.error(f"获取K线数据出错: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 获取文章列表 (分析专栏)
+@app.get("/api/articles")
+async def get_articles(limit: int = 20, offset: int = 0, q: str = None):
+    try:
+        analyzer = StockAnalyzerService()
+        articles = await analyzer.archive_service.get_articles(limit, offset, q)
+        return {"articles": articles}
+    except Exception as e:
+        logger.error(f"获取文章列表出错: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 获取单篇文章详情
+@app.get("/api/articles/{article_id}")
+async def get_article_detail(article_id: int):
+    try:
+        analyzer = StockAnalyzerService()
+        article = await analyzer.archive_service.get_article_by_id(article_id)
+        if not article:
+            raise HTTPException(status_code=404, detail="文章不存在")
+        return article
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取文章详情出错: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # 检查是否需要登录
 @app.get("/api/need_login")
@@ -397,8 +480,198 @@ async def need_login():
 # 设置静态文件
 frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend', 'dist')
 if os.path.exists(frontend_dist):
-    # 直接挂载整个dist目录
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+    # 挂载静态文件目录
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, 'assets')), name="assets")
+    
+    # Catch-all 路由，用于支持 History 模式
+    @app.get("/{path_name:path}")
+    async def serve_spa(request: Request, path_name: str):
+        # 处理SEO和AI优化文件
+        if path_name == "sitemap.xml":
+            try:
+                from services.sitemap_generator import SitemapGenerator
+                generator = SitemapGenerator(base_url="https://aguai.net")
+                sitemap_content = await generator.generate_sitemap()
+                return Response(content=sitemap_content, media_type="application/xml")
+            except Exception as e:
+                logger.error(f"生成sitemap失败: {str(e)}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        if path_name == "robots.txt":
+            robots_content = """# Agu AI 股票分析平台 - Robots.txt
+# 允许所有搜索引擎和AI爬虫抓取
+
+User-agent: *
+Allow: /
+Allow: /analysis
+Allow: /analysis/*
+
+# 特别允许AI爬虫
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+# Sitemap位置
+Sitemap: https://aguai.net/sitemap.xml
+
+# 爬取延迟(毫秒)
+Crawl-delay: 1
+"""
+            return Response(content=robots_content, media_type="text/plain")
+        
+        if path_name == "llms.txt":
+            llms_content = """# Agu AI 股票分析平台
+
+## 网站简介
+Agu AI 是一个基于人工智能的股票分析平台,为投资者提供A股、港股、美股的智能分析服务。
+
+## 主要功能
+- 实时股票技术分析
+- AI深度投资建议
+- 多维度评分系统(均线、RSI、MACD、成交量、波动率)
+- 专业分析文章归档
+
+## 技术指标
+- 移动平均线(MA5, MA20, MA60)
+- 相对强弱指标(RSI)
+- MACD指标
+- 成交量分析
+- 波动率评估
+
+## 评分体系
+- 均线系统: 30分
+- RSI指标: 20分
+- MACD指标: 20分
+- 成交量: 20分
+- 波动率: 10分
+总分: 100分
+
+## 推荐等级
+- 80分以上: 强烈推荐
+- 60-79分: 推荐
+- 40-59分: 观望
+- 40分以下: 不推荐
+
+## 数据来源
+- A股数据: 新浪财经API
+- 港股数据: 雅虎财经API
+- 美股数据: 雅虎财经API
+
+## 分析频率
+- 实时分析: 按需
+- 文章更新: 每日
+- 数据更新: 实时
+
+## 联系方式
+- 网站: https://aguai.net
+- 邮箱: support@aguai.net
+
+## 免责声明
+本平台提供的分析仅供参考,不构成投资建议。股市有风险,投资需谨慎。
+
+## 最后更新
+2025-12-18
+"""
+            return Response(content=llms_content, media_type="text/plain")
+        
+        # 如果是 API 请求，让 FastAPI 的 API 路由处理（通常 API 路由会先匹配）
+        if path_name.startswith("api/"):
+            raise HTTPException(status_code=404)
+        
+        # 检查是否是静态文件请求 (简单判断)
+        file_path = os.path.join(frontend_dist, path_name)
+        if os.path.isfile(file_path):
+            return Response(content=open(file_path, "rb").read(), media_type="application/octet-stream")
+            
+        # 否则读取 index.html 并进行 SEO 注入
+        index_path = os.path.join(frontend_dist, "index.html")
+        if not os.path.exists(index_path):
+            return Response(content="Frontend not built", status_code=404)
+            
+        with open(index_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+            
+        # SEO 动态注入逻辑
+        if path_name.startswith("analysis/"):
+            try:
+                # 尝试从路径中提取文章 ID
+                parts = path_name.split("/")
+                article_id = parts[1] if len(parts) > 1 else ""
+                
+                if article_id and article_id.isdigit():
+                    from services.archive_service import ArchiveService
+                    import json
+                    archive_service = ArchiveService()
+                    article = await archive_service.get_article_by_id(int(article_id))
+                    
+                    if article:
+                        title = f"{article['title']} - Agu AI"
+                        desc = f"{article['stock_name']}({article['stock_code']})当日行情深度分析，综合评分 {article['score']}。{article['content'][:150]}..."
+                        
+                        # 注入标题
+                        html_content = html_content.replace("<title>免费AI在线股票分析平台系统 - 智能诊股助手_软件</title>", f"<title>{title}</title>")
+                        
+                        # 注入描述和关键词 (OG 标签也更新)
+                        html_content = html_content.replace('content="免费的A股、港股、美股、ETF智能AI分析平台系统"', f'content="{desc}"')
+                        html_content = html_content.replace('content="Stock Scanner -免费股市AI分析工具"', f'content="{title}"')
+                        html_content = html_content.replace('content="基于AI的股票量化分析平台，支持A股、港股、美股批量分析。"', f'content="{desc}"')
+                        
+                        # 构建 JSON-LD 结构化数据
+                        json_ld = {
+                            "@context": "https://schema.org",
+                            "@type": "Article",
+                            "headline": article['title'],
+                            "description": desc,
+                            "datePublished": article.get('publish_date', article.get('created_at', '')),
+                            "author": {
+                                "@type": "Organization",
+                                "name": "Agu AI",
+                                "url": "https://aguai.net"
+                            },
+                            "publisher": {
+                                "@type": "Organization",
+                                "name": "Agu AI 股票分析平台",
+                                "logo": {
+                                    "@type": "ImageObject",
+                                    "url": "https://aguai.net/favicon.ico"
+                                }
+                            },
+                            "about": {
+                                "@type": "FinancialProduct",
+                                "name": article['stock_name'],
+                                "identifier": article['stock_code'],
+                                "category": f"{article['market_type']}股"
+                            },
+                            "keywords": f"{article['stock_name']}, {article['stock_code']}, 股票分析, AI分析, {article['market_type']}股",
+                            "articleBody": article['content'][:500]
+                        }
+                        
+                        # 注入 JSON-LD 到 head 标签中
+                        json_ld_script = f'\n<script type="application/ld+json">\n{json.dumps(json_ld, ensure_ascii=False, indent=2)}\n</script>\n</head>'
+                        html_content = html_content.replace('</head>', json_ld_script)
+                        
+            except Exception as e:
+                logger.error(f"SEO Injection Error: {str(e)}")
+        
+        return Response(content=html_content, media_type="text/html")
+
     logger.info(f"前端构建目录挂载成功: {frontend_dist}")
 else:
     logger.warning("前端构建目录不存在，仅API功能可用")

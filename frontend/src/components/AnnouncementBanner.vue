@@ -91,48 +91,58 @@ onBeforeUnmount(() => {
   right: 1rem;
   max-width: 24rem;
   z-index: 50;
-  animation: fadeInDown 0.3s ease-out;
+  animation: fadeInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .announcement-card {
-  border-left: 4px solid var(--n-primary-color);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-radius: 0.5rem;
+  border-left: 4px solid #667eea;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+  border-radius: 12px;
   overflow: hidden;
-  backdrop-filter: blur(10px);
-  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background-color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-left-width: 4px;
 }
 
 .announcement-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1f2937;
 }
 
 .info-icon {
-  color: var(--n-primary-color);
+  color: #667eea;
 }
 
 .announcement-content {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   white-space: pre-line;
+  color: #4b5563;
+  line-height: 1.5;
+  font-size: 0.95rem;
 }
 
 .announcement-timer {
   font-size: 0.75rem;
-  color: var(--n-text-color-disabled);
+  color: #9ca3af;
+  font-weight: 500;
 }
 
 .announcement-link {
-  color: var(--n-primary-color);
+  color: #667eea;
   text-decoration: underline;
+  font-weight: 500;
 }
 
 @keyframes fadeInDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-20px);
   }
   to {
     opacity: 1;
@@ -149,9 +159,8 @@ onBeforeUnmount(() => {
 
 .login-card-style {
   background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(20px);
   border-left: 4px solid #2080f0;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
-
 </style>
