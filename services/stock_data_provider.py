@@ -65,61 +65,58 @@ class StockDataProvider:
 
     def get_hk_share_list(self) -> List[Dict[str, str]]:
         """
-        获取港股列表（包含代码、名称和拼音）
-        带缓存机制和重试逻辑
+        获取港股列表（使用预定义的常用港股列表）
+        避免海外服务器连接中国数据源的问题
         """
         if self._hk_share_list_cache:
             return self._hk_share_list_cache
         
-        import time
-        max_retries = 3
-        retry_delay = 1
+        from pypinyin import pinyin, Style
         
-        for attempt in range(max_retries):
+        logger.info("使用预定义的常用港股列表")
+        
+        # 常用港股列表
+        popular_hk_stocks = [
+            ('00700', '腾讯控股'), ('00388', '香港交易所'), ('00939', '建设银行'),
+            ('00941', '中国移动'), ('01299', '友邦保险'), ('02318', '中国平安'),
+            ('03690', '美团'), ('00175', '吉利汽车'), ('01810', '小米集团'),
+            ('00883', '中国海洋石油'), ('00005', '汇丰控股'), ('02020', '安踏体育'),
+            ('01093', '石药集团'), ('00027', '银河娱乐'), ('01024', '快手'),
+            ('03968', '招商银行'), ('01398', '工商银行'), ('00386', '中国石油化工'),
+            ('01288', '农业银行'), ('03988', '中国银行'), ('00688', '中国海外发展'),
+            ('02382', '舜宇光学科技'), ('00384', '中国燃气'), ('02269', '药明生物'),
+            ('00291', '华润啤酒'), ('01109', '华润置地'), ('00016', '新鸿基地产'),
+            ('00001', '长和'), ('00002', '中电控股'), ('00003', '香港中华煤气'),
+            ('00006', '电能实业'), ('00011', '恒生银行'), ('00012', '恒基地产'),
+            ('00013', '和记电讯'), ('00017', '新世界发展'), ('00019', '太古股份公司A'),
+            ('00020', '商汤'), ('00066', '香港铁路'), ('00083', '信和置业'),
+            ('00101', '恒隆地产'), ('00144', '招商局港口'), ('00151', '中国旺旺'),
+            ('00168', '青岛啤酒'), ('00177', '江苏宁沪高速'), ('00267', '中信股份'),
+            ('00288', '万洲国际'), ('00293', '国泰航空'), ('00316', '东方海外国际'),
+            ('00322', '康师傅控股'), ('00857', '中国石油股份'), ('00968', '信义光能'),
+            ('00981', '中芯国际'), ('00992', '联想集团'), ('01071', '华电国际电力股份'),
+            ('01088', '中国神华'), ('01113', '长实集团'), ('01177', '中国生物制药'),
+        ]
+        
+        stock_list = []
+        for code, name in popular_hk_stocks:
+            # 生成拼音首字母
             try:
-                import akshare as ak
-                from pypinyin import pinyin, Style
-                
-                logger.info(f"正在获取港股股票列表... (尝试 {attempt + 1}/{max_retries})")
-                # 获取港股代码和名称列表
-                df = ak.stock_hk_spot_em()
-                
-                stock_list = []
-                for _, row in df.iterrows():
-                    code = str(row['代码'])
-                    name = str(row['名称'])
-                    
-                    # 生成拼音首字母
-                    try:
-                        py_list = pinyin(name, style=Style.FIRST_LETTER)
-                        py_str = ''.join([item[0] for item in py_list]).lower()
-                        # 处理多音字等异常字符，确保只保留字母数字
-                        py_str = ''.join(c for c in py_str if c.isalnum())
-                    except Exception:
-                        py_str = ""
-                    
-                    stock_list.append({
-                        'code': code,
-                        'name': name,
-                        'pinyin': py_str
-                    })
-                    
-                self._hk_share_list_cache = stock_list
-                logger.info(f"成功加载 {len(stock_list)} 只港股股票信息")
-                return stock_list
-                
-            except Exception as e:
-                logger.warning(f"获取港股列表失败 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
-                if attempt < max_retries - 1:
-                    if "Connection" in str(e) or "reset" in str(e).lower():
-                        logger.info(f"连接错误，{retry_delay}秒后重试...")
-                        time.sleep(retry_delay)
-                        retry_delay *= 2
-                        continue
-                logger.error(f"获取港股列表最终失败: {str(e)}")
-                return []
+                py_list = pinyin(name, style=Style.FIRST_LETTER)
+                py_str = ''.join([item[0] for item in py_list]).lower()
+                py_str = ''.join(c for c in py_str if c.isalnum())
+            except Exception:
+                py_str = ""
+            
+            stock_list.append({
+                'code': code,
+                'name': name,
+                'pinyin': py_str
+            })
         
-        return []
+        self._hk_share_list_cache = stock_list
+        logger.info(f"已加载 {len(stock_list)} 只常用港股信息")
+        return stock_list
     
     def resolve_stock_code(self, input_str: str, market_type: str = 'A') -> Tuple[str, str]:
         """
@@ -238,116 +235,46 @@ class StockDataProvider:
                 )
                 
             elif market_type in ['HK']:
-                logger.debug(f"获取港股数据: {stock_code}")
-                df = ak.stock_hk_daily(
-                    symbol=stock_code,
-                    adjust="qfq"
-                )
-                
-                # 在获取数据后进行日期过滤
+                logger.debug(f"获取港股数据: {stock_code} (使用 yfinance)")
                 try:
-                    if not isinstance(df.index, pd.DatetimeIndex):
-                        # 如果存在命名为'date'的列，将其设为索引
-                        if 'date' in df.columns:
-                            df['date'] = pd.to_datetime(df['date'])
-                            df.set_index('date', inplace=True)
-                        else:
-                            # 尝试将第一列转换为日期索引
-                            date_col = df.columns[0]
-                            df[date_col] = pd.to_datetime(df[date_col])
-                            df.set_index(date_col, inplace=True)
+                    import yfinance as yf
                     
-                    # 转换日期字符串为日期对象
-                    if start_date:
-                        if start_date.isdigit() and len(start_date) == 8:
-                            start_date_dt = pd.to_datetime(start_date, format='%Y%m%d')
-                        else:
-                            start_date_dt = pd.to_datetime(start_date)
+                    # 港股需要添加 .HK 后缀
+                    if not stock_code.endswith('.HK'):
+                        yf_symbol = f"{stock_code}.HK"
                     else:
-                        start_date_dt = pd.to_datetime((datetime.now() - timedelta(days=365)).strftime('%Y%m%d'))
-                        
-                    if end_date:
-                        if end_date.isdigit() and len(end_date) == 8:
-                            end_date_dt = pd.to_datetime(end_date, format='%Y%m%d')
-                        else:
-                            end_date_dt = pd.to_datetime(end_date)
-                    else:
-                        end_date_dt = pd.to_datetime(datetime.now().strftime('%Y%m%d'))
+                        yf_symbol = stock_code
                     
-                    # 过滤日期范围
-                    df = df[(df.index >= start_date_dt) & (df.index <= end_date_dt)]
-                    logger.debug(f"港股日期过滤后数据点数: {len(df)}")
+                    ticker = yf.Ticker(yf_symbol)
+                    df = ticker.history(period="1y")
+                    
+                    if df.empty:
+                        raise ValueError(f"未获取到港股 {stock_code} 的数据")
+                    
+                    logger.debug(f"港股数据列: {df.columns.tolist()}")
+                    logger.debug(f"港股数据形状: {df.shape}")
                     
                 except Exception as e:
-                    logger.warning(f"港股日期过滤出错: {str(e)}，使用原始数据")
+                    logger.error(f"yfinance 获取港股数据失败 {stock_code}: {str(e)}")
+                    raise ValueError(f"获取港股数据失败 {stock_code}: {str(e)}")
                 
             elif market_type in ['US']:
-                logger.debug(f"获取美股数据: {stock_code}")
+                logger.debug(f"获取美股数据: {stock_code} (使用 yfinance)")
                 try:
-                    df = ak.stock_us_daily(
-                        symbol=stock_code,
-                        adjust="qfq"
-                    )
-                    logger.debug(f"美股数据原始列: {df.columns.tolist()}")
+                    import yfinance as yf
+                    
+                    ticker = yf.Ticker(stock_code)
+                    df = ticker.history(period="1y")
+                    
+                    if df.empty:
+                        raise ValueError(f"未获取到美股 {stock_code} 的数据")
+                    
+                    logger.debug(f"美股数据列: {df.columns.tolist()}")
                     logger.debug(f"美股数据形状: {df.shape}")
                     
-                    # 确保索引是日期时间类型
-                    if not isinstance(df.index, pd.DatetimeIndex):
-                        # 如果存在命名为'date'的列，将其设为索引
-                        if 'date' in df.columns:
-                            df['date'] = pd.to_datetime(df['date'])
-                            df.set_index('date', inplace=True)
-                            logger.debug("已将'date'列设置为索引")
-                        else:
-                            # 否则将当前索引转换为日期类型
-                            df.index = pd.to_datetime(df.index)
-                            logger.debug("已将索引转换为DatetimeIndex")
-                    
-                    # 计算美股的成交额（Amount）= 成交量（Volume）× 收盘价（Close）
-                    volume_col = next((col for col in df.columns if col.lower() == 'volume'), None)
-                    close_col = next((col for col in df.columns if col.lower() == 'close'), None)
-                    
-                    if volume_col and close_col:
-                        df['amount'] = df[volume_col] * df[close_col]
-                        logger.debug("已为美股数据计算成交额(amount)字段")
-                    else:
-                        logger.warning(f"美股数据缺少volume或close列，无法计算amount。当前列: {df.columns.tolist()}")
-                        # 添加空的amount列，避免后续处理错误
-                        df['amount'] = 0.0
-                        
-                    # 将所有列名转为小写以进行统一处理
-                    df.columns = [col.lower() for col in df.columns]
-                    
                 except Exception as e:
-                    logger.error(f"获取美股数据失败 {stock_code}: {str(e)}")
+                    logger.error(f"yfinance 获取美股数据失败 {stock_code}: {str(e)}")
                     raise ValueError(f"获取美股数据失败 {stock_code}: {str(e)}")
-                
-                # 将字符串日期转换为日期时间对象进行比较
-                try:
-                    # 尝试多种格式解析日期
-                    # 如果日期是数字格式（20220101），使用适当的格式
-                    if start_date.isdigit() and len(start_date) == 8:
-                        start_date_dt = pd.to_datetime(start_date, format='%Y%m%d')
-                    else:
-                        # 否则让pandas自动推断格式
-                        start_date_dt = pd.to_datetime(start_date)
-                        
-                    if end_date.isdigit() and len(end_date) == 8:
-                        end_date_dt = pd.to_datetime(end_date, format='%Y%m%d')
-                    else:
-                        end_date_dt = pd.to_datetime(end_date)
-                except Exception as e:
-                    logger.warning(f"日期转换出错: {str(e)}，使用默认值")
-                    # 如果转换失败，使用合理的默认值
-                    start_date_dt = pd.to_datetime('20000101', format='%Y%m%d')
-                    end_date_dt = pd.to_datetime(datetime.now().strftime('%Y%m%d'), format='%Y%m%d')
-                
-                # 过滤日期
-                try:
-                    df = df[(df.index >= start_date_dt) & (df.index <= end_date_dt)]
-                    logger.debug(f"日期过滤后数据点数: {len(df)}")
-                except Exception as e:
-                    logger.warning(f"日期过滤出错: {str(e)}，返回原始数据")
                     
             elif market_type in ['ETF']:
                 logger.debug(f"获取{market_type}基金数据: {stock_code}")
@@ -375,39 +302,37 @@ class StockDataProvider:
                 # 实际数据列：['日期', '股票代码', '开盘', '收盘', '最高', '最低', '成交量', '成交额', '振幅', '涨跌幅', '涨跌额', '换手率']
                 df.columns = ['Date', 'Code', 'Open', 'Close', 'High', 'Low', 'Volume', 'Amount', 'Amplitude', 'Change_pct', 'Change', 'Turnover']
             elif market_type in ['HK', 'US']:
-                # 美股数据列可能不同，需要通过映射处理
-                columns_mapping = {
-                    'open': 'Open',
-                    'high': 'High',
-                    'low': 'Low',
-                    'close': 'Close',
-                    'volume': 'Volume',
-                    'amount': 'Amount'
-                }
+                # yfinance 数据列：Open, High, Low, Close, Volume, Dividends, Stock Splits
+                # 列名已经是首字母大写，需要添加 Amount 列
+                logger.debug(f"yfinance 原始列名: {df.columns.tolist()}")
                 
-                # 创建新的DataFrame以确保列顺序和存在性
-                new_df = pd.DataFrame(index=df.index)
+                # 计算成交额 Amount = Volume × Close
+                if 'Volume' in df.columns and 'Close' in df.columns:
+                    df['Amount'] = df['Volume'] * df['Close']
+                else:
+                    df['Amount'] = 0.0
                 
-                # 遍历映射，填充新DataFrame
-                for orig_col, new_col in columns_mapping.items():
-                    if orig_col in df.columns:
-                        new_df[new_col] = df[orig_col]
-                    else:
-                        # 如果原始列不存在，创建一个填充0的列
-                        logger.warning(f"数据中缺少{orig_col}列，使用0值填充")
-                        new_df[new_col] = 0.0
+                # 确保必需的列存在
+                required_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Amount']
+                for col in required_cols:
+                    if col not in df.columns:
+                        logger.warning(f"数据中缺少{col}列，使用0值填充")
+                        df[col] = 0.0
                 
-                # 替换原始df
-                df = new_df
+                # 只保留需要的列
+                df = df[required_cols]
                 
             elif market_type in ['ETF', 'LOF']:
                 # 基金数据可能有不同的列
                 df.columns = ['Date', 'Open', 'Close', 'High', 'Low', 'Volume', 'Amount', 'Amplitude', 'Change_pct', 'Change', 'Turnover']
                 
-            # 确保日期列是日期类型
+            # 确保日期列是日期类型（yfinance 默认索引就是日期）
             if 'Date' in df.columns:
                 df['Date'] = pd.to_datetime(df['Date'])
                 df.set_index('Date', inplace=True)
+            elif not isinstance(df.index, pd.DatetimeIndex):
+                # 如果索引不是日期类型，尝试转换
+                df.index = pd.to_datetime(df.index)
                 
             # 确保按日期升序排序
             df.sort_index(inplace=True)
