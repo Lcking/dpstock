@@ -1,0 +1,52 @@
+# Docker 构建时忽略的文件和目录
+
+# 数据目录 - 通过 volume 挂载持久化，不要复制到镜像中
+data/
+
+# 日志目录
+logs/
+
+# SSL 证书目录
+certbot/
+
+# Git 目录
+.git/
+.gitignore
+
+# Node modules (前端会在构建时重新安装)
+node_modules/
+frontend/node_modules/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# IDE 和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 环境文件
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# 测试和临时文件
+tests/
+*.log
+*.tmp
+
+# Docker 相关（避免递归）
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# 文档
+*.md
+!README.md
