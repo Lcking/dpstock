@@ -239,17 +239,23 @@ class StockDataProvider:
                 try:
                     import yfinance as yf
                     
-                    # 港股需要添加 .HK 后缀
+                    # 港股代码格式转换
+                    # 输入: 00700 -> 输出: 0700.HK (去掉前导0)
+                    # 输入: 0700.HK -> 输出: 0700.HK (保持不变)
                     if not stock_code.endswith('.HK'):
-                        yf_symbol = f"{stock_code}.HK"
+                        # 去掉前导0（港股代码通常是5位，yfinance需要4位）
+                        clean_code = stock_code.lstrip('0') or '0'  # 防止全是0的情况
+                        yf_symbol = f"{clean_code}.HK"
                     else:
                         yf_symbol = stock_code
+                    
+                    logger.debug(f"港股代码转换: {stock_code} -> {yf_symbol}")
                     
                     ticker = yf.Ticker(yf_symbol)
                     df = ticker.history(period="1y")
                     
                     if df.empty:
-                        raise ValueError(f"未获取到港股 {stock_code} 的数据")
+                        raise ValueError(f"未获取到港股 {stock_code} 的数据，yfinance symbol: {yf_symbol}")
                     
                     logger.debug(f"港股数据列: {df.columns.tolist()}")
                     logger.debug(f"港股数据形状: {df.shape}")
