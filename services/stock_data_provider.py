@@ -240,11 +240,15 @@ class StockDataProvider:
                     import yfinance as yf
                     
                     # 港股代码格式转换
-                    # 输入: 00700 -> 输出: 0700.HK (去掉前导0)
+                    # 输入: 00700 -> 输出: 0700.HK (保持4位数字)
                     # 输入: 0700.HK -> 输出: 0700.HK (保持不变)
                     if not stock_code.endswith('.HK'):
-                        # 去掉前导0（港股代码通常是5位，yfinance需要4位）
-                        clean_code = stock_code.lstrip('0') or '0'  # 防止全是0的情况
+                        # 港股代码通常是5位（00700），yfinance需要4位（0700）
+                        # 只去掉第一个0，保持4位数字格式
+                        if len(stock_code) == 5 and stock_code.startswith('0'):
+                            clean_code = stock_code[1:]  # 去掉第一个字符
+                        else:
+                            clean_code = stock_code  # 保持原样
                         yf_symbol = f"{clean_code}.HK"
                     else:
                         yf_symbol = stock_code
