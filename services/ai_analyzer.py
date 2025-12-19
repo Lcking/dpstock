@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from utils.logger import get_logger
 from utils.api_utils import APIUtils
 from datetime import datetime
+from services.stock_scorer import StockScorer
 
 # 获取日志器
 logger = get_logger()
@@ -31,6 +32,9 @@ class AIAnalyzer:
         self.API_KEY = os.getenv('API_KEY')
         self.API_MODEL = os.getenv('API_MODEL', 'deepseek-reasoner')
         self.API_TIMEOUT = int(os.getenv('API_TIMEOUT', 60))
+        
+        # 初始化统一评分器
+        self.scorer = StockScorer()
         
         logger.debug(f"初始化AIAnalyzer: API_URL={self.API_URL}, API_MODEL={self.API_MODEL}, API_KEY={'已提供' if self.API_KEY else '未提供'}, API_TIMEOUT={self.API_TIMEOUT}")
     
@@ -298,11 +302,11 @@ class AIAnalyzer:
                         # 完整的分析内容
                         full_content = buffer
                         
-                        # 尝试从分析内容中提取投资建议
-                        recommendation = self._extract_recommendation(full_content)
+                        # 使用统一评分器计算分析评分（与 StockScorer 算法一致）
+                        score = self.scorer.calculate_score(df)
                         
-                        # 计算分析评分
-                        score = self._calculate_analysis_score(full_content, technical_summary)
+                        # 使用统一评分器获取投资建议
+                        recommendation = self.scorer.get_recommendation(score)
                         
                         # 补发完整分析内容，供前端展示
                         if full_content:
@@ -338,11 +342,11 @@ class AIAnalyzer:
                     response_data = response.json()
                     analysis_text = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
                     
-                    # 尝试从分析内容中提取投资建议
-                    recommendation = self._extract_recommendation(analysis_text)
+                    # 使用统一评分器计算分析评分（与 StockScorer 算法一致）
+                    score = self.scorer.calculate_score(df)
                     
-                    # 计算分析评分
-                    score = self._calculate_analysis_score(analysis_text, technical_summary)
+                    # 使用统一评分器获取投资建议
+                    recommendation = self.scorer.get_recommendation(score)
                     
                     # 发送完整的分析结果
                     yield json.dumps({

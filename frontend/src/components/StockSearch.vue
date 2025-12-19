@@ -29,7 +29,7 @@
             v-for="item in results"
             :key="item.symbol"
             class="search-result-item mobile-search-result-item"
-            @click="selectStock(item)"
+            @mousedown.prevent="selectStock(item)"
           >
             <div class="result-symbol-name">
               <span class="result-symbol">{{ item.symbol }}</span>
@@ -69,6 +69,7 @@ const results = ref<SearchResult[]>([]);
 const loading = ref(false);
 const showResults = ref(false);
 const searchInputRef = ref<any>(null);
+const isSelecting = ref(false); // 新增：防止blur和click竞争条件
 
 // 创建防抖搜索函数
 const debouncedSearch = debounce(async (keyword: string) => {
@@ -114,19 +115,27 @@ function handleSearchInput() {
 }
 
 function selectStock(item: SearchResult) {
+  isSelecting.value = true; // 标记正在选择，防止blur误关闭
   // 处理symbol，确保不包含序号
   // 假设symbol格式可能是"1. AAPL"这样的格式，我们只需要"AAPL"部分
   const cleanSymbol = item.symbol.replace(/^\d+\.\s*/, '');
   emit('select', cleanSymbol);
   searchKeyword.value = '';
   showResults.value = false;
+  
+  // 延迟重置标志
+  setTimeout(() => {
+    isSelecting.value = false;
+  }, 100);
 }
 
 function handleBlur() {
-  // 延迟隐藏，以便可以点击结果项
+  // 延迟隐藏，并检查是否正在选择
   setTimeout(() => {
-    showResults.value = false;
-  }, 200);
+    if (!isSelecting.value) {
+      showResults.value = false;
+    }
+  }, 250); // 增加到250ms，给选择操作更多时间
 }
 
 function handleFocus() {

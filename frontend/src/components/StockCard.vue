@@ -140,9 +140,40 @@
         </div>
       </div>
 
-      <n-divider dashed v-if="stock.analysisStatus === 'completed' || isAnalyzing" style="margin: 12px 0">AI 深度分析</n-divider>
+      <n-divider dashed v-if="stock.analysisStatus === 'completed' || isAnalyzing || stock.analysisStatus === 'waiting'" style="margin: 12px 0">AI 深度分析</n-divider>
 
-      <template v-if="stock.analysisStatus === 'error'">
+      <!-- 等待分析状态：显示骨架屏和进度提示 -->
+      <template v-if="stock.analysisStatus === 'waiting'">
+        <div class="analysis-waiting">
+          <div class="waiting-progress">
+            <div class="progress-step active">
+              <span class="step-icon">✓</span>
+              <span class="step-text">股票代码已确认</span>
+            </div>
+            <div class="progress-step pending">
+              <n-spin size="small" />
+              <span class="step-text">正在获取行情数据...</span>
+            </div>
+            <div class="progress-step pending">
+              <span class="step-icon">○</span>
+              <span class="step-text">计算技术指标</span>
+            </div>
+            <div class="progress-step pending">
+              <span class="step-icon">○</span>
+              <span class="step-text">AI深度分析</span>
+            </div>
+          </div>
+          <div class="skeleton-content">
+            <div class="skeleton-line long"></div>
+            <div class="skeleton-line medium"></div>
+            <div class="skeleton-line short"></div>
+            <div class="skeleton-line long"></div>
+            <div class="skeleton-line medium"></div>
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="stock.analysisStatus === 'error'">
         <div class="error-status">
           <n-icon :component="AlertCircleIcon" class="error-icon" />
           <span>{{ stock.error || '未知错误' }}</span>
@@ -1205,5 +1236,117 @@ window.addEventListener('resize', () => {
 /* New Content Divider */
 .analysis-result {
   margin-top: 8px;
+}
+
+/* Waiting State - Skeleton & Progress */
+.analysis-waiting {
+  padding: 16px 0;
+}
+
+.waiting-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(118, 75, 162, 0.06) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.progress-step.active .step-icon {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.progress-step.active .step-text {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.progress-step.pending .step-icon {
+  color: #94a3b8;
+}
+
+.progress-step.pending .step-text {
+  color: #64748b;
+}
+
+.step-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.step-text {
+  font-size: 0.875rem;
+}
+
+/* Skeleton Loader */
+.skeleton-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.skeleton-line {
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    rgba(102, 126, 234, 0.1) 0%,
+    rgba(102, 126, 234, 0.2) 50%,
+    rgba(102, 126, 234, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-line.long {
+  width: 100%;
+}
+
+.skeleton-line.medium {
+  width: 75%;
+}
+
+.skeleton-line.short {
+  width: 50%;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Mobile Optimization for Waiting State */
+@media (max-width: 768px) {
+  .waiting-progress {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .progress-step {
+    gap: 8px;
+  }
+
+  .step-text {
+    font-size: 0.8rem;
+  }
 }
 </style>
