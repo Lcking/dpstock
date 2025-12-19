@@ -261,20 +261,23 @@ class AIAnalyzer:
 
                                         # 解析 delta
                                         delta = chunk_data.get("choices", [{}])[0].get("delta", {})
-                                        content = delta.get("content", "")
+                                        content = delta.get("content")
+                                        
+                                        # 过滤 None 和空字符串
+                                        if content is None or content == "":
+                                            continue
 
                                         logger.info(f"AI返回delta内容: {content}")
+                                        
+                                        chunk_count += 1
+                                        buffer += content
+                                        collected_messages.append(content)
 
-                                        if content:
-                                            chunk_count += 1
-                                            buffer += content
-                                            collected_messages.append(content)
-
-                                            yield json.dumps({
-                                                "stock_code": stock_code,
-                                                "ai_analysis_chunk": content,
-                                                "status": "analyzing"
-                                            })
+                                        yield json.dumps({
+                                            "stock_code": stock_code,
+                                            "ai_analysis_chunk": content,
+                                            "status": "analyzing"
+                                        })
                                     except json.JSONDecodeError:
                                         logger.error(f"JSON解析错误，块内容: {raw_line}")
                                         if "streaming failed after retries" in raw_line.lower():
