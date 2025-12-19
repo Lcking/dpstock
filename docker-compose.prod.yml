@@ -1,82 +1,58 @@
-# 用于GitHub Actions自动化部署流程
-
-version: '3.8'
-
 services:
   app:
-    image: ${DOCKERHUB_USERNAME}/stock-scanner:${TAG}
+    build: .
     container_name: stock-scanner-app
-    ports:
-      - "8888:8888"
+    restart: unless-stopped
     environment:
       - API_TYPE=${API_TYPE}
       - API_KEY=${API_KEY}
       - API_URL=${API_URL}
       - API_MODEL=${API_MODEL}
       - API_TIMEOUT=${API_TIMEOUT}
-      - LOGIN_PASSWORD=${LOGIN_PASSWORD}
       - ANNOUNCEMENT_TEXT=${ANNOUNCEMENT_TEXT}
+      - LOGIN_PASSWORD=${LOGIN_PASSWORD}
+      - STREAM=${STREAM:-true}
     volumes:
-      - ./logs:/app/logs
       - ./data:/app/data
-    restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/api/config"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "5"
+      - ./logs:/app/logs
     networks:
       - stock-scanner-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8888/api/need_login" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   nginx:
     image: nginx:stable-alpine
     container_name: stock-scanner-nginx
-    #ports:
-    #  - "80:80"
-    #  - "443:443"
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
-      - ./nginx/logs:/var/log/nginx
-      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+    networks:
+      - stock-scanner-network
     depends_on:
       - app
-    restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 5s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 128M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-  #  networks:
-   #   - stock-scanner-network
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: stock-scanner-certbot
+    volumes:
+      - ./certbot/www:/var/www/certbot:rw
+      - ./certbot/conf:/etc/letsencrypt:rw
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done;'"
 
 networks:
   stock-scanner-network:
-    driver: bridge 
+    driver: bridge
