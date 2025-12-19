@@ -66,46 +66,60 @@ class StockDataProvider:
     def get_hk_share_list(self) -> List[Dict[str, str]]:
         """
         获取港股列表（包含代码、名称和拼音）
-        带缓存机制
+        带缓存机制和重试逻辑
         """
         if self._hk_share_list_cache:
             return self._hk_share_list_cache
-            
-        try:
-            import akshare as ak
-            from pypinyin import pinyin, Style
-            
-            logger.info("正在获取港股股票列表...")
-            # 获取港股代码和名称列表
-            df = ak.stock_hk_spot_em()
-            
-            stock_list = []
-            for _, row in df.iterrows():
-                code = str(row['代码'])
-                name = str(row['名称'])
+        
+        import time
+        max_retries = 3
+        retry_delay = 1
+        
+        for attempt in range(max_retries):
+            try:
+                import akshare as ak
+                from pypinyin import pinyin, Style
                 
-                # 生成拼音首字母
-                try:
-                    py_list = pinyin(name, style=Style.FIRST_LETTER)
-                    py_str = ''.join([item[0] for item in py_list]).lower()
-                    # 处理多音字等异常字符，确保只保留字母数字
-                    py_str = ''.join(c for c in py_str if c.isalnum())
-                except Exception:
-                    py_str = ""
+                logger.info(f"正在获取港股股票列表... (尝试 {attempt + 1}/{max_retries})")
+                # 获取港股代码和名称列表
+                df = ak.stock_hk_spot_em()
                 
-                stock_list.append({
-                    'code': code,
-                    'name': name,
-                    'pinyin': py_str
-                })
+                stock_list = []
+                for _, row in df.iterrows():
+                    code = str(row['代码'])
+                    name = str(row['名称'])
+                    
+                    # 生成拼音首字母
+                    try:
+                        py_list = pinyin(name, style=Style.FIRST_LETTER)
+                        py_str = ''.join([item[0] for item in py_list]).lower()
+                        # 处理多音字等异常字符，确保只保留字母数字
+                        py_str = ''.join(c for c in py_str if c.isalnum())
+                    except Exception:
+                        py_str = ""
+                    
+                    stock_list.append({
+                        'code': code,
+                        'name': name,
+                        'pinyin': py_str
+                    })
+                    
+                self._hk_share_list_cache = stock_list
+                logger.info(f"成功加载 {len(stock_list)} 只港股股票信息")
+                return stock_list
                 
-            self._hk_share_list_cache = stock_list
-            logger.info(f"成功加载 {len(stock_list)} 只港股股票信息")
-            return stock_list
-            
-        except Exception as e:
-            logger.error(f"获取港股列表失败: {str(e)}")
-            return []
+            except Exception as e:
+                logger.warning(f"获取港股列表失败 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt < max_retries - 1:
+                    if "Connection" in str(e) or "reset" in str(e).lower():
+                        logger.info(f"连接错误，{retry_delay}秒后重试...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
+                logger.error(f"获取港股列表最终失败: {str(e)}")
+                return []
+        
+        return []
     
     def resolve_stock_code(self, input_str: str, market_type: str = 'A') -> Tuple[str, str]:
         """

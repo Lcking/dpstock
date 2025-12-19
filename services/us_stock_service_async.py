@@ -30,40 +30,57 @@ class USStockServiceAsync:
         Returns:
             匹配的股票列表
         """
-        try:
-            logger.info(f"异步搜索美股: {keyword}")
-            
-            # 使用线程池执行同步的akshare调用
-            df = await asyncio.to_thread(self._get_us_stocks_data)
-            
-            # 模糊匹配搜索 (代码, 名称, 拼音)
-            keyword_lower = keyword.lower()
-            mask = (df['name'].str.contains(keyword, case=False, na=False) | 
-                   df['symbol'].str.contains(keyword, case=False, na=False) |
-                   df['pinyin'].str.contains(keyword_lower, case=False, na=False))
-            results = df[mask]
-            
-            # 格式化返回结果并处理 NaN 值
-            formatted_results = []
-            for _, row in results.iterrows():
-                formatted_results.append({
-                    'name': row['name'] if pd.notna(row['name']) else '',
-                    'symbol': str(row['symbol']) if pd.notna(row['symbol']) else '',
-                    'price': float(row['price']) if pd.notna(row['price']) else 0.0,
-                    'market_value': float(row['market_value']) if pd.notna(row['market_value']) else 0.0
-                })
-                # 限制只返回前10个结果
-                if len(formatted_results) >= 10:
-                    break
-            
-            logger.info(f"美股搜索完成，找到 {len(formatted_results)} 个匹配项（限制显示前10个）")
-            return formatted_results
-            
-        except Exception as e:
-            error_msg = f"搜索美股代码失败: {str(e)}"
-            logger.error(error_msg)
-            logger.exception(e)
-            raise Exception(error_msg)
+        max_retries = 3
+        retry_delay = 1  # 秒
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"异步搜索美股: {keyword} (尝试 {attempt + 1}/{max_retries})")
+                
+                # 使用线程池执行同步的akshare调用
+                df = await asyncio.to_thread(self._get_us_stocks_data)
+                
+                # 模糊匹配搜索 (代码, 名称, 拼音)
+                keyword_lower = keyword.lower()
+                mask = (df['name'].str.contains(keyword, case=False, na=False) | 
+                       df['symbol'].str.contains(keyword, case=False, na=False) |
+                       df['pinyin'].str.contains(keyword_lower, case=False, na=False))
+                results = df[mask]
+                
+                # 格式化返回结果并处理 NaN 值
+                formatted_results = []
+                for _, row in results.iterrows():
+                    formatted_results.append({
+                        'name': row['name'] if pd.notna(row['name']) else '',
+                        'symbol': str(row['symbol']) if pd.notna(row['symbol']) else '',
+                        'price': float(row['price']) if pd.notna(row['price']) else 0.0,
+                        'market_value': float(row['market_value']) if pd.notna(row['market_value']) else 0.0
+                    })
+                    # 限制只返回前10个结果
+                    if len(formatted_results) >= 10:
+                        break
+                
+                logger.info(f"美股搜索完成，找到 {len(formatted_results)} 个匹配项（限制显示前10个）")
+                return formatted_results
+                
+            except Exception as e:
+                error_msg = f"搜索美股代码失败 (尝试 {attempt + 1}/{max_retries}): {str(e)}"
+                logger.warning(error_msg)
+                
+                # 如果是连接错误，等待后重试
+                if attempt < max_retries - 1:
+                    if "Connection" in str(e) or "reset" in str(e).lower():
+                        logger.info(f"连接错误，{retry_delay}秒后重试...")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # 指数退避
+                        continue
+                
+                # 最后一次尝试失败，记录错误但返回空列表而不是抛异常
+                logger.error(f"搜索美股代码最终失败: {str(e)}")
+                # 返回空列表，让前端可以正常工作
+                return []
+        
+        return []
     
     def _get_us_stocks_data(self) -> pd.DataFrame:
         """
