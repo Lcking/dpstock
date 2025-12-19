@@ -42,7 +42,7 @@ echo ""
 
 # 停止现有的Nginx容器(如果存在)
 echo "🛑 停止现有Nginx容器..."
-docker-compose -f docker-compose.prod.yml stop nginx 2>/dev/null || true
+docker compose -f docker-compose.prod.yml stop nginx 2>/dev/null || true
 
 # 获取SSL证书
 echo "🔐 获取SSL证书..."
@@ -78,7 +78,7 @@ if [ $? -eq 0 ]; then
     
     # 启动所有服务
     echo "🚀 启动服务..."
-    docker-compose -f docker-compose.prod.yml up -d
+    docker compose -f docker-compose.prod.yml up -d
     
     echo ""
     echo "========================================="
@@ -90,7 +90,7 @@ if [ $? -eq 0 ]; then
     echo "  - HTTPS: https://$DOMAIN"
     echo ""
     echo "证书信息:"
-    docker-compose -f docker-compose.prod.yml exec certbot certbot certificates
+    docker compose -f docker-compose.prod.yml exec certbot certbot certificates
     echo ""
     echo "证书将在90天后过期，Certbot会自动续期"
     echo ""
