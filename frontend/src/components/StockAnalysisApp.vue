@@ -947,7 +947,7 @@ function handleAnnouncementClose() {
 .main-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1.5rem 1rem;
+  padding: 1rem 1.5rem 2rem;
   width: 100%;
   box-sizing: border-box;
   background: transparent !important;
@@ -956,10 +956,15 @@ function handleAnnouncementClose() {
 /* Glassmorphism Analysis Card */
 .analysis-container {
   margin-bottom: 1.5rem;
-  border-radius: 20px !important;
+  border-radius: 24px !important;
   overflow: hidden;
-  transition: all 0.3s ease;
-  background: rgba(255, 255, 255, 0.65) !important; /* Slightly more opaque for main content */
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.75) !important;
+  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.08);
+}
+
+.analysis-container:hover {
+  box-shadow: 0 8px 40px rgba(102, 126, 234, 0.12);
 }
 
 /* Config Section */

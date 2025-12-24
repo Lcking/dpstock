@@ -6,7 +6,7 @@
         <span class="divider">|</span>
         <router-link to="/analysis" class="footer-link">分析专栏</router-link>
         <span class="divider">|</span>
-        <a href="https://github.com/Lcking/dpstock" target="_blank" rel="noopener" class="footer-link">GitHub</a>
+        <a href="https://jsj.top/f/GXpvZu" target="_blank" rel="noopener" class="footer-link">建议意见</a>
       </div>
       <div class="footer-copyright">
         © {{ currentYear }} Agu AI - 智能股票分析平台

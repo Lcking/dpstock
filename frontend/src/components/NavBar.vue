@@ -60,7 +60,7 @@ const links: NavLink[] = [
 
 /* Push body content below the fixed bar */
 :global(body) {
-  padding-top: 64px;
+  padding-top: 80px;
 }
 
 .nav-inner {
