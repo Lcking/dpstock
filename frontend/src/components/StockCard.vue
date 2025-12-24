@@ -207,7 +207,7 @@ import {
 } from '@vicons/ionicons5';
 import * as echarts from 'echarts';
 import { apiService } from '@/services/api';
-import { formatMarketValue, getCategoryName, parseMarkdown } from '@/utils';
+import { getCategoryName, parseMarkdown } from '@/utils';
 import type { StockInfo } from '@/types';
 
 const props = defineProps<{
