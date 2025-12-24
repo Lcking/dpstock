@@ -4,10 +4,13 @@
       <n-loading-bar-provider>
         <n-dialog-provider>
           <n-notification-provider>
-            <n-layout>
+            <n-layout class="app-layout">
                 <NavBar />
-            <router-view />
-             </n-layout>
+                <main class="main-content">
+                  <router-view />
+                </main>
+                <Footer />
+            </n-layout>
           </n-notification-provider>
         </n-dialog-provider>
       </n-loading-bar-provider>
@@ -18,6 +21,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import NavBar from '@/components/NavBar.vue'
+import Footer from '@/components/Footer.vue'
+import { NLayout } from 'naive-ui'
 import { 
   NConfigProvider, 
   NMessageProvider, 
@@ -39,5 +44,15 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+}
+
+.app-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
 }
 </style>

@@ -164,7 +164,7 @@ const chartLoading = ref(false);
 // 文章完整 URL（用于分享）
 const articleUrl = computed(() => {
   if (!article.value) return '';
-  return `${window.location.origin}/article/${article.value.id}`;
+  return `${window.location.origin}/analysis/${article.value.id}`;
 });
 
 

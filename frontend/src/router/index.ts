@@ -90,8 +90,17 @@ router.beforeEach(async (to, from, next) => {
       }
     } catch (error) {
       console.error('认证检查失败:', error);
-      // 认证检查失败，重定向到登录页
-      next({ name: 'Login' });
+      // 网络错误时不跳转登录，采用乐观策略允许访问
+      // 只有明确的认证失败才跳转登录页
+      const isNetworkError = error instanceof TypeError ||
+        (error as any)?.code === 'ERR_NETWORK' ||
+        (error as any)?.message?.includes('Network');
+      if (isNetworkError) {
+        console.log('网络错误，允许访问');
+        next();
+      } else {
+        next({ name: 'Login' });
+      }
     }
   } else {
     // 不需要认证的路由，直接访问

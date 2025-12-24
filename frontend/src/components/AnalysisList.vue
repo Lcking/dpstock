@@ -59,11 +59,20 @@
         </div>
       </n-card>
     </div>
+    
+    <!-- 加载更多状态 -->
+    <div v-if="loadingMore" class="loading-more">
+      <n-spin size="small" />
+      <span>加载更多...</span>
+    </div>
+    <div v-else-if="!hasMore && articles.length > 0" class="no-more">
+      已加载全部内容
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { NCard, NTag, NEmpty, NButton, NSpin, NInput, NIcon } from 'naive-ui';
 import { SearchOutline } from '@vicons/ionicons5';
 import { apiService } from '@/services/api';
@@ -71,26 +80,59 @@ import { useDebounceFn } from '@vueuse/core';
 
 const articles = ref<any[]>([]);
 const loading = ref(true);
+const loadingMore = ref(false);
 const searchQuery = ref('');
+const offset = ref(0);
+const hasMore = ref(true);
+const LIMIT = 20;
 
 const handleSearch = useDebounceFn(() => {
-  fetchArticles();
+  // 搜索时重置分页
+  offset.value = 0;
+  hasMore.value = true;
+  fetchArticles(false);
 }, 500);
 
-async function fetchArticles() {
-  loading.value = true;
+async function fetchArticles(append = false) {
+  if (append) {
+    loadingMore.value = true;
+  } else {
+    loading.value = true;
+    offset.value = 0;
+  }
+  
   try {
-    const data = await apiService.getArticles(50, 0, searchQuery.value);
-    articles.value = data;
+    const data = await apiService.getArticles(LIMIT, offset.value, searchQuery.value);
+    
+    if (append) {
+      articles.value.push(...data);
+    } else {
+      articles.value = data;
+    }
+    
+    // 如果返回数量少于请求数量，说明没有更多了
+    hasMore.value = data.length === LIMIT;
+    offset.value += data.length;
   } catch (error) {
     console.error('获取文章列表失败:', error);
   } finally {
     loading.value = false;
+    loadingMore.value = false;
+  }
+}
+
+function handleScroll() {
+  if (loadingMore.value || !hasMore.value) return;
+  
+  const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+  // 距离底部 200px 时开始加载
+  if (scrollTop + clientHeight >= scrollHeight - 200) {
+    fetchArticles(true);
   }
 }
 
 function getMarketType(type: string) {
-  const map: any = { 'A': 'success', 'HK': 'info', 'US': 'warning', 'Fund': 'error' };
+  const map: any = { 'A': 'success', 'HK': 'info', 'US': 'warning', 'ETF': 'info', 'LOF': 'info', 'Fund': 'error' };
   return map[type] || 'default';
 }
 
@@ -101,8 +143,13 @@ function getScoreClass(score: number) {
 }
 
 onMounted(() => {
-  fetchArticles();
+  fetchArticles(false);
   document.title = '分析专栏 - Agu AI';
+  window.addEventListener('scroll', handleScroll);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', handleScroll);
 });
 </script>
 
@@ -234,5 +281,22 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   padding: 100px 0;
+}
+
+.loading-more {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.no-more {
+  text-align: center;
+  padding: 32px 0;
+  color: #94a3b8;
+  font-size: 14px;
 }
 </style>

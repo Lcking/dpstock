@@ -53,9 +53,21 @@ export function parseMarkdown(text: string): string {
 // 更新市场时间信息
 export function updateMarketTimeInfo(): MarketTimeInfo {
   const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=周日, 6=周六
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
   // 当前时间
   const currentTime = now.toLocaleTimeString('zh-CN', { hour12: false });
+
+  // 周末所有市场休市
+  if (isWeekend) {
+    return {
+      currentTime,
+      cnMarket: { isOpen: false, nextTime: '周末休市，周一开盘' },
+      hkMarket: { isOpen: false, nextTime: '周末休市，周一开盘' },
+      usMarket: { isOpen: false, nextTime: '周末休市，周一开盘' }
+    };
+  }
 
   // 中国时间
   const cnOptions = { timeZone: 'Asia/Shanghai', hour12: false } as Intl.DateTimeFormatOptions;
