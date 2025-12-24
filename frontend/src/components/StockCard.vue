@@ -207,7 +207,7 @@ import {
 } from '@vicons/ionicons5';
 import * as echarts from 'echarts';
 import { apiService } from '@/services/api';
-import { parseMarkdown } from '@/utils';
+import { formatMarketValue, getCategoryName, parseMarkdown } from '@/utils';
 import type { StockInfo } from '@/types';
 
 const props = defineProps<{
@@ -571,9 +571,10 @@ async function generateShareImage() {
       ? props.stock.analysis.replace(/[#*]/g, '').substring(0, 200) + '...'
       : '完整分析请访问平台';
     
-    const shareText = `📊 AI股票分析报告
+    const categoryName = getCategoryName(props.stock.marketType);
+    const shareText = `📊 AI${categoryName}分析报告
 ━━━━━━━━━━━━━━━
-股票: ${stockName}
+${categoryName}: ${stockName}
 代码: ${props.stock.code}
 综合评分: ${score}分
 投资建议: ${recommendation}

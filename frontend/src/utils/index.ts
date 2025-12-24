@@ -7,13 +7,13 @@ export function debounce<T extends (...args: any[]) => any>(
   wait: number
 ): (...args: Parameters<T>) => void {
   let timeout: number | null = null;
-  
-  return function(...args: Parameters<T>): void {
+
+  return function (...args: Parameters<T>): void {
     const later = () => {
       timeout = null;
       func(...args);
     };
-    
+
     if (timeout !== null) {
       clearTimeout(timeout);
     }
@@ -24,7 +24,7 @@ export function debounce<T extends (...args: any[]) => any>(
 // 格式化市值
 export function formatMarketValue(value: number): string {
   if (!value) return '未知';
-  
+
   if (value >= 1000000000000) {
     return (value / 1000000000000).toFixed(2) + '万亿';
   } else if (value >= 100000000) {
@@ -53,42 +53,42 @@ export function parseMarkdown(text: string): string {
 // 更新市场时间信息
 export function updateMarketTimeInfo(): MarketTimeInfo {
   const now = new Date();
-  
+
   // 当前时间
   const currentTime = now.toLocaleTimeString('zh-CN', { hour12: false });
-  
+
   // 中国时间
   const cnOptions = { timeZone: 'Asia/Shanghai', hour12: false } as Intl.DateTimeFormatOptions;
   const cnTime = now.toLocaleString('zh-CN', cnOptions);
   const cnHour = new Date(cnTime).getHours();
   const cnMinute = new Date(cnTime).getMinutes();
-  
+
   // A股市场状态
   const cnMarketOpen = (cnHour === 9 && cnMinute >= 30) || (cnHour === 10) ||
-                     (cnHour === 11 && cnMinute <= 30) ||
-                     (cnHour >= 13 && cnHour < 15);
-                     
+    (cnHour === 11 && cnMinute <= 30) ||
+    (cnHour >= 13 && cnHour < 15);
+
   const cnNextTime = getNextTimeText(cnMarketOpen, cnHour, cnMinute, 9, 30, 15, 0);
 
   // 港股市场状态（与A股相同时区）
-  const hkMarketOpen = (cnHour === 9 && cnMinute >= 30) || 
-                     (cnHour === 10) || (cnHour === 11) ||
-                     (cnHour >= 13 && cnHour < 16);
-                     
+  const hkMarketOpen = (cnHour === 9 && cnMinute >= 30) ||
+    (cnHour === 10) || (cnHour === 11) ||
+    (cnHour >= 13 && cnHour < 16);
+
   const hkNextTime = getNextTimeText(hkMarketOpen, cnHour, cnMinute, 9, 30, 16, 0);
-  
+
   // 获取美国东部时间
   const usOptions = { timeZone: 'America/New_York', hour12: false } as Intl.DateTimeFormatOptions;
   const usTime = now.toLocaleString('zh-CN', usOptions);
   const usHour = new Date(usTime).getHours();
   const usMinute = new Date(usTime).getMinutes();
-  
+
   // 美股市场状态
-  const usMarketOpen = (usHour >= 9 && usHour < 16) || 
-                     (usHour === 16 && usMinute === 0);
-                     
+  const usMarketOpen = (usHour >= 9 && usHour < 16) ||
+    (usHour === 16 && usMinute === 0);
+
   const usNextTime = getNextTimeText(usMarketOpen, usHour, usMinute, 9, 30, 16, 0);
-  
+
   return {
     currentTime,
     cnMarket: { isOpen: cnMarketOpen, nextTime: cnNextTime },
@@ -110,21 +110,21 @@ function getNextTimeText(
   if (isOpen) {
     // 计算距离收盘时间
     let timeToCloseMinutes = (closeHour - currentHour) * 60 + (closeMinute - currentMinute);
-    
+
     if (timeToCloseMinutes <= 0) {
       return '即将收盘';
     }
-    
+
     const hours = Math.floor(timeToCloseMinutes / 60);
     const minutes = timeToCloseMinutes % 60;
-    
+
     return `距离收盘还有 ${hours}小时${minutes}分钟`;
   } else {
     // 计算距离开盘时间
     let nextOpenHour = openHour;
     let nextOpenMinute = openMinute;
     let isNextDay = false;
-    
+
     if (currentHour >= closeHour) {
       // 已经过了今天的收盘时间，下一个开盘是明天
       isNextDay = true;
@@ -136,24 +136,34 @@ function getNextTimeText(
       nextOpenHour = 13;
       nextOpenMinute = 0;
     }
-    
+
     let timeToOpenMinutes;
-    
+
     if (isNextDay) {
       timeToOpenMinutes = (24 - currentHour + nextOpenHour) * 60 + (nextOpenMinute - currentMinute);
     } else {
       timeToOpenMinutes = (nextOpenHour - currentHour) * 60 + (nextOpenMinute - currentMinute);
     }
-    
+
     if (timeToOpenMinutes <= 0) {
       return '即将开盘';
     }
-    
+
     const hours = Math.floor(timeToOpenMinutes / 60);
     const minutes = timeToOpenMinutes % 60;
-    
+
     return `距离开盘还有 ${hours}小时${minutes}分钟`;
   }
 }
 
-
+// 获取品类名称
+export function getCategoryName(marketType: string): string {
+  const categoryMap: Record<string, string> = {
+    'A': '股票',
+    'HK': '股票',
+    'US': '股票',
+    'ETF': 'ETF',
+    'LOF': 'LOF'
+  };
+  return categoryMap[marketType] || '股票';
+}

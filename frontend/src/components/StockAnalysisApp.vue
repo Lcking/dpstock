@@ -110,7 +110,7 @@
                 </div>
                 
                 <template v-if="analyzedStocks.length === 0 && !isAnalyzing">
-                  <n-empty description="尚未分析股票" size="large">
+                  <n-empty description="尚未分析" size="large">
                     <template #icon>
                       <n-icon :component="DocumentTextIcon" />
                     </template>
@@ -425,7 +425,7 @@ function handleMarketTypeChange() {
   analyzedStocks.value = [];
   // 切换市场时，如果搜索框有正在进行的操作，可以清空
   searchOptions.value = [];
-  selectedStockValues.value = []; // 清空已选股票
+  selectedStockValues.value = []; // 清空已选项
 }
 
 // 处理流式响应的数据
@@ -443,7 +443,7 @@ function processStreamData(text: string) {
       handleStreamUpdate(data as StreamAnalysisUpdate);
     } else if (data.scan_completed) {
       // 扫描完成消息
-      message.success(`分析完成，共扫描 ${data.total_scanned} 只股票，符合条件 ${data.total_matched} 只`);
+      message.success(`分析完成，共扫描 ${data.total_scanned} 个，符合条件 ${data.total_matched} 个`);
       
       // 将所有分析中的股票状态更新为已完成
       analyzedStocks.value = analyzedStocks.value.map(stock => {
@@ -558,7 +558,7 @@ function handleStreamUpdate(data: StreamAnalysisUpdate) {
 // 分析股票
 async function analyzeStocks() {
   if (selectedStockValues.value.length === 0) {
-    message.warning('请选择要分析的股票');
+    message.warning('请选择要分析的项目');
     return;
   }
   
@@ -568,7 +568,7 @@ async function analyzeStocks() {
   isAnalyzing.value = true;
   analyzedStocks.value = [];
   
-  // 在前端验证股票代码
+  // 在前端验证代码
   const marketTypeEnum = marketType.value as keyof typeof MarketType;
   const invalidCodes = validateMultipleStockCodes(
     uniqueCodes, 
@@ -578,7 +578,7 @@ async function analyzeStocks() {
   // 如果有无效代码，显示错误信息并返回
   if (invalidCodes.length > 0) {
     const errorMessages = invalidCodes.map(item => item.errorMessage).join('\n');
-    message.error(`股票代码验证失败:${errorMessages}`);
+    message.error(`代码验证失败:${errorMessages}`);
     return;
   }
   
@@ -682,7 +682,7 @@ async function analyzeStocks() {
       errorMessage += error.message || '未知错误';
     }
     message.error(errorMessage);
-    console.error('分析股票时出错:', error);
+    console.error('分析时出错:', error);
     
     // 清空分析状态
     analyzedStocks.value = [];
@@ -843,7 +843,7 @@ function exportToCSV() {
     // 创建下载链接
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `股票分析结果_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `分析结果_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     
     // 添加到文档并触发点击

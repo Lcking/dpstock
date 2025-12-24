@@ -8,7 +8,7 @@
     <div class="search-bar">
       <n-input
         v-model:value="searchQuery"
-        placeholder="搜索股票代码、名称或文章标题..."
+        placeholder="搜索代码、名称或文章标题..."
         clearable
         @update:value="handleSearch"
       >
@@ -26,7 +26,7 @@
     <div v-else-if="articles.length === 0" class="empty-state">
       <n-empty description="暂无存档分析">
         <template #extra>
-          <n-button @click="$router.push('/')">去分析几只股票</n-button>
+          <n-button @click="$router.push('/')">去分析</n-button>
         </template>
       </n-empty>
     </div>

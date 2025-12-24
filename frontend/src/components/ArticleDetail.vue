@@ -34,6 +34,9 @@
         </div>
       </header>
       
+      <!-- 分享按钮 -->
+      <ShareButtons :url="articleUrl" :title="article.title" />
+      
       <n-divider />
 
       <!-- 行情走势回顾 -->
@@ -69,7 +72,8 @@ import { NButton, NIcon, NTag, NSpin, NEmpty, NDivider } from 'naive-ui';
 import { ArrowBackOutline as ArrowBack } from '@vicons/ionicons5';
 import * as echarts from 'echarts';
 import { apiService } from '@/services/api';
-import { parseMarkdown } from '@/utils';
+import { parseMarkdown, getCategoryName } from '@/utils';
+import ShareButtons from './ShareButtons.vue';
 
 const route = useRoute();
 const article = ref<any>(null);
@@ -101,9 +105,10 @@ async function fetchArticle() {
 function updateMetaTags() {
   if (!article.value) return;
   
+  const categoryName = getCategoryName(article.value.market_type);
   const title = article.value.title;
   const description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${article.value.score}。${article.value.content.substring(0, 150)}...`;
-  const keywords = `${article.value.stock_name}, ${article.value.stock_code}, 股票分析, 智能辅助, 投资辅助, ${article.value.market_type}股`;
+  const keywords = `${article.value.stock_name}, ${article.value.stock_code}, ${categoryName}分析, 智能辅助, 投资辅助, ${article.value.market_type}`;
 
   document.title = title;
   
@@ -155,6 +160,13 @@ const schemaData = computed(() => {
 const chartRef = ref<HTMLElement | null>(null);
 const chartInstance = ref<echarts.ECharts | null>(null);
 const chartLoading = ref(false);
+
+// 文章完整 URL（用于分享）
+const articleUrl = computed(() => {
+  if (!article.value) return '';
+  return `${window.location.origin}/article/${article.value.id}`;
+});
+
 
 async function initChart() {
   if (!chartRef.value || !article.value) {

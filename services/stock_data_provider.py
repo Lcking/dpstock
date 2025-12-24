@@ -210,6 +210,23 @@ class StockDataProvider:
         同步获取股票数据的实现
         将被异步方法调用
         """
+        # Monkey patch requests库以禁用SSL验证
+        # 这是为了解决东方财富API的SSL连接问题
+        import requests
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        # 保存原始的request方法
+        original_request = requests.Session.request
+        
+        # 创建新的request方法，强制设置verify=False
+        def patched_request(self, method, url, **kwargs):
+            kwargs['verify'] = False
+            return original_request(self, method, url, **kwargs)
+        
+        # 应用monkey patch
+        requests.Session.request = patched_request
+        
         import akshare as ak
         
         if start_date is None:
