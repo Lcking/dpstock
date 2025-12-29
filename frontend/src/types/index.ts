@@ -27,6 +27,7 @@ export interface StockInfo {
   changePercent?: number;
   marketValue?: number;
   analysis?: string;
+  analysisV1?: any; // Analysis V1 结构化数据
   analysisStatus: 'waiting' | 'analyzing' | 'completed' | 'error';
   error?: string;
   score?: number;
@@ -92,6 +93,7 @@ export interface StreamInitMessage {
 export interface StreamAnalysisUpdate {
   stock_code: string;
   analysis?: string;
+  analysis_v1?: any; // Analysis V1 结构化数据
   status: 'analyzing' | 'completed' | 'error';
   error?: string;
   name?: string;
@@ -108,3 +110,6 @@ export interface StreamAnalysisUpdate {
   analysis_date?: string;
   ai_analysis_chunk?: string;
 }
+
+// Judgment types
+export * from './judgment';

@@ -51,7 +51,17 @@
 
       <section class="analysis-content-section">
         <h3 class="section-title">AI 深度分析报告</h3>
-        <div class="article-content" v-html="parsedContent"></div>
+        <!-- 优先显示 Analysis V1 格式 -->
+        <AnalysisV1Display 
+          v-if="analysisV1Data"
+          :data="analysisV1Data"
+          :stock-code="article.stock_code"
+          :stock-name="article.stock_name"
+          :hide-judgment-zone="true"
+          @saved="handleJudgmentSaved"
+        />
+        <!-- 降级：显示普通文本分析 -->
+        <div v-else class="article-content" v-html="parsedContent"></div>
       </section>
 
       <footer class="article-footer">
@@ -74,6 +84,7 @@ import * as echarts from 'echarts';
 import { apiService } from '@/services/api';
 import { parseMarkdown, getCategoryName } from '@/utils';
 import ShareButtons from './ShareButtons.vue';
+import AnalysisV1Display from './AnalysisV1Display.vue';
 
 const route = useRoute();
 const article = ref<any>(null);
@@ -107,7 +118,17 @@ function updateMetaTags() {
   
   const categoryName = getCategoryName(article.value.market_type);
   const title = article.value.title;
-  const description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${article.value.score}。${article.value.content.substring(0, 150)}...`;
+  
+  // 生成 description：优先从 Analysis V1 提取，否则使用原文本
+  let description = '';
+  if (analysisV1Data.value) {
+    // 从 Analysis V1 提取有意义的描述
+    const structureDesc = analysisV1Data.value.structure_snapshot?.trend_description || '';
+    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${article.value.score}。${structureDesc.substring(0, 150)}...`;
+  } else {
+    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${article.value.score}。${article.value.content.substring(0, 150)}...`;
+  }
+  
   const keywords = `${article.value.stock_name}, ${article.value.stock_code}, ${categoryName}分析, 智能辅助, 投资辅助, ${article.value.market_type}`;
 
   document.title = title;
@@ -263,12 +284,51 @@ async function initChart() {
   }
 }
 
+// 尝试解析 Analysis V1 JSON
+const analysisV1Data = computed(() => {
+  if (!article.value?.content) return null;
+  
+  try {
+    let jsonStr = article.value.content;
+    
+    // 移除可能的 markdown 代码块标记
+    if (jsonStr.includes('```json')) {
+      jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+    } else if (jsonStr.includes('```')) {
+      jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+    }
+    
+    // 尝试解析 JSON
+    const parsed = JSON.parse(jsonStr);
+    
+    // 验证是否包含 Analysis V1 必要字段
+    const requiredFields = ['structure_snapshot', 'pattern_fitting', 'indicator_translate', 
+                           'risk_of_misreading', 'judgment_zone'];
+    if (requiredFields.every(field => field in parsed)) {
+      return parsed;
+    }
+  } catch (e) {
+    // 不是 JSON 或解析失败，返回 null
+    console.warn('Failed to parse Analysis V1 JSON:', e);
+  }
+  
+  return null;
+});
+
 const parsedContent = computed(() => {
+  // 如果是 Analysis V1 格式，不需要解析为 markdown
+  if (analysisV1Data.value) return '';
+  
   if (article.value?.content) {
     return parseMarkdown(article.value.content);
   }
   return '';
 });
+
+// 处理判断保存成功事件
+function handleJudgmentSaved(judgmentId: string) {
+  console.log('Judgment saved from archive:', judgmentId);
+}
 
 function getMarketType(type: string) {
   const map: any = { 'A': 'success', 'HK': 'info', 'US': 'warning', 'Fund': 'error' };

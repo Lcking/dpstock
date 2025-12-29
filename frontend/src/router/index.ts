@@ -32,6 +32,22 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/my-judgments',
+    name: 'MyJudgments',
+    component: () => import('@/components/MyJudgments.vue'),
+    meta: { requiresAuth: false }  // Anonymous via cookie
+  },
+  {
+    path: '/help/judgment-verification',
+    name: 'JudgmentHelp',
+    component: () => import('@/components/JudgmentHelp.vue'),
+    meta: {
+      requiresAuth: false,
+      title: '判断验证功能说明 - Agu AI 智能股票分析',
+      description: '了解如何使用判断追踪功能，提升投资分析能力。详细说明验证状态、价格变化和验证原因等字段含义。'
+    }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }

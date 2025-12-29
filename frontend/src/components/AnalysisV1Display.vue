@@ -1,0 +1,485 @@
+<template>
+  <div class="analysis-v1-display">
+    <!-- Section 1: 结构快照 -->
+    <div class="analysis-section structure-snapshot">
+      <h3 class="section-title">📊 结构快照</h3>
+      <n-descriptions :column="2" bordered size="small">
+        <n-descriptions-item label="结构类型">
+          <n-tag :type="getStructureTypeColor(data.structure_snapshot.structure_type)" size="small">
+            {{ getStructureTypeName(data.structure_snapshot.structure_type) }}
+          </n-tag>
+        </n-descriptions-item>
+        <n-descriptions-item label="MA200位置">
+          <n-tag :type="getMA200PositionColor(data.structure_snapshot.ma200_position)" size="small">
+            {{ getMA200PositionName(data.structure_snapshot.ma200_position) }}
+          </n-tag>
+        </n-descriptions-item>
+        <n-descriptions-item label="阶段">
+          <n-tag size="small">{{ getPhaseName(data.structure_snapshot.phase) }}</n-tag>
+        </n-descriptions-item>
+      </n-descriptions>
+      
+      <div class="key-levels" v-if="data.structure_snapshot.key_levels.length > 0">
+        <h4>关键价格位</h4>
+        <n-space>
+          <n-tag v-for="level in data.structure_snapshot.key_levels" :key="level.label" type="info" size="small">
+            {{ level.label }}: {{ level.price.toFixed(2) }}
+          </n-tag>
+        </n-space>
+      </div>
+      
+      <p class="trend-description">{{ data.structure_snapshot.trend_description }}</p>
+    </div>
+
+    <!-- Section 2: 形态拟合 -->
+    <div class="analysis-section pattern-fitting">
+      <h3 class="section-title">📐 形态拟合</h3>
+      <n-descriptions :column="2" bordered size="small">
+        <n-descriptions-item label="形态类型">
+          <n-tag size="small">{{ getPatternTypeName(data.pattern_fitting.pattern_type) }}</n-tag>
+        </n-descriptions-item>
+        <n-descriptions-item label="完成度" v-if="data.pattern_fitting.completion_rate !== null">
+          <n-progress 
+            type="line" 
+            :percentage="data.pattern_fitting.completion_rate" 
+            :show-indicator="true"
+            :height="12"
+          />
+        </n-descriptions-item>
+      </n-descriptions>
+      <p class="pattern-description">{{ data.pattern_fitting.pattern_description }}</p>
+    </div>
+
+    <!-- Section 3: 指标翻译 -->
+    <div class="analysis-section indicator-translate">
+      <h3 class="section-title">📈 指标翻译</h3>
+      <div class="indicators-list">
+        <div v-for="indicator in data.indicator_translate.indicators" :key="indicator.name" class="indicator-item">
+          <div class="indicator-header">
+            <strong>{{ indicator.name }}</strong>
+            <n-tag :type="getSignalColor(indicator.signal)" size="small">
+              {{ getSignalName(indicator.signal) }}
+            </n-tag>
+          </div>
+          <div class="indicator-value">值: {{ indicator.value }}</div>
+          <div class="indicator-interpretation">{{ indicator.interpretation }}</div>
+        </div>
+      </div>
+      <n-alert type="info" :bordered="false" class="global-note">
+        {{ data.indicator_translate.global_note }}
+      </n-alert>
+    </div>
+
+    <!-- Section 4: 误读风险 -->
+    <div class="analysis-section risk-of-misreading">
+      <h3 class="section-title">⚠️ 误读风险</h3>
+      <n-alert :type="getRiskLevelType(data.risk_of_misreading.risk_level)" :bordered="false">
+        <template #header>
+          风险等级: {{ getRiskLevelName(data.risk_of_misreading.risk_level) }}
+        </template>
+        <ul class="risk-factors">
+          <li v-for="(factor, idx) in data.risk_of_misreading.risk_factors" :key="idx">
+            {{ factor }}
+          </li>
+        </ul>
+        <div class="risk-flags" v-if="data.risk_of_misreading.risk_flags.length > 0">
+          <n-space>
+            <n-tag v-for="flag in data.risk_of_misreading.risk_flags" :key="flag" type="warning" size="small">
+              {{ flag }}
+            </n-tag>
+          </n-space>
+        </div>
+        <p class="caution-note"><strong>注意:</strong> {{ data.risk_of_misreading.caution_note }}</p>
+      </n-alert>
+    </div>
+
+    <!-- Section 5: 判断区 -->
+    <div v-if="!hideJudgmentZone" class="analysis-section judgment-zone">
+      <h3 class="section-title">🎯 判断区</h3>
+      
+      <n-radio-group v-model:value="selectedCandidate" class="candidates-group">
+        <n-space vertical>
+          <n-radio
+            v-for="candidate in data.judgment_zone.candidates"
+            :key="candidate.option_id"
+            :value="candidate.option_id"
+            class="candidate-radio"
+          >
+            <div class="candidate-content">
+              <strong class="candidate-id">{{ candidate.option_id }}.</strong>
+              <span class="candidate-description">{{ candidate.description }}</span>
+            </div>
+          </n-radio>
+        </n-space>
+      </n-radio-group>
+
+      <n-divider />
+
+      <div class="risk-checks">
+        <h4>风险检查项</h4>
+        <n-checkbox-group v-model:value="selectedRiskChecks">
+          <n-space vertical>
+            <n-checkbox
+              v-for="(check, idx) in data.judgment_zone.risk_checks"
+              :key="idx"
+              :value="check"
+            >
+              {{ check }}
+            </n-checkbox>
+          </n-space>
+        </n-checkbox-group>
+      </div>
+
+      <n-alert type="info" :bordered="false" class="judgment-note">
+        {{ data.judgment_zone.note }}
+      </n-alert>
+
+      <n-button
+        type="primary"
+        size="large"
+        block
+        @click="handleSaveJudgment"
+        :disabled="!selectedCandidate || selectedRiskChecks.length === 0"
+        :loading="saving"
+        class="save-judgment-button"
+      >
+        <template #icon>
+          <n-icon><BookmarkOutline /></n-icon>
+        </template>
+        保存我的判断
+      </n-button>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue';
+import {
+  NDescriptions,
+  NDescriptionsItem,
+  NTag,
+  NSpace,
+  NProgress,
+  NAlert,
+  NRadioGroup,
+  NRadio,
+  NCheckboxGroup,
+  NCheckbox,
+  NDivider,
+  NButton,
+  NIcon,
+  useMessage
+} from 'naive-ui';
+import { BookmarkOutline } from '@vicons/ionicons5';
+import { apiService } from '@/services/api';
+
+interface Props {
+  data: any; // Analysis V1 data
+  stockCode: string;
+  stockName: string;
+  hideJudgmentZone?: boolean; // 是否隐藏判断区（用于存档文章）
+}
+
+const props = defineProps<Props>();
+const emit = defineEmits(['saved']);
+
+const message = useMessage();
+const selectedCandidate = ref<string>('');
+const selectedRiskChecks = ref<string[]>([]);
+const saving = ref(false);
+
+// 辅助函数：结构类型
+function getStructureTypeName(type: string): string {
+  const map: Record<string, string> = {
+    'uptrend': '上升',
+    'downtrend': '下降',
+    'consolidation': '盘整'
+  };
+  return map[type] || type;
+}
+
+function getStructureTypeColor(type: string): 'success' | 'error' | 'warning' {
+  const map: Record<string, 'success' | 'error' | 'warning'> = {
+    'uptrend': 'success',
+    'downtrend': 'error',
+    'consolidation': 'warning'
+  };
+  return map[type] || 'warning';
+}
+
+// 辅助函数：MA200位置
+function getMA200PositionName(pos: string): string {
+  const map: Record<string, string> = {
+    'above': '上方',
+    'below': '下方',
+    'near': '接近',
+    'no_data': '无数据'
+  };
+  return map[pos] || pos;
+}
+
+function getMA200PositionColor(pos: string): 'success' | 'error' | 'info' {
+  const map: Record<string, 'success' | 'error' | 'info'> = {
+    'above': 'success',
+    'below': 'error',
+    'near': 'info',
+    'no_data': 'info'
+  };
+  return map[pos] || 'info';
+}
+
+// 辅助函数：阶段
+function getPhaseName(phase: string): string {
+  const map: Record<string, string> = {
+    'early': '早期',
+    'middle': '中期',
+    'late': '后期',
+    'unclear': '不明'
+  };
+  return map[phase] || phase;
+}
+
+// 辅助函数：形态类型
+function getPatternTypeName(type: string): string {
+  const map: Record<string, string> = {
+    'head_shoulders': '头肩形态',
+    'double_top_bottom': '双顶/双底',
+    'triangle': '三角形',
+    'channel': '通道',
+    'wedge': '楔形',
+    'flag': '旗形',
+    'none': '无明显形态'
+  };
+  return map[type] || type;
+}
+
+// 辅助函数：信号
+function getSignalName(signal: string): string {
+  const map: Record<string, string> = {
+    'strengthening': '强化',
+    'weakening': '弱化',
+    'extreme': '极值',
+    'neutral': '中性'
+  };
+  return map[signal] || signal;
+}
+
+function getSignalColor(signal: string): 'success' | 'error' | 'warning' | 'info' {
+  const map: Record<string, 'success' | 'error' | 'warning' | 'info'> = {
+    'strengthening': 'success',
+    'weakening': 'error',
+    'extreme': 'warning',
+    'neutral': 'info'
+  };
+  return map[signal] || 'info';
+}
+
+// 辅助函数：风险等级
+function getRiskLevelName(level: string): string {
+  const map: Record<string, string> = {
+    'high': '高风险',
+    'medium': '中风险',
+    'low': '低风险'
+  };
+  return map[level] || level;
+}
+
+function getRiskLevelType(level: string): 'error' | 'warning' | 'success' {
+  const map: Record<string, 'error' | 'warning' | 'success'> = {
+    'high': 'error',
+    'medium': 'warning',
+    'low': 'success'
+  };
+  return map[level] || 'warning';
+}
+
+// 保存判断
+async function handleSaveJudgment() {
+  if (!selectedCandidate.value || selectedRiskChecks.value.length === 0) {
+    message.warning('请选择判断候选项并确认风险检查项');
+    return;
+  }
+
+  saving.value = true;
+  try {
+    const snapshot = {
+      stock_code: props.stockCode,
+      snapshot_time: new Date().toISOString(),
+      structure_premise: {
+        structure_type: props.data.structure_snapshot.structure_type,
+        ma200_position: props.data.structure_snapshot.ma200_position,
+        phase: props.data.structure_snapshot.phase,
+        pattern_type: props.data.pattern_fitting.pattern_type
+      },
+      selected_candidates: [selectedCandidate.value],
+      key_levels_snapshot: props.data.structure_snapshot.key_levels,
+      structure_type: props.data.structure_snapshot.structure_type,
+      ma200_position: props.data.structure_snapshot.ma200_position,
+      phase: props.data.structure_snapshot.phase
+    };
+
+    const response = await apiService.saveJudgment(snapshot);
+    
+    if (response && response.judgment_id) {
+      message.success('判断已保存！可在"我的判断"中查看');
+      emit('saved', response.judgment_id);
+    } else {
+      message.error('保存失败，请重试');
+    }
+  } catch (error: any) {
+    console.error('保存判断失败:', error);
+    if (error.response?.status === 422) {
+      message.error('数据格式错误，请稍后重试');
+    } else {
+      message.error('保存失败，请重试');
+    }
+  } finally {
+    saving.value = false;
+  }
+}
+</script>
+
+<style scoped>
+.analysis-v1-display {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.analysis-section {
+  padding: 16px;
+  background: var(--n-color);
+  border-radius: 8px;
+  border: 1px solid var(--n-border-color);
+}
+
+.section-title {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--n-text-color);
+}
+
+.key-levels {
+  margin-top: 16px;
+}
+
+.key-levels h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.trend-description,
+.pattern-description {
+  margin: 12px 0 0 0;
+  line-height: 1.6;
+  color: var(--n-text-color-2);
+}
+
+.indicators-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.indicator-item {
+  padding: 12px;
+  background: var(--n-color-embedded);
+  border-radius: 6px;
+}
+
+.indicator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.indicator-value {
+  font-size: 13px;
+  color: var(--n-text-color-2);
+  margin-bottom: 4px;
+}
+
+.indicator-interpretation {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--n-text-color-3);
+}
+
+.global-note {
+  margin-top: 12px;
+}
+
+.risk-factors {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.risk-factors li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.risk-flags {
+  margin: 12px 0;
+}
+
+.caution-note {
+  margin: 12px 0 0 0;
+  line-height: 1.6;
+}
+
+.candidates-group {
+  width: 100%;
+}
+
+.candidate-radio {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--n-border-color);
+  border-radius: 6px;
+  transition: all 0.3s;
+}
+
+.candidate-radio:hover {
+  background: var(--n-color-hover);
+  border-color: var(--n-color-target);
+}
+
+.candidate-content {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.candidate-id {
+  flex-shrink: 0;
+  color: var(--n-color-target);
+}
+
+.candidate-description {
+  flex: 1;
+  line-height: 1.6;
+}
+
+.risk-checks {
+  margin: 16px 0;
+}
+
+.risk-checks h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.judgment-note {
+  margin: 16px 0;
+}
+
+.save-judgment-button {
+  margin-top: 16px;
+}
+</style>

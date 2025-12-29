@@ -1,0 +1,103 @@
+{
+    "stock_code": "000001",
+    "stock_name": "平安银行",
+    "market_type": "A",
+    "analysis_date": "2025-12-29T11:00:00",
+    "structure_snapshot": {
+        "structure_type": "consolidation",
+        "ma200_position": "above",
+        "phase": "middle",
+        "key_levels": [
+            {
+                "price": 12.50,
+                "label": "近期支撑"
+            },
+            {
+                "price": 12.20,
+                "label": "次级支撑"
+            },
+            {
+                "price": 13.00,
+                "label": "近期压力"
+            },
+            {
+                "price": 13.50,
+                "label": "前高压力"
+            }
+        ],
+        "trend_description": "价格在MA200上方盘整，区间12.50-13.00，结构完整"
+    },
+    "pattern_fitting": {
+        "pattern_type": "triangle",
+        "pattern_description": "对称三角形整理，高点逐步降低，低点逐步抬升",
+        "completion_rate": 65
+    },
+    "indicator_translate": {
+        "indicators": [
+            {
+                "name": "RSI(14)",
+                "value": "52.3",
+                "signal": "neutral",
+                "interpretation": "RSI在中性区域，多空力量均衡"
+            },
+            {
+                "name": "MACD",
+                "value": "DIF: -0.05, DEA: -0.03",
+                "signal": "weakening",
+                "interpretation": "MACD在零轴下方收敛，动能减弱"
+            },
+            {
+                "name": "成交量",
+                "value": "0.8倍均量",
+                "signal": "weakening",
+                "interpretation": "成交量萎缩，观望情绪浓厚"
+            },
+            {
+                "name": "MA均线",
+                "value": "MA5: 12.75, MA20: 12.68",
+                "signal": "neutral",
+                "interpretation": "短期均线略高于中期均线，但差距不大"
+            }
+        ],
+        "global_note": "指标整体显示盘整特征，缺乏方向性信号"
+    },
+    "risk_of_misreading": {
+        "risk_level": "medium",
+        "risk_factors": [
+            "三角形末端，方向选择临近",
+            "成交量持续萎缩，突破有效性存疑",
+            "大盘波动可能影响个股选择"
+        ],
+        "risk_flags": [
+            "low_volume",
+            "narrow_range",
+            "direction_unclear"
+        ],
+        "caution_note": "本段用于提示易被高估的直觉，不构成方向或买卖结论。"
+    },
+    "judgment_zone": {
+        "candidates": [
+            {
+                "option_id": "A",
+                "option_type": "structure_premise",
+                "description": "前提：当前仍为整理结构（方向未确认）"
+            },
+            {
+                "option_id": "B",
+                "option_type": "structure_premise",
+                "description": "前提：更偏向上行结构的早期尝试（需进一步确认）"
+            },
+            {
+                "option_id": "C",
+                "option_type": "structure_premise",
+                "description": "前提：更偏向下行结构的早期尝试（需进一步确认）"
+            }
+        ],
+        "risk_checks": [
+            "我理解：整理末端阶段单次信号更容易失效",
+            "我理解：成交变化不等于资金意图明确",
+            "我接受：外部波动可能使结构前提被削弱或破坏"
+        ],
+        "note": "以上为结构分析，非走势预测，系统不提供买卖建议"
+    }
+}

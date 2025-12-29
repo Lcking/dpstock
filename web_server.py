@@ -19,7 +19,7 @@ import json
 import secrets
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from routes import captcha, auth
+from routes import captcha, auth, judgments
 
 load_dotenv()
 
@@ -47,6 +47,7 @@ app = FastAPI(
 # 用户注册接口,到Fastapi应用中 - 区别于上述密码用户体系    
 app.include_router(captcha.router)
 app.include_router(auth.router) 
+app.include_router(judgments.router)
 
 # 添加CORS中间件
 app.add_middleware(
@@ -623,7 +624,28 @@ Agu AI 是一个基于人工智能的股票分析平台,为投资者提供A股�
                     
                     if article:
                         title = f"{article['title']} - Agu AI"
-                        desc = f"{article['stock_name']}({article['stock_code']})当日行情深度分析，综合评分 {article['score']}。{article['content'][:150]}..."
+                        
+                        # 尝试从 Analysis V1 JSON 提取描述
+                        desc = ""
+                        try:
+                            content_str = article['content']
+                            # 移除可能的 markdown 代码块标记
+                            if '```json' in content_str:
+                                content_str = content_str.split('```json')[1].split('```')[0].strip()
+                            elif '```' in content_str:
+                                content_str = content_str.split('```')[1].split('```')[0].strip()
+                            
+                            content_json = json.loads(content_str)
+                            # 如果是 Analysis V1 格式，从 trend_description 提取
+                            if 'structure_snapshot' in content_json and 'trend_description' in content_json['structure_snapshot']:
+                                trend_desc = content_json['structure_snapshot']['trend_description']
+                                desc = f"{article['stock_name']}({article['stock_code']})当日行情深度分析，综合评分 {article['score']}。{trend_desc[:150]}..."
+                            else:
+                                # 降级：使用简短描述
+                                desc = f"{article['stock_name']}({article['stock_code']})当日行情深度分析，综合评分 {article['score']}。"
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            # 如果不是 JSON 或解析失败，使用原文本
+                            desc = f"{article['stock_name']}({article['stock_code']})当日行情深度分析，综合评分 {article['score']}。{article['content'][:150]}..."
                         
                         # 注入标题
                         html_content = html_content.replace("<title>免费AI在线股票分析平台系统 - 智能诊股助手_软件</title>", f"<title>{title}</title>")

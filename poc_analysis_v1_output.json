@@ -1,0 +1,82 @@
+{
+  "stock_code": "000001",
+  "stock_name": "平安银行",
+  "market_type": "A",
+  "analysis_date": "2024-07-22T16:00:00",
+  "structure_snapshot": {
+    "structure_type": "uptrend",
+    "ma200_position": "above",
+    "phase": "middle",
+    "key_levels": [
+      {
+        "price": 12.0,
+        "label": "支撑位1(MA20)"
+      },
+      {
+        "price": 11.5,
+        "label": "支撑位2(MA200)"
+      },
+      {
+        "price": 12.8,
+        "label": "压力位1"
+      }
+    ],
+    "trend_description": "价格位于MA200上方，短中期均线呈多头排列"
+  },
+  "pattern_fitting": {
+    "pattern_type": "none",
+    "pattern_description": "无明显技术图案",
+    "completion_rate": 0
+  },
+  "indicator_translate": {
+    "indicators": [
+      {
+        "name": "RSI(14)",
+        "value": "55",
+        "signal": "strengthening",
+        "interpretation": "RSI位于50-70区间，显示多头力量占优但未进入超买"
+      },
+      {
+        "name": "成交量",
+        "value": "放量",
+        "signal": "strengthening",
+        "interpretation": "成交量放大，配合价格上涨"
+      }
+    ],
+    "global_note": "技术指标整体偏多，但需关注是否能突破压力位"
+  },
+  "risk_of_misreading": {
+    "risk_level": "medium",
+    "risk_factors": [
+      "价格接近压力位12.80，存在回调可能",
+      "成交量放大但需观察持续性"
+    ],
+    "risk_flags": [],
+    "caution_note": "需关注价格能否有效突破12.80压力位"
+  },
+  "judgment_zone": {
+    "candidates": [
+      {
+        "option_id": "A",
+        "option_type": "structure_premise",
+        "description": "上升结构延续，价格保持在MA200上方运行"
+      },
+      {
+        "option_id": "B",
+        "option_type": "structure_premise",
+        "description": "测试12.00支撑位，结构前提受到挑战"
+      },
+      {
+        "option_id": "C",
+        "option_type": "structure_premise",
+        "description": "跌破MA200(11.50)，上升结构被破坏"
+      }
+    ],
+    "risk_checks": [
+      "关键支撑位(12.00)失守风险",
+      "MA200位置关系改变风险",
+      "成交量配合情况"
+    ],
+    "note": "以上为结构分析，非走势预测，系统不提供买卖建议"
+  }
+}

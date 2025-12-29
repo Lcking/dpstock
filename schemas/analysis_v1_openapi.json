@@ -1,0 +1,502 @@
+{
+  "$defs": {
+    "IndicatorItem": {
+      "description": "单个指标翻译",
+      "properties": {
+        "name": {
+          "description": "指标名称，如'RSI'、'MACD'",
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "description": "指标值（格式化字符串）",
+          "title": "Value",
+          "type": "string"
+        },
+        "signal": {
+          "$ref": "#/$defs/IndicatorSignal",
+          "description": "信号方向"
+        },
+        "interpretation": {
+          "description": "指标解读",
+          "maxLength": 150,
+          "title": "Interpretation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "signal",
+        "interpretation"
+      ],
+      "title": "IndicatorItem",
+      "type": "object"
+    },
+    "IndicatorSignal": {
+      "description": "指标信号",
+      "enum": [
+        "strengthening",
+        "weakening",
+        "extreme",
+        "neutral"
+      ],
+      "title": "IndicatorSignal",
+      "type": "string"
+    },
+    "IndicatorTranslate": {
+      "description": "Section 3: Indicator Translate - 指标翻译",
+      "properties": {
+        "indicators": {
+          "description": "指标列表",
+          "items": {
+            "$ref": "#/$defs/IndicatorItem"
+          },
+          "maxItems": 5,
+          "title": "Indicators",
+          "type": "array"
+        },
+        "global_note": {
+          "description": "指标整体说明",
+          "maxLength": 200,
+          "title": "Global Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "indicators",
+        "global_note"
+      ],
+      "title": "IndicatorTranslate",
+      "type": "object"
+    },
+    "JudgmentOption": {
+      "description": "判断候选项",
+      "properties": {
+        "option_id": {
+          "description": "选项ID，如'A'、'B'、'C'",
+          "title": "Option Id",
+          "type": "string"
+        },
+        "option_type": {
+          "$ref": "#/$defs/JudgmentOptionType",
+          "description": "选项类型"
+        },
+        "description": {
+          "description": "判断描述（结构前提/执行方式/风险确认）",
+          "maxLength": 150,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "option_id",
+        "option_type",
+        "description"
+      ],
+      "title": "JudgmentOption",
+      "type": "object"
+    },
+    "JudgmentOptionType": {
+      "description": "判断选项类型",
+      "enum": [
+        "structure_premise",
+        "execution_method",
+        "risk_check"
+      ],
+      "title": "JudgmentOptionType",
+      "type": "string"
+    },
+    "JudgmentZone": {
+      "description": "Section 5: Judgment Zone - 判断候选区",
+      "properties": {
+        "candidates": {
+          "description": "判断候选项（结构前提）",
+          "items": {
+            "$ref": "#/$defs/JudgmentOption"
+          },
+          "maxItems": 4,
+          "minItems": 2,
+          "title": "Candidates",
+          "type": "array"
+        },
+        "risk_checks": {
+          "description": "风险确认项",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Risk Checks",
+          "type": "array"
+        },
+        "note": {
+          "description": "说明：系统不提供买卖建议",
+          "maxLength": 100,
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidates",
+        "risk_checks",
+        "note"
+      ],
+      "title": "JudgmentZone",
+      "type": "object"
+    },
+    "MA200Position": {
+      "description": "MA200位置关系",
+      "enum": [
+        "above",
+        "below",
+        "near",
+        "no_data"
+      ],
+      "title": "MA200Position",
+      "type": "string"
+    },
+    "MisreadingRisk": {
+      "description": "Section 4: Risk of Misreading - 误读风险",
+      "properties": {
+        "risk_level": {
+          "$ref": "#/$defs/RiskLevel",
+          "description": "误读风险等级"
+        },
+        "risk_factors": {
+          "description": "风险因素列表",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Risk Factors",
+          "type": "array"
+        },
+        "risk_flags": {
+          "description": "风险标记（如'背离'、'缩量'）",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Risk Flags",
+          "type": "array"
+        },
+        "caution_note": {
+          "description": "注意事项",
+          "maxLength": 200,
+          "title": "Caution Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "risk_level",
+        "risk_factors",
+        "risk_flags",
+        "caution_note"
+      ],
+      "title": "MisreadingRisk",
+      "type": "object"
+    },
+    "PatternFitting": {
+      "description": "Section 2: Pattern Fitting - 形态拟合",
+      "properties": {
+        "pattern_type": {
+          "$ref": "#/$defs/PatternType",
+          "description": "识别的形态类型"
+        },
+        "pattern_description": {
+          "description": "形态描述",
+          "maxLength": 200,
+          "title": "Pattern Description",
+          "type": "string"
+        },
+        "completion_rate": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "形态完成度（百分比）",
+          "title": "Completion Rate"
+        }
+      },
+      "required": [
+        "pattern_type",
+        "pattern_description"
+      ],
+      "title": "PatternFitting",
+      "type": "object"
+    },
+    "PatternType": {
+      "description": "形态类型",
+      "enum": [
+        "head_shoulders",
+        "double_top_bottom",
+        "triangle",
+        "channel",
+        "wedge",
+        "flag",
+        "none"
+      ],
+      "title": "PatternType",
+      "type": "string"
+    },
+    "Phase": {
+      "description": "阶段",
+      "enum": [
+        "early",
+        "middle",
+        "late",
+        "unclear"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "PriceLevel": {
+      "description": "价格位",
+      "properties": {
+        "price": {
+          "description": "价格",
+          "title": "Price",
+          "type": "number"
+        },
+        "label": {
+          "description": "标签，如'支撑位1'、'压力位2'",
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "price",
+        "label"
+      ],
+      "title": "PriceLevel",
+      "type": "object"
+    },
+    "RiskLevel": {
+      "description": "风险等级",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "RiskLevel",
+      "type": "string"
+    },
+    "StructureSnapshot": {
+      "description": "Section 1: Structure Snapshot - 结构快照",
+      "properties": {
+        "structure_type": {
+          "$ref": "#/$defs/StructureType",
+          "description": "当前结构类型"
+        },
+        "ma200_position": {
+          "$ref": "#/$defs/MA200Position",
+          "description": "价格与MA200的位置关系"
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase",
+          "description": "当前所处阶段"
+        },
+        "key_levels": {
+          "description": "关键价格位（支撑/压力）",
+          "items": {
+            "$ref": "#/$defs/PriceLevel"
+          },
+          "maxItems": 6,
+          "title": "Key Levels",
+          "type": "array"
+        },
+        "trend_description": {
+          "description": "趋势描述（简短）",
+          "maxLength": 200,
+          "title": "Trend Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "structure_type",
+        "ma200_position",
+        "phase",
+        "key_levels",
+        "trend_description"
+      ],
+      "title": "StructureSnapshot",
+      "type": "object"
+    },
+    "StructureType": {
+      "description": "结构类型",
+      "enum": [
+        "uptrend",
+        "downtrend",
+        "consolidation"
+      ],
+      "title": "StructureType",
+      "type": "string"
+    }
+  },
+  "description": "Analysis V1 完整响应（固定五段式）",
+  "example": {
+    "analysis_date": "2025-12-29T10:30:00",
+    "indicator_translate": {
+      "global_note": "指标整体显示盘整特征，缺乏方向性信号",
+      "indicators": [
+        {
+          "interpretation": "RSI在中性区域，多空力量均衡",
+          "name": "RSI(14)",
+          "signal": "neutral",
+          "value": "52.3"
+        },
+        {
+          "interpretation": "MACD在零轴下方收敛，动能减弱",
+          "name": "MACD",
+          "signal": "weakening",
+          "value": "DIF: -0.05, DEA: -0.03"
+        },
+        {
+          "interpretation": "成交量萎缩，观望情绪浓厚",
+          "name": "成交量",
+          "signal": "weakening",
+          "value": "0.8倍均量"
+        }
+      ]
+    },
+    "judgment_zone": {
+      "candidates": [
+        {
+          "description": "若有效突破13.00且放量，结构转为上升",
+          "option_id": "A",
+          "option_type": "structure_premise"
+        },
+        {
+          "description": "若跌破12.50且放量，结构转为下降",
+          "option_id": "B",
+          "option_type": "structure_premise"
+        },
+        {
+          "description": "继续在区间内震荡，等待方向明确",
+          "option_id": "C",
+          "option_type": "structure_premise"
+        }
+      ],
+      "note": "以上为结构分析，非走势预测，系统不提供买卖建议",
+      "risk_checks": [
+        "突破时成交量是否显著放大",
+        "突破后能否站稳关键位",
+        "大盘环境是否配合"
+      ]
+    },
+    "market_type": "A",
+    "pattern_fitting": {
+      "completion_rate": 65,
+      "pattern_description": "对称三角形整理，高点逐步降低，低点逐步抬升",
+      "pattern_type": "triangle"
+    },
+    "risk_of_misreading": {
+      "caution_note": "需等待有效突破确认，避免假突破陷阱",
+      "risk_factors": [
+        "三角形末端，方向选择临近",
+        "成交量持续萎缩，突破有效性存疑",
+        "大盘波动可能影响个股选择"
+      ],
+      "risk_flags": [
+        "缩量",
+        "窄幅震荡",
+        "方向不明"
+      ],
+      "risk_level": "medium"
+    },
+    "stock_code": "000001",
+    "stock_name": "平安银行",
+    "structure_snapshot": {
+      "key_levels": [
+        {
+          "label": "近期支撑",
+          "price": 12.5
+        },
+        {
+          "label": "次级支撑",
+          "price": 12.2
+        },
+        {
+          "label": "近期压力",
+          "price": 13.0
+        },
+        {
+          "label": "前高压力",
+          "price": 13.5
+        }
+      ],
+      "ma200_position": "above",
+      "phase": "middle",
+      "structure_type": "consolidation",
+      "trend_description": "价格在MA200上方盘整，区间12.50-13.00，结构完整"
+    }
+  },
+  "properties": {
+    "stock_code": {
+      "description": "股票代码",
+      "title": "Stock Code",
+      "type": "string"
+    },
+    "stock_name": {
+      "description": "股票名称",
+      "title": "Stock Name",
+      "type": "string"
+    },
+    "market_type": {
+      "description": "市场类型",
+      "examples": [
+        "A",
+        "HK",
+        "US"
+      ],
+      "title": "Market Type",
+      "type": "string"
+    },
+    "analysis_date": {
+      "description": "分析日期",
+      "format": "date-time",
+      "title": "Analysis Date",
+      "type": "string"
+    },
+    "structure_snapshot": {
+      "$ref": "#/$defs/StructureSnapshot",
+      "description": "Section 1: 结构快照"
+    },
+    "pattern_fitting": {
+      "$ref": "#/$defs/PatternFitting",
+      "description": "Section 2: 形态拟合"
+    },
+    "indicator_translate": {
+      "$ref": "#/$defs/IndicatorTranslate",
+      "description": "Section 3: 指标翻译"
+    },
+    "risk_of_misreading": {
+      "$ref": "#/$defs/MisreadingRisk",
+      "description": "Section 4: 误读风险"
+    },
+    "judgment_zone": {
+      "$ref": "#/$defs/JudgmentZone",
+      "description": "Section 5: 判断候选区"
+    }
+  },
+  "required": [
+    "stock_code",
+    "stock_name",
+    "market_type",
+    "analysis_date",
+    "structure_snapshot",
+    "pattern_fitting",
+    "indicator_translate",
+    "risk_of_misreading",
+    "judgment_zone"
+  ],
+  "title": "AnalysisV1Response",
+  "type": "object"
+}

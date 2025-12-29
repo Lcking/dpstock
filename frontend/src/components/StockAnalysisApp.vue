@@ -511,6 +511,11 @@ function handleStreamUpdate(data: StreamAnalysisUpdate) {
       stock.analysis = data.analysis;
     }
 
+    // ✅ 若收到 Analysis V1 数据，直接更新
+    if (data.analysis_v1 !== undefined) {
+      stock.analysisV1 = data.analysis_v1;
+    }
+
     // ✅ 若收到增量片段，则拼接
     if (data.ai_analysis_chunk !== undefined) {
       stock.analysis = (stock.analysis || '') + data.ai_analysis_chunk;

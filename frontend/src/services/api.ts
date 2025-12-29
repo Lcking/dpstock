@@ -212,5 +212,44 @@ export const apiService = {
       console.error('获取文章详情时出错:', error);
       return null;
     }
+  },
+
+  // ========== Judgment API ==========
+
+  // 保存判断快照
+  saveJudgment: async (snapshot: any) => {
+    try {
+      const response = await axiosInstance.post('/v1/judgments', {
+        snapshot
+      });
+      return response.data;
+    } catch (error) {
+      console.error('保存判断时出错:', error);
+      throw error;
+    }
+  },
+
+  // 获取我的判断列表
+  getMyJudgments: async (limit: number = 50) => {
+    try {
+      const response = await axiosInstance.get('/v1/me/judgments', {
+        params: { limit }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('获取判断列表时出错:', error);
+      return { user_id: '', total: 0, judgments: [] };
+    }
+  },
+
+  // 获取判断详情
+  getJudgmentDetail: async (judgmentId: string) => {
+    try {
+      const response = await axiosInstance.get(`/v1/judgments/${judgmentId}`);
+      return response.data;
+    } catch (error) {
+      console.error('获取判断详情时出错:', error);
+      return null;
+    }
   }
 };

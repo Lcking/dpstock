@@ -50,6 +50,21 @@
               </template>
               分享
             </n-button>
+            <n-button 
+              size="small" 
+              v-if="stock.analysisStatus === 'completed'"
+              @click="saveJudgment"
+              class="header-action-button save-button"
+              type="success"
+              secondary
+              round
+              :loading="savingJudgment"
+            >
+              <template #icon>
+                <n-icon><BookmarkOutline /></n-icon>
+              </template>
+              保存判断
+            </n-button>
         </div>
       </div>
       <div class="analysis-status" v-if="stock.analysisStatus !== 'completed'">
@@ -188,7 +203,16 @@
       </template>
       
       <template v-else-if="stock.analysisStatus === 'completed'">
-        <div class="analysis-result analysis-completed" v-html="parsedAnalysis"></div>
+        <!-- 优先显示 Analysis V1 格式 -->
+        <AnalysisV1Display 
+          v-if="stock.analysisV1"
+          :data="stock.analysisV1"
+          :stock-code="stock.code"
+          :stock-name="stock.name || stock.code"
+          @saved="handleJudgmentSaved"
+        />
+        <!-- 降级：显示普通文本分析 -->
+        <div v-else class="analysis-result analysis-completed" v-html="parsedAnalysis"></div>
       </template>
     </div>
   </n-card>
@@ -203,12 +227,14 @@ import {
   CopyOutline,
   HourglassOutline,
   ReloadOutline,
-  ShareSocialOutline
+  ShareSocialOutline,
+  BookmarkOutline
 } from '@vicons/ionicons5';
 import * as echarts from 'echarts';
 import { apiService } from '@/services/api';
 import { getCategoryName, parseMarkdown } from '@/utils';
 import type { StockInfo } from '@/types';
+import AnalysisV1Display from './AnalysisV1Display.vue';
 
 const props = defineProps<{
   stock: StockInfo;
@@ -593,6 +619,64 @@ ${baseUrl}/analysis
     console.error('复制分享链接失败:', error);
     message.error('复制失败，请重试');
   }
+}
+
+// 保存判断状态
+const savingJudgment = ref(false);
+
+// 保存判断功能
+async function saveJudgment() {
+  if (!props.stock.analysis) {
+    message.warning('暂无分析结果可保存');
+    return;
+  }
+
+  savingJudgment.value = true;
+  try {
+    // 构造简化的 judgment snapshot
+    const snapshot = {
+      stock_code: props.stock.code,
+      snapshot_time: new Date().toISOString(),
+      structure_premise: {
+        structure_type: props.stock.maTrend || 'consolidation',
+        analysis_summary: props.stock.analysis.substring(0, 200)
+      },
+      selected_candidates: ['A'], // 默认选项
+      key_levels_snapshot: [
+        {
+          price: props.stock.price || 0,
+          label: '当前价格'
+        }
+      ],
+      structure_type: props.stock.maTrend === 'UP' ? 'uptrend' : 
+                      props.stock.maTrend === 'DOWN' ? 'downtrend' : 'consolidation',
+      ma200_position: 'above', // 默认值
+      phase: 'middle' // 默认值
+    };
+
+    const response = await apiService.saveJudgment(snapshot);
+    
+    if (response && response.judgment_id) {
+      message.success('判断已保存！可在"我的判断"中查看');
+    } else {
+      message.error('保存失败，请重试');
+    }
+  } catch (error: any) {
+    console.error('保存判断失败:', error);
+    if (error.response?.status === 422) {
+      message.error('数据格式错误，请稍后重试');
+    } else {
+      message.error('保存失败，请重试');
+    }
+  } finally {
+    savingJudgment.value = false;
+  }
+}
+
+// 处理判断保存成功事件
+function handleJudgmentSaved(judgmentId: string) {
+  console.log('Judgment saved:', judgmentId);
+  // 可以在这里添加额外的处理逻辑
 }
 
 // 监听滚动事件

@@ -11,6 +11,10 @@
           <span class="btn-text">分析专栏</span>
           <span class="btn-glow"></span>
         </router-link>
+        <router-link to="/my-judgments" class="nav-btn">
+          <span class="btn-text">我的判断</span>
+          <span class="btn-glow"></span>
+        </router-link>
         <a
           v-for="link in links"
           :key="link.text"
