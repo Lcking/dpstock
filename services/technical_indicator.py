@@ -129,6 +129,38 @@ class TechnicalIndicator:
         
         return atr
     
+    def calculate_kdj(self, df: pd.DataFrame, n: int = 9, m1: int = 3, m2: int = 3) -> tuple:
+        """
+        计算KDJ指标
+        
+        Args:
+            df: 包含High, Low, Close列的DataFrame
+            n: RSV周期，默认9
+            m1: K值平滑周期，默认3
+            m2: D值平滑周期，默认3
+            
+        Returns:
+            (K值, D值, J值)的元组
+        """
+        # 计算RSV (Raw Stochastic Value)
+        low_n = df['Low'].rolling(window=n).min()
+        high_n = df['High'].rolling(window=n).max()
+        
+        rsv = (df['Close'] - low_n) / (high_n - low_n) * 100
+        rsv = rsv.fillna(50)  # 填充初始值为50
+        
+        # 计算K值 (K = SMA(RSV, m1))
+        k = rsv.ewm(com=m1-1, adjust=False).mean()
+        
+        # 计算D值 (D = SMA(K, m2))
+        d = k.ewm(com=m2-1, adjust=False).mean()
+        
+        # 计算J值 (J = 3*K - 2*D)
+        j = 3 * k - 2 * d
+        
+        return k, d, j
+
+    
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         计算所有技术指标
@@ -178,7 +210,14 @@ class TechnicalIndicator:
             # 波动率 (过去20天收盘价的标准差/均值)
             result_df['Volatility'] = result_df['Close'].rolling(window=20).std() / result_df['Close'].rolling(window=20).mean() * 100
             
+            # KDJ指标
+            k, d, j = self.calculate_kdj(result_df)
+            result_df['KDJ_K'] = k
+            result_df['KDJ_D'] = d
+            result_df['KDJ_J'] = j
+            
             return result_df
+
             
         except Exception as e:
             logger.error(f"计算技术指标时出错: {str(e)}")

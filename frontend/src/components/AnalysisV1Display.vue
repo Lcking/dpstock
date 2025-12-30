@@ -28,7 +28,7 @@
         </n-space>
       </div>
       
-      <p class="trend-description">{{ data.structure_snapshot.trend_description }}</p>
+      <div class="trend-description markdown-content" v-html="renderMarkdown(data.structure_snapshot.trend_description)"></div>
     </div>
 
     <!-- Section 2: 形态拟合 -->
@@ -47,7 +47,7 @@
           />
         </n-descriptions-item>
       </n-descriptions>
-      <p class="pattern-description">{{ data.pattern_fitting.pattern_description }}</p>
+      <div class="pattern-description markdown-content" v-html="renderMarkdown(data.pattern_fitting.pattern_description)"></div>
     </div>
 
     <!-- Section 3: 指标翻译 -->
@@ -62,11 +62,11 @@
             </n-tag>
           </div>
           <div class="indicator-value">值: {{ indicator.value }}</div>
-          <div class="indicator-interpretation">{{ indicator.interpretation }}</div>
+          <div class="indicator-interpretation markdown-content" v-html="renderMarkdown(indicator.interpretation)"></div>
         </div>
       </div>
       <n-alert type="info" :bordered="false" class="global-note">
-        {{ data.indicator_translate.global_note }}
+        <div class="markdown-content" v-html="renderMarkdown(data.indicator_translate.global_note)"></div>
       </n-alert>
     </div>
 
@@ -89,7 +89,10 @@
             </n-tag>
           </n-space>
         </div>
-        <p class="caution-note"><strong>注意:</strong> {{ data.risk_of_misreading.caution_note }}</p>
+        <div class="caution-note markdown-content">
+          <strong>注意:</strong>
+          <div v-html="renderMarkdown(data.risk_of_misreading.caution_note)"></div>
+        </div>
       </n-alert>
     </div>
 
@@ -107,7 +110,7 @@
           >
             <div class="candidate-content">
               <strong class="candidate-id">{{ candidate.option_id }}.</strong>
-              <span class="candidate-description">{{ candidate.description }}</span>
+              <span class="candidate-description markdown-content" v-html="renderMarkdown(candidate.description)"></span>
             </div>
           </n-radio>
         </n-space>
@@ -172,6 +175,21 @@ import {
 } from 'naive-ui';
 import { BookmarkOutline } from '@vicons/ionicons5';
 import { apiService } from '@/services/api';
+import MarkdownIt from 'markdown-it';
+
+// 初始化 Markdown 渲染器
+const md = new MarkdownIt({
+  html: false,        // 不允许 HTML 标签
+  breaks: true,       // 将换行符转换为 <br>
+  linkify: true,      // 自动转换 URL 为链接
+  typographer: true   // 启用智能引号和其他排版优化
+});
+
+// Markdown 渲染函数
+function renderMarkdown(text: string): string {
+  if (!text) return '';
+  return md.render(text);
+}
 
 interface Props {
   data: any; // Analysis V1 data
@@ -482,4 +500,57 @@ async function handleSaveJudgment() {
 .save-judgment-button {
   margin-top: 16px;
 }
+
+/* Markdown 渲染内容样式 */
+.markdown-content {
+  line-height: 1.8;
+}
+
+.markdown-content p {
+  margin: 8px 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.markdown-content li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+
+.markdown-content strong {
+  font-weight: 600;
+  color: var(--n-text-color);
+}
+
+.markdown-content code {
+  padding: 2px 6px;
+  background: var(--n-color-embedded);
+  border-radius: 3px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 0.9em;
+}
+
+.markdown-content pre {
+  padding: 12px;
+  background: var(--n-color-embedded);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.markdown-content pre code {
+  padding: 0;
+  background: none;
+}
+
+.markdown-content blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--n-border-color);
+  color: var(--n-text-color-2);
+}
+
 </style>

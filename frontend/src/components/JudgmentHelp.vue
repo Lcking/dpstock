@@ -147,6 +147,54 @@
       </section>
 
       <section class="help-section">
+        <h2>🔒 数据隐私保护</h2>
+        <n-alert type="success" :bordered="false" class="privacy-alert">
+          <template #header>
+            <strong>您的数据完全私密</strong>
+          </template>
+          <p>我们非常重视您的隐私。所有判断验证数据都存储在您的浏览器本地，不会上传到服务器。</p>
+        </n-alert>
+
+        <div class="privacy-details">
+          <h3>📍 数据存储位置</h3>
+          <p>
+            所有判断数据都保存在您浏览器的 <code>localStorage</code> 中，这意味着：
+          </p>
+          <ul>
+            <li>数据只存在于您当前使用的浏览器中</li>
+            <li>其他人无法访问您的判断数据</li>
+            <li>我们的服务器不会收集或存储您的判断记录</li>
+          </ul>
+
+          <h3>🔐 隐私保证</h3>
+          <ul>
+            <li><strong>不上传</strong>：判断数据不会发送到任何服务器</li>
+            <li><strong>不共享</strong>：您的判断记录不会与任何第三方共享</li>
+            <li><strong>不追踪</strong>：我们不会追踪您的判断历史</li>
+          </ul>
+
+          <h3>🗑️ 数据管理</h3>
+          <p>您可以随时管理自己的数据：</p>
+          <ul>
+            <li><strong>查看数据</strong>：在"我的判断"页面查看所有保存的判断</li>
+            <li><strong>清除数据</strong>：清除浏览器缓存会删除所有判断数据</li>
+            <li><strong>导出数据</strong>：（未来功能）支持导出判断数据到本地文件</li>
+          </ul>
+
+          <n-alert type="warning" :bordered="false" class="privacy-note">
+            <template #header>
+              <strong>⚠️ 注意事项</strong>
+            </template>
+            <ul>
+              <li>更换浏览器或设备后，之前的判断数据将无法访问</li>
+              <li>清除浏览器缓存会永久删除所有判断数据</li>
+              <li>建议定期截图保存重要的判断记录</li>
+            </ul>
+          </n-alert>
+        </div>
+      </section>
+
+      <section class="help-section">
         <h2>❓ 常见问题</h2>
         <n-collapse>
           <n-collapse-item title="为什么我的判断一直显示'未验证'？" name="1">
@@ -393,6 +441,53 @@ import { ArrowBackOutline as ArrowBack } from '@vicons/ionicons5';
 
 .footer-note a:hover {
   text-decoration: underline;
+}
+
+.privacy-alert {
+  margin-bottom: 24px;
+}
+
+.privacy-details {
+  margin-top: 24px;
+}
+
+.privacy-details h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 24px 0 12px 0;
+}
+
+.privacy-details code {
+  padding: 2px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 0.9em;
+  color: #6366f1;
+}
+
+.privacy-details ul {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.privacy-details li {
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.privacy-note {
+  margin-top: 20px;
+}
+
+.privacy-note ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+.privacy-note li {
+  margin-bottom: 6px;
 }
 
 @media (max-width: 768px) {
