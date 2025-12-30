@@ -98,6 +98,51 @@ class AIAnalyzer:
             ma60 = latest_data.get('MA60', price)
             ma200 = latest_data.get('MA200', price)
             
+            # --- 增强统计数据计算 (A+B+C 方案) ---
+            
+            # 1. 价格位置频率 (过去 20 天)
+            recent_20 = df.tail(20)
+            days_above_ma20 = (recent_20['Close'] > recent_20['MA20']).sum()
+            days_below_ma20 = 20 - days_above_ma20
+            
+            # 2. RSI 分位数与极值 (过去 30 天 / 90 天)
+            recent_30 = df.tail(30)
+            recent_90 = df.tail(90)
+            
+            rsi_30_mean = recent_30['RSI'].mean()
+            rsi_30_max = recent_30['RSI'].max()
+            rsi_30_min = recent_30['RSI'].min()
+            
+            # 计算 RSI 分位数 (百分位)
+            import scipy.stats as stats
+            rsi_percentile_30 = stats.percentileofscore(recent_30['RSI'], rsi) if len(recent_30) > 0 else 50
+            
+            # 3. 成交量情境
+            vol_30_mean = recent_30['Volume'].mean()
+            vol_ratio_30 = latest_data['Volume'] / vol_30_mean if vol_30_mean > 0 else 1.0
+            
+            # 统计上下文数据包
+            stats_context = {
+                "price_ma20_freq": {
+                    "days_above": int(days_above_ma20),
+                    "days_below": int(days_below_ma20),
+                    "total": 20
+                },
+                "rsi_context": {
+                    "current": round(rsi, 2),
+                    "mean_30": round(rsi_30_mean, 2),
+                    "max_30": round(rsi_30_max, 2),
+                    "min_30": round(rsi_30_min, 2),
+                    "percentile_30": round(rsi_percentile_30, 1)
+                },
+                "volume_context": {
+                    "current_ratio_30": round(vol_ratio_30, 2),
+                    "is_shrinking": vol_ratio_30 < 0.8,
+                    "is_expanding": vol_ratio_30 > 1.2
+                }
+            }
+            # -----------------------------------
+            
             # 构建 Analysis V1 prompt（统一格式，适用所有市场）
             market_name_map = {'A': 'A股', 'HK': '港股', 'US': '美股', 'ETF': 'ETF', 'LOF': 'LOF'}
             market_display = market_name_map.get(market_type, market_type)
@@ -143,15 +188,22 @@ class AIAnalyzer:
 **近14日交易数据：**
 {recent_data}
 
+**统计上下文 (Statistical Context)：**
+{stats_context}
+
 **数据整理要求（附正反示例）：**
 
 1. **结构快照（Structure Snapshot）**：
+   - **数据故事化**：增加历史对比和频率统计
+   - ✅ 正确："价格 11.56，位于 MA20(11.80) 下方 0.24 元。过去 20 个交易日中，价格有 12 天在 MA20 下方运行，8 天在上方运行。"
+   - ❌ 错误："价格长期受到 MA20 压制，走势疲软"
+   
    - 陈述价格与各均线的位置关系
    - ✅ 正确："价格 11.56，位于 MA20(11.80) 下方 0.24 元，位于 MA200(11.55) 上方 0.01 元"
-   - ❌ 错误："价格在 MA20 下方，处于弱势区域"
    
    - 列出3-6个关键价格位，只说明是什么位置
    - ✅ 正确："11.65（近期高点）、11.56（MA200）、11.30（近期低点）"
+
    - ❌ 错误:"11.65 压力位、11.30 支撑位"
    
    - trend_description 只描述客观事实
@@ -163,27 +215,22 @@ class AIAnalyzer:
    - ✅ 正确："价格在 11.30-11.65 区间内形成 3 个高点（11.65, 11.62, 11.63）和 3 个低点（11.32, 11.35, 11.30），高点逐渐下降，低点基本持平"
    - ❌ 错误："形成下降三角形，即将向下突破"
    
-   - 不说形态"完成"或"突破"
-   - ✅ 正确："当前价格 11.56，位于 11.30-11.65 区间中部"
+   - 不说形态"完成"或"突破"，但可以描述形态的时间/空间进度
+   - ✅ 正确："当前价格 11.56，位于 11.30-11.65 形态区间的后段（空间位置 80%）"
+   - ✅ 正确："completion_rate: 80 （表示当前形态已运行的时间/空间占比，非成功概率）"
    - ❌ 错误："形态完成度 80%，等待突破确认"
 
 3. **指标翻译（Indicator Translate）**：
-   - 只陈述指标的当前数值和历史对比
-   - ✅ 正确："RSI(14) 当前 44.50，过去 30 天均值 52.3，过去 90 天均值 48.7，过去 30 天最高 68.2，最低 35.6"
-   - ❌ 错误："RSI 44.50，处于中性偏弱区域"
+   - **多维度呈现**：增加百分位排名、分布统计
+   - ✅ 正确："RSI(14) 当前 44.50。处于过去 30 天数据的第 35 百分位（即 65% 的时间 RSI 高于当前值）。过去 30 天均值 52.3，最高 68.2，最低 35.6"
+   - ❌ 错误："RSI 44.50，显示空头力量占优"
    
-   - ✅ 正确："MACD DIF -0.05，DEA -0.03，柱状图 -0.02。过去 5 日 DIF 从 0.02 降至 -0.05，DEA 从 0.01 降至 -0.03"
-   - ❌ 错误："MACD 死叉，动能转弱"
+   - **场景化描述**：使用具体数字和比例
+   - ✅ 正确："成交量今日 120 万股，为 20 日均量的 0.80 倍。过去 5 日平均成交 115 万股，较 20 日均量减少 23%。"
    
-   - ✅ 正确："KDJ 当前 K 值 45.2，D 值 42.8，J 值 50.0。过去 5 日 K 值从 38.5 升至 45.2，D 值从 36.2 升至 42.8"
-   - ❌ 错误："KDJ 金叉，即将进入强势区"
-   
-   - ✅ 正确："成交量今日 120 万股，20 日均量 150 万股，今日成交量为均量的 0.80 倍"
-   - ❌ 错误："成交量萎缩，市场观望情绪浓厚"
-   
-   - global_note 只综合陈述各指标的数值状态，使用 Markdown 列表格式
-   - ✅ 正确："当前指标状态：\n- RSI 44.50 低于 30 日均值 7.8 个点\n- MACD DIF 由正转负已持续 3 日\n- KDJ K 值在 50 以下区域运行\n- 成交量连续 5 日低于均量"
-   - ❌ 错误："技术指标整体偏弱，多空力量对比向空方倾斜"
+   - global_note 使用 Markdown 列表，包含"参考性解读"
+   - ✅ 正确："当前指标状态：\n- RSI 44.50 处于历史 35% 分位\n- 价格在 MA20 下方运行（近 20 日内第 12 次）\n\n**参考性解读**（注：历史统计不代表未来）：\n- 历史数据显示，当 RSI 处于 30-40 区间时，过去 90 天内出现过 3 次，随后 5 天价格平均波动 +1.2%"
+   - ❌ 错误："建议观望，等待 RSI 修复"
 
 4. **误读风险（Risk of Misreading）**：
    - 只列出可能影响数据解读的客观因素
@@ -263,7 +310,7 @@ class AIAnalyzer:
         "interpretation": "成交量今日 120 万股，20 日均量 150 万股，今日成交量为均量的 0.80 倍，连续 5 日低于均量"
       }}
     ],
-    "global_note": "RSI 44.50 低于 30 日均值 7.8 个点，MACD DIF 由正转负已持续 3 日，KDJ K 值在 50 以下区域运行，成交量连续 5 日低于均量"
+    "global_note": "当前指标状态：\n- RSI 44.50 处于过去 30 天的 35% 分位\n- 价格连续 3 日位于 MA20 下方\n- 成交量萎缩至均量的 0.8 倍\n\n**参考性解读**（注：仅为历史统计）：\n- 过去 90 天内类似成交量萎缩出现过 4 次，其中 3 次随后出现震荡整理"
   }},
   "risk_of_misreading": {{
     "risk_level": "high|medium|low",
