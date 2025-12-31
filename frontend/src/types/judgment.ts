@@ -21,6 +21,7 @@ export interface JudgmentSnapshot {
     structure_type: string;
     ma200_position: string;
     phase: string;
+    verification_period: number;
 }
 
 export interface JudgmentCheck {
@@ -42,6 +43,7 @@ export interface Judgment {
     structure_type: string;
     ma200_position: string;
     phase: string;
+    verification_period?: number;
     selected_candidates: string[];
     created_at: string;
     latest_check?: JudgmentCheck;

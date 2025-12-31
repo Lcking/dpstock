@@ -133,6 +133,20 @@
         </n-checkbox-group>
       </div>
 
+      <div class="verification-period">
+        <h4>验证周期</h4>
+        <n-radio-group v-model:value="selectedPeriod" size="small">
+          <n-radio-button :value="1">1天</n-radio-button>
+          <n-radio-button :value="3">3天</n-radio-button>
+          <n-radio-button :value="7">7天</n-radio-button>
+          <n-radio-button :value="30">30天</n-radio-button>
+        </n-radio-group>
+        <div class="period-hint">
+          <n-text depth="3" style="font-size: 12px;">这将决定并在多长时间内追踪验证此判断是否成立</n-text>
+        </div>
+      </div>
+
+
       <n-alert type="info" :bordered="false" class="judgment-note">
         {{ data.judgment_zone.note }}
       </n-alert>
@@ -166,6 +180,7 @@ import {
   NAlert,
   NRadioGroup,
   NRadio,
+  NRadioButton,
   NCheckboxGroup,
   NCheckbox,
   NDivider,
@@ -204,6 +219,7 @@ const emit = defineEmits(['saved']);
 const message = useMessage();
 const selectedCandidate = ref<string>('');
 const selectedRiskChecks = ref<string[]>([]);
+const selectedPeriod = ref<number>(7);
 const saving = ref(false);
 
 // 辅助函数：结构类型
@@ -333,7 +349,8 @@ async function handleSaveJudgment() {
       key_levels_snapshot: props.data.structure_snapshot.key_levels,
       structure_type: props.data.structure_snapshot.structure_type,
       ma200_position: props.data.structure_snapshot.ma200_position,
-      phase: props.data.structure_snapshot.phase
+      phase: props.data.structure_snapshot.phase,
+      verification_period: selectedPeriod.value
     };
 
     const response = await apiService.saveJudgment(snapshot);
@@ -491,6 +508,20 @@ async function handleSaveJudgment() {
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 500;
+}
+
+.verification-period {
+  margin: 16px 0;
+}
+
+.verification-period h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.period-hint {
+  margin-top: 4px;
 }
 
 .judgment-note {

@@ -145,6 +145,7 @@ class JudgmentSnapshot(BaseModel):
     structure_type: StructureType = Field(..., description="结构类型")
     ma200_position: MA200Position = Field(..., description="MA200位置")
     phase: Phase = Field(..., description="阶段")
+    verification_period: int = Field(default=7, description="验证周期（天）")
 
 
 class JudgmentOverview(BaseModel):

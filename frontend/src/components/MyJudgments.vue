@@ -66,6 +66,9 @@
           <n-descriptions-item label="选择前提">
             {{ selectedJudgment.selected_candidates.join(', ') }}
           </n-descriptions-item>
+          <n-descriptions-item label="验证周期">
+            {{ selectedJudgment.verification_period || 7 }} 天
+          </n-descriptions-item>
         </n-descriptions>
 
         <n-divider>当前验证状态</n-divider>
@@ -130,6 +133,7 @@ import {
   NSpace,
   NText,
   NIcon,
+  NProgress,
   NEmpty,
   NTag,
   NCollapse,
@@ -217,6 +221,48 @@ const columns: DataTableColumns<Judgment> = [
     width: 100,
     render(row: Judgment) {
       return row.selected_candidates.join(', ');
+    }
+  },
+  {
+    title: '验证进度',
+    key: 'progress',
+    width: 140,
+    render(row: Judgment) {
+      if (!row.latest_check) return h(NTag, { size: 'small', type: 'default', bordered: false }, { default: () => '等待验证' });
+
+      // 如果结构破坏，直接显示失效及天数
+      const status = row.latest_check.current_structure_status;
+      const createdTime = new Date(row.created_at).getTime();
+      const checkTime = new Date(row.latest_check.check_time).getTime(); // 使用检查时间更准确
+      const daysPassed = Math.ceil((checkTime - createdTime) / (1000 * 60 * 60 * 24));
+      const period = row.verification_period || 7;
+      
+      // 1. 结构已被破坏
+      if (status === 'broken') {
+        return h(NTag, { size: 'small', type: 'error' }, { default: () => `❌ DAY ${daysPassed} 失效` });
+      }
+
+      // 2. 验证期满且维持
+      if (daysPassed >= period && (status === 'maintained' || status === 'weakened')) {
+         return h(NTag, { size: 'small', type: 'success' }, { default: () => `✅ 成功 (${period}天)` });
+      }
+
+      // 3. 进行中
+      return h(
+        NSpace,
+        { size: 'small', align: 'center' },
+        { 
+          default: () => [
+            h(NProgress, {
+              type: 'circle',
+              percentage: Math.min(100, Math.round((daysPassed / period) * 100)),
+              style: { width: '24px', height: '24px' },
+              showIndicator: false
+            }),
+            h('span', `DAY ${daysPassed}/${period}`)
+          ]
+        }
+      );
     }
   },
   {

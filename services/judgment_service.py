@@ -43,9 +43,17 @@ class JudgmentService:
                         structure_type TEXT,
                         ma200_position TEXT,
                         phase TEXT,
+                        verification_period INTEGER DEFAULT 7,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+
+                # Check if verification_period column exists (for migration)
+                cursor.execute("PRAGMA table_info(judgments)")
+                columns = [info[1] for info in cursor.fetchall()]
+                if "verification_period" not in columns:
+                    logger.info("Migrating database: adding verification_period column")
+                    cursor.execute("ALTER TABLE judgments ADD COLUMN verification_period INTEGER DEFAULT 7")
                 
                 # Create indexes
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_judgments_user_id ON judgments(user_id)")
@@ -97,8 +105,9 @@ class JudgmentService:
                     INSERT INTO judgments (
                         judgment_id, user_id, stock_code, stock_name, market_type,
                         snapshot_time, structure_premise, selected_candidates,
-                        key_levels_snapshot, structure_type, ma200_position, phase
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        key_levels_snapshot, structure_type, ma200_position, phase,
+                        verification_period
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     judgment_id,
                     user_id,
@@ -111,7 +120,8 @@ class JudgmentService:
                     json.dumps([level.model_dump() for level in snapshot.key_levels_snapshot]),
                     snapshot.structure_type.value if hasattr(snapshot.structure_type, 'value') else snapshot.structure_type,
                     snapshot.ma200_position.value if hasattr(snapshot.ma200_position, 'value') else snapshot.ma200_position,
-                    snapshot.phase.value if hasattr(snapshot.phase, 'value') else snapshot.phase
+                    snapshot.phase.value if hasattr(snapshot.phase, 'value') else snapshot.phase,
+                    getattr(snapshot, 'verification_period', 7)
                 ))
                 conn.commit()
                 
@@ -177,6 +187,7 @@ class JudgmentService:
                         "structure_type": row["structure_type"],
                         "ma200_position": row["ma200_position"],
                         "phase": row["phase"],
+                        "verification_period": row["verification_period"],
                         "selected_candidates": json.loads(row["selected_candidates"]),
                         "created_at": row["created_at"]
                     }
@@ -253,7 +264,9 @@ class JudgmentService:
                     "key_levels_snapshot": json.loads(judgment_row["key_levels_snapshot"]),
                     "structure_type": judgment_row["structure_type"],
                     "ma200_position": judgment_row["ma200_position"],
+                    "ma200_position": judgment_row["ma200_position"],
                     "phase": judgment_row["phase"],
+                    "verification_period": judgment_row["verification_period"],
                     "created_at": judgment_row["created_at"]
                 }
                 
