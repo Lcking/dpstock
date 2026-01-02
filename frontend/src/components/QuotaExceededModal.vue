@@ -75,7 +75,7 @@
         <template #icon>
           <n-icon><BulbOutline /></n-icon>
         </template>
-        <strong>记住:</strong> 专注少数标的,比广撒网更有价值
+        <strong>💡 提示:</strong> 专注少数标的,比广撒网更有价值
       </n-alert>
     </div>
 
