@@ -86,6 +86,11 @@
               </n-tag>
             </n-space>
 
+            <!-- Wyckoff II Status Guide -->
+            <JudgmentStatusGuide
+              :status="selectedJudgment.latest_check.current_structure_status"
+            />
+
             <n-space align="center">
               <n-text strong>当前价格:</n-text>
               <n-text>{{ selectedJudgment.latest_check.current_price.toFixed(2) }}</n-text>
@@ -126,6 +131,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue';
+import JudgmentStatusGuide from '@/components/WyckoffGuide/JudgmentStatusGuide.vue';
 import {
   NCard,
   NDataTable,

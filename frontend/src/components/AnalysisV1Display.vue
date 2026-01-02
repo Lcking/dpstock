@@ -97,6 +97,13 @@
     </div>
 
     <!-- Section 5: 判断区 -->
+    <!-- Wyckoff II Pre-Judgment Reminder -->
+    <JudgmentPreReminder
+      v-if="!hideJudgmentZone"
+      :risk-flags="data.risk_of_misreading?.risk_flags || []"
+      :expand-by-default="false"
+    />
+
     <div v-if="!hideJudgmentZone" class="analysis-section judgment-zone">
       <h3 class="section-title">🎯 判断区</h3>
       
@@ -166,11 +173,24 @@
         保存我的判断
       </n-button>
     </div>
+
+    <!-- Wyckoff II Judgment Confirm Dialog -->
+    <JudgmentConfirmDialog
+      v-model:show="showJudgmentConfirm"
+      :judgment-candidate="selectedCandidate"
+      :risk-flags="data.risk_of_misreading?.risk_flags || []"
+      :stock-code="stockCode"
+      :stock-name="stockName"
+      @confirm="confirmSaveJudgment"
+      @cancel="showJudgmentConfirm = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import JudgmentConfirmDialog from '@/components/WyckoffGuide/JudgmentConfirmDialog.vue';
+import JudgmentPreReminder from '@/components/WyckoffGuide/JudgmentPreReminder.vue';
 import {
   NDescriptions,
   NDescriptionsItem,
@@ -221,6 +241,7 @@ const selectedCandidate = ref<string>('');
 const selectedRiskChecks = ref<string[]>([]);
 const selectedPeriod = ref<number>(7);
 const saving = ref(false);
+const showJudgmentConfirm = ref(false);
 
 // 辅助函数：结构类型
 function getStructureTypeName(type: string): string {
@@ -327,13 +348,19 @@ function getRiskLevelType(level: string): 'error' | 'warning' | 'success' {
   return map[level] || 'warning';
 }
 
-// 保存判断
+// 保存判断 - 显示确认对话框
 async function handleSaveJudgment() {
   if (!selectedCandidate.value || selectedRiskChecks.value.length === 0) {
     message.warning('请选择判断候选项并确认风险检查项');
     return;
   }
 
+  // 显示 Wyckoff II 确认对话框
+  showJudgmentConfirm.value = true;
+}
+
+// 确认保存判断 (用户在对话框中确认后)
+async function confirmSaveJudgment() {
   saving.value = true;
   try {
     const snapshot = {

@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import NavBar from '@/components/NavBar.vue'
 import Footer from '@/components/Footer.vue'
 import { NLayout } from 'naive-ui'
@@ -30,9 +30,15 @@ import {
   NDialogProvider, 
   NNotificationProvider, 
 } from 'naive-ui'
+import { getOrCreateUserId } from '@/utils/cookies'
 
 // 主题设置 (默认使用亮色主题)
 const theme = ref<any>(null) // 可以切换为 darkTheme 以启用暗色模式
+
+// Initialize aguai_uid cookie for anonymous user tracking
+onMounted(() => {
+  getOrCreateUserId();
+});
 </script>
 
 <style>
