@@ -8,6 +8,8 @@
         <span class="divider">|</span>
         <router-link to="/help/judgment-verification" class="footer-link">判断验证说明</router-link>
         <span class="divider">|</span>
+        <router-link to="/about" class="footer-link">关于我们</router-link>
+        <span class="divider">|</span>
         <a href="https://jsj.top/f/GXpvZu" target="_blank" rel="noopener" class="footer-link">建议意见</a>
       </div>
       <div class="footer-copyright">
