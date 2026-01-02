@@ -126,13 +126,42 @@ export const JudgmentStatusMessages: Record<string, JudgmentStatusMessage> = {
 /**
  * 获取 risk_flag 的解释
  * 支持中文key(通过映射)和英文key
+ * 使用关键词匹配以适应生产环境的完整句子
  * 如果 key 不存在,返回通用提醒
  */
 export function getRiskFlagExplanation(flagKey: string): RiskFlagExplanation {
-    // 先尝试中文映射
+    // 先尝试精确匹配
     const englishKey = RISK_FLAG_CN_TO_EN[flagKey] || flagKey;
 
-    return WyckoffMisreadingGuide[englishKey] || {
+    if (WyckoffMisreadingGuide[englishKey]) {
+        return WyckoffMisreadingGuide[englishKey];
+    }
+
+    // 如果精确匹配失败,尝试关键词匹配
+    const lowerFlagKey = flagKey.toLowerCase();
+
+    // 关键词映射规则
+    if (lowerFlagKey.includes('均线') || lowerFlagKey.includes('粘合') || lowerFlagKey.includes('ma')) {
+        return WyckoffMisreadingGuide['pattern_as_signal'];
+    }
+    if (lowerFlagKey.includes('缩量') || lowerFlagKey.includes('成交量') || lowerFlagKey.includes('volume')) {
+        return WyckoffMisreadingGuide['low_volume_ambiguity'];
+    }
+    if (lowerFlagKey.includes('背离') || lowerFlagKey.includes('rsi') || lowerFlagKey.includes('macd')) {
+        return WyckoffMisreadingGuide['indicator_overinterpretation'];
+    }
+    if (lowerFlagKey.includes('关键位') || lowerFlagKey.includes('支撑') || lowerFlagKey.includes('压力')) {
+        return WyckoffMisreadingGuide['key_level_overconfidence'];
+    }
+    if (lowerFlagKey.includes('趋势') || lowerFlagKey.includes('trend')) {
+        return WyckoffMisreadingGuide['trend_perpetuity_illusion'];
+    }
+    if (lowerFlagKey.includes('消息') || lowerFlagKey.includes('news')) {
+        return WyckoffMisreadingGuide['news_dependency'];
+    }
+
+    // 如果都不匹配,返回通用提醒
+    return {
         title: "认知风险提醒",
         explanation: "当前分析识别到潜在的认知偏误风险。在做判断前,请确保您理解判断前提可能失效是正常的。",
         reminder: "保持开放心态,允许判断被证伪"
