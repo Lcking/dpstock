@@ -26,12 +26,30 @@
           <span class="btn-text">{{ link.text }}</span>
           <span class="btn-glow"></span>
         </a>
+        
+        <!-- Quota Status -->
+        <QuotaStatus 
+          ref="quotaStatusRef"
+          @open-invite="showInviteDialog = true"
+        />
       </div>
     </div>
   </n-layout-header>
+  
+  <!-- Invite Dialog -->
+  <InviteDialog 
+    v-model:show="showInviteDialog"
+    :quota-status="quotaStatus"
+    @invite-generated="handleInviteGenerated"
+  />
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue';
+import QuotaStatus from './QuotaStatus.vue';
+import InviteDialog from './InviteDialog.vue';
+import { apiService } from '@/services/api';
+
 interface NavLink {
   text: string
   href: string
@@ -42,7 +60,34 @@ interface NavLink {
 const links: NavLink[] = [
   { text: '实盘策略平台', href: 'https://www.qifuapp.net/', target: '_blank', rel: 'noopener sponsored' },
   { text: '配查查', href: 'https://www.peichacha.net/', target: '_blank', rel: 'noopener sponsored' }
-]
+];
+
+const showInviteDialog = ref(false);
+const quotaStatusRef = ref<any>(null);
+const quotaStatus = ref<any>(null);
+
+const handleInviteGenerated = async () => {
+  // Refresh quota status after invite generation
+  if (quotaStatusRef.value) {
+    await quotaStatusRef.value.refresh();
+  }
+  await loadQuotaStatus();
+};
+
+const loadQuotaStatus = async () => {
+  try {
+    const data = await apiService.getQuotaStatus();
+    if (data) {
+      quotaStatus.value = data;
+    }
+  } catch (error) {
+    console.error('Failed to load quota status:', error);
+  }
+};
+
+onMounted(() => {
+  loadQuotaStatus();
+});
 </script>
 
 <style scoped>

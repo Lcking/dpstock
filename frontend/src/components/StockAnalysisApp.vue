@@ -146,6 +146,13 @@
 
       </n-layout-content>
     </n-layout>
+    
+    <!-- Quota Exceeded Modal -->
+    <QuotaExceededModal 
+      v-model:show="showQuotaExceededModal"
+      :error-data="quotaExceededData"
+      @open-invite="handleOpenInviteFromQuota"
+    />
   </div>
 </template>
 
@@ -182,6 +189,7 @@ import {
 import MarketTimeDisplay from './MarketTimeDisplay.vue';
 import StockCard from './StockCard.vue';
 import AnnouncementBanner from './AnnouncementBanner.vue';
+import QuotaExceededModal from './QuotaExceededModal.vue';
 
 import { apiService } from '@/services/api';
 import type { StockInfo, StreamInitMessage, StreamAnalysisUpdate } from '@/types';
@@ -194,6 +202,10 @@ const { copy } = useClipboard();
 // 公告配置
 const announcement = ref('');
 const showAnnouncementBanner = ref(true);
+
+// 配额超限弹窗
+const showQuotaExceededModal = ref(false);
+const quotaExceededData = ref<any>(null);
 
 // 股票分析配置
 const marketType = ref('A');
@@ -626,6 +638,20 @@ async function analyzeStocks() {
         // 可以在这里触发登录流程
         return;
       }
+      if (response.status === 403) {
+        // 配额超限错误
+        try {
+          const errorData = await response.json();
+          quotaExceededData.value = errorData.detail || errorData;
+          showQuotaExceededModal.value = true;
+          isAnalyzing.value = false;
+          return;
+        } catch (e) {
+          message.error('今日分析额度已用完');
+          isAnalyzing.value = false;
+          return;
+        }
+      }
       if (response.status === 404) {
         throw new Error('服务器接口未找到，请检查服务是否正常运行');
       }
@@ -924,6 +950,14 @@ onBeforeUnmount(() => {
 // 处理公告关闭事件
 function handleAnnouncementClose() {
   showAnnouncementBanner.value = false;
+}
+
+// 从配额超限弹窗打开邀请对话框
+function handleOpenInviteFromQuota() {
+  // 这个功能需要在NavBar中实现邀请对话框
+  // 目前只是关闭配额超限弹窗
+  showQuotaExceededModal.value = false;
+  message.info('请在导航栏点击"邀请"按钮生成邀请链接');
 }
 
 //analyzedStocks 控制台调试代码

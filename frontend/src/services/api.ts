@@ -251,5 +251,57 @@ export const apiService = {
       console.error('获取判断详情时出错:', error);
       return null;
     }
+  },
+
+  // ========== Quota API ==========
+
+  // 获取额度状态
+  getQuotaStatus: async () => {
+    try {
+      const response = await axiosInstance.get('/v1/quota/status');
+      return response.data;
+    } catch (error) {
+      console.error('获取额度状态时出错:', error);
+      return null;
+    }
+  },
+
+  // 检查额度
+  checkQuota: async (stockCode: string) => {
+    try {
+      const response = await axiosInstance.post('/v1/quota/check', {
+        stock_code: stockCode
+      });
+      return response.data;
+    } catch (error) {
+      console.error('检查额度时出错:', error);
+      throw error;
+    }
+  },
+
+  // ========== Invite API ==========
+
+  // 生成邀请码
+  generateInviteCode: async () => {
+    try {
+      const response = await axiosInstance.post('/v1/invite/generate');
+      return response.data;
+    } catch (error) {
+      console.error('生成邀请码时出错:', error);
+      throw error;
+    }
+  },
+
+  // 接受邀请
+  acceptInvite: async (code: string) => {
+    try {
+      const response = await axiosInstance.get('/v1/invite/accept', {
+        params: { code }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('接受邀请时出错:', error);
+      throw error;
+    }
   }
 };

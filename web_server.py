@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Response, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, Response, Depends, HTTPException, BackgroundTasks, Cookie
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,7 +19,9 @@ import json
 import secrets
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from routes import captcha, auth, judgments
+from routes import captcha, auth, judgments, quota, invite
+from services.quota_service import QuotaService
+from services.invite_service import InviteService
 
 load_dotenv()
 
@@ -48,6 +50,8 @@ app = FastAPI(
 app.include_router(captcha.router)
 app.include_router(auth.router) 
 app.include_router(judgments.router)
+app.include_router(quota.router)
+app.include_router(invite.router)
 
 # 添加CORS中间件
 app.add_middleware(
@@ -166,11 +170,43 @@ async def get_config():
     
 # AI分析股票
 @app.post("/api/analyze")
-async def analyze(request: AnalyzeRequest, username: str = Depends(verify_token)):
+async def analyze(
+    request: AnalyzeRequest, 
+    response: Response,
+    username: str = Depends(verify_token),
+    aguai_uid: Optional[str] = Cookie(None),
+    aguai_ref: Optional[str] = Cookie(None)
+):
     try:
         logger.info("开始处理分析请求")
         stock_codes = request.stock_codes
         market_type = request.market_type
+        
+        # Initialize quota service
+        quota_service_instance = QuotaService()
+        invite_service_instance = InviteService()
+        
+        # Quota check for single stock analysis only (batch analysis not subject to quota)
+        if len(stock_codes) == 1 and aguai_uid:
+            stock_code = stock_codes[0].strip()
+            
+            # Check quota before analysis
+            allowed, reason, details = quota_service_instance.check_quota(
+                user_id=aguai_uid,
+                stock_code=stock_code
+            )
+            
+            if not allowed:
+                logger.warning(f"Quota exceeded for user {aguai_uid}, stock {stock_code}")
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "quota_exceeded",
+                        "message": details.get("message", "今日分析额度已用完"),
+                        "remaining_quota": details.get("remaining_quota", 0),
+                        "analyzed_stocks_today": details.get("analyzed_stocks_today", [])
+                    }
+                )
         
         # 后端再次去重，确保安全
         original_count = len(stock_codes)
@@ -218,6 +254,24 @@ async def analyze(request: AnalyzeRequest, username: str = Depends(verify_token)
                     yield chunk + '\n'
                 
                 logger.info(f"股票 {target_code} 流式分析完成，共发送 {chunk_count} 个块")
+                
+                # Record analysis consumption (only for single stock with aguai_uid)
+                if aguai_uid:
+                    quota_service_instance.record_analysis(
+                        user_id=aguai_uid,
+                        stock_code=target_code
+                    )
+                    logger.info(f"Recorded analysis for user {aguai_uid}, stock {target_code}")
+                    
+                    # Check and reward inviter if applicable
+                    if aguai_ref:
+                        reward_result = invite_service_instance.check_and_reward_inviter(
+                            invitee_id=aguai_uid,
+                            referrer_id=aguai_ref
+                        )
+                        if reward_result:
+                            logger.info(f"Invite reward granted: {reward_result}")
+
             else:
                 # 批量分析流式处理
                 logger.info(f"开始批量流式分析: {stock_codes}")
@@ -253,6 +307,9 @@ async def analyze(request: AnalyzeRequest, username: str = Depends(verify_token)
         logger.info("成功创建流式响应生成器")
         return StreamingResponse(generate_stream(), media_type='application/json')
             
+    except HTTPException:
+        # Re-raise HTTPException (like 403 quota exceeded) without catching
+        raise
     except Exception as e:
         error_msg = f"分析时出错: {str(e)}"
         logger.error(error_msg)
