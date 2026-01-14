@@ -210,6 +210,23 @@ class StockDataProvider:
         同步获取股票数据的实现
         将被异步方法调用
         """
+        # 增加递归深度限制,防止pandas比较操作时出现递归错误
+        import sys
+        old_limit = sys.getrecursionlimit()
+        sys.setrecursionlimit(10000)  # 临时增加到10000
+        
+        try:
+            return self._fetch_stock_data_internal(stock_code, market_type, start_date, end_date)
+        finally:
+            # 恢复原始递归限制
+            sys.setrecursionlimit(old_limit)
+    
+    def _fetch_stock_data_internal(self, stock_code: str, market_type: str = 'A',
+                                   start_date: Optional[str] = None,
+                                   end_date: Optional[str] = None) -> pd.DataFrame:
+        """
+        内部数据获取实现
+        """
         # Monkey patch requests库以禁用SSL验证
         # 这是为了解决东方财富API的SSL连接问题
         import requests
@@ -219,7 +236,7 @@ class StockDataProvider:
         # 保存原始的request方法
         original_request = requests.Session.request
         
-        # 创建新的request方法，强制设置verify=False
+        # 创建新的request方法,强制设置verify=False
         def patched_request(self, method, url, **kwargs):
             kwargs['verify'] = False
             return original_request(self, method, url, **kwargs)
