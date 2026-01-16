@@ -18,7 +18,7 @@
           <n-input
             v-model:value="formData.email"
             placeholder="输入邮箱"
-            type="email"
+            type="text"
             :disabled="sending"
             @keyup.enter="sendCode"
           />
