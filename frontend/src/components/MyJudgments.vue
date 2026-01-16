@@ -2,7 +2,12 @@
   <div class="my-judgments-container">
     <n-card title="我的判断记录">
       <template #header-extra>
-        <n-space>
+        <n-space align="center">
+          <!-- Anchor Status -->
+          <AnchorStatus @show-bind="showBindDialog = true" />
+          
+          <n-divider vertical />
+          
           <n-text depth="3">共 {{ judgments.length }} 条</n-text>
           <n-button size="small" @click="loadJudgments">
             <template #icon>
@@ -126,12 +131,20 @@
         </template>
       </template>
     </n-modal>
+    
+    <!-- Anchor Bind Dialog -->
+    <AnchorBindDialog
+      v-model:show="showBindDialog"
+      @bind-success="handleBindSuccess"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue';
 import JudgmentStatusGuide from '@/components/WyckoffGuide/JudgmentStatusGuide.vue';
+import AnchorStatus from '@/components/AnchorStatus.vue';
+import AnchorBindDialog from '@/components/AnchorBindDialog.vue';
 import {
   NCard,
   NDataTable,
@@ -143,11 +156,11 @@ import {
   NEmpty,
   NTag,
   NCollapse,
+  NDivider,
   NCollapseItem,
   NModal,
   NDescriptions,
   NDescriptionsItem,
-  NDivider,
   useMessage,
   type DataTableColumns
 } from 'naive-ui';
@@ -164,6 +177,8 @@ const loading = ref(false);
 const judgments = ref<Judgment[]>([]);
 const showDetailModal = ref(false);
 const selectedJudgment = ref<Judgment | null>(null);
+const showBindDialog = ref(false);
+
 
 // 状态标签配置
 const statusConfig = {
@@ -376,6 +391,14 @@ async function loadJudgments() {
   } finally {
     loading.value = false;
   }
+}
+
+// Handle bind success
+function handleBindSuccess(data: any) {
+  console.log('[MyJudgments] Bind success:', data);
+  message.success(`已绑定邮箱,迁移了 ${data.migrated_count} 条判断`);
+  // Reload judgments to reflect ownership change
+  loadJudgments();
 }
 
 // 查看详情
