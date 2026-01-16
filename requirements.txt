@@ -44,4 +44,4 @@ Pillow==9.5.0
 pypinyin==0.50.0
 
 # Email service
-resend==2.5.0
+resend==2.19.0
