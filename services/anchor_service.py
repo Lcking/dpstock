@@ -11,21 +11,20 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 import sqlite3
 from utils.logger import get_logger
+from database.db_factory import DatabaseFactory
 
 logger = get_logger()
 
 class AnchorService:
     """Service for managing email anchors and verification"""
     
-    def __init__(self, db_path: str, jwt_secret: str):
-        self.db_path = db_path
+    def __init__(self, jwt_secret: str):
+        self.db = DatabaseFactory()
         self.jwt_secret = jwt_secret
         
     def _get_db(self) -> sqlite3.Connection:
         """Get database connection"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return self.db.get_connection()
     
     # ============ Email Utilities ============
     

@@ -19,9 +19,8 @@ logger = get_logger()
 router = APIRouter()
 
 # Initialize anchor service
-DB_PATH = os.getenv('DB_PATH', 'data/stock_scanner.db')
 JWT_SECRET = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
-anchor_service = AnchorService(DB_PATH, JWT_SECRET)
+anchor_service = AnchorService(JWT_SECRET)
 
 # ============ Request/Response Models ============
 
