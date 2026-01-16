@@ -31,13 +31,20 @@ import {
   NNotificationProvider, 
 } from 'naive-ui'
 import { getOrCreateUserId } from '@/utils/cookies'
+import { getOrCreateAnonymousId } from '@/utils/anonymousId'
 
 // 主题设置 (默认使用亮色主题)
 const theme = ref<any>(null) // 可以切换为 darkTheme 以启用暗色模式
 
-// Initialize aguai_uid cookie for anonymous user tracking
+// Initialize user identity on app mount
 onMounted(() => {
+  // Initialize cookie-based user ID (for quota system)
   getOrCreateUserId();
+  
+  // Initialize anonymous ID (for anchor system)
+  getOrCreateAnonymousId();
+  
+  console.log('[App] User identity initialized');
 });
 </script>
 

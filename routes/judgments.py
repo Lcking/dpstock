@@ -23,6 +23,38 @@ COOKIE_NAME = "aguai_uid"
 COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # 1 year
 
 
+def get_actor(request: Request) -> dict:
+    """
+    Get actor identity from request
+    Priority: 1. Bearer token (anchor) -> 2. X-Anonymous-Id header -> 3. Cookie
+    Returns: {'type': 'anchor'|'anonymous', 'id': str}
+    """
+    # Check Authorization header for anchor token
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header.replace('Bearer ', '')
+        # Verify anchor token
+        try:
+            from services.anchor_service import AnchorService
+            import os
+            db_path = os.getenv('DB_PATH', 'data/stock_scanner.db')
+            jwt_secret = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+            anchor_service = AnchorService(db_path, jwt_secret)
+            anchor_id = anchor_service.verify_anchor_token(token)
+            if anchor_id:
+                return {'type': 'anchor', 'id': anchor_id}
+        except Exception as e:
+            logger.warning(f"Token verification failed: {str(e)}")
+    
+    # Check X-Anonymous-Id header
+    anonymous_id = request.headers.get('X-Anonymous-Id')
+    if anonymous_id:
+        return {'type': 'anonymous', 'id': anonymous_id}
+    
+    # Fallback: return None (will use cookie-based ID)
+    return None
+
+
 def get_or_create_user_id(request: Request, response: Response, aguai_uid: Optional[str] = Cookie(None)) -> str:
     """
     Get user ID from cookie or create new one
@@ -77,20 +109,30 @@ async def create_judgment(
     """
     Save a judgment snapshot
     
-    - Reads or creates anonymous user ID from cookie
-    - Saves judgment snapshot to database
+    - Supports both anonymous (cookie/header) and anchor (token) users
+    - Saves judgment snapshot to database with owner info
     - Returns judgment ID
     """
     try:
-        # Get or create user ID
-        user_id = get_or_create_user_id(request, response, aguai_uid)
+        # Get actor (anchor or anonymous)
+        actor = get_actor(request)
         
-        # Create judgment
-        judgment_id = judgment_service.create_judgment(user_id, body.snapshot)
+        if actor:
+            # Use actor from token or header
+            owner_type = actor['type']
+            owner_id = actor['id']
+        else:
+            # Fallback to cookie-based anonymous
+            user_id = get_or_create_user_id(request, response, aguai_uid)
+            owner_type = 'anonymous'
+            owner_id = user_id
+        
+        # Create judgment with owner info
+        judgment_id = judgment_service.create_judgment(owner_type, owner_id, body.snapshot)
         
         return CreateJudgmentResponse(
             judgment_id=judgment_id,
-            user_id=user_id,
+            user_id=owner_id,  # For backward compatibility
             created_at=datetime.now().isoformat()
         )
         
@@ -109,25 +151,37 @@ async def get_my_judgments(
     """
     Get user's judgment history with latest verification status
     
-    - Requires aguai_uid cookie (creates if not exists)
+    - Supports both anonymous (cookie/header) and anchor (token) users
     - Returns list of judgments with latest check status
     - Ordered by creation time (newest first)
     """
     try:
-        # Get or create user ID
-        user_id = get_or_create_user_id(request, response, aguai_uid)
+        # Get actor (anchor or anonymous)
+        actor = get_actor(request)
         
-        # Get user judgments
-        judgments = judgment_service.get_user_judgments(user_id, limit)
+        if actor:
+            # Use actor from token or header
+            owner_type = actor['type']
+            owner_id = actor['id']
+        else:
+            # Fallback to cookie-based anonymous
+            user_id = get_or_create_user_id(request, response, aguai_uid)
+            owner_type = 'anonymous'
+            owner_id = user_id
+        
+        # Get judgments by owner
+        judgments = judgment_service.get_user_judgments(owner_type, owner_id, limit)
         
         return {
-            "user_id": user_id,
+            "user_id": owner_id,  # For backward compatibility
+            "owner_type": owner_type,
+            "owner_id": owner_id,
             "total": len(judgments),
             "judgments": judgments
         }
         
     except Exception as e:
-        logger.error(f"Failed to get user judgments: {str(e)}")
+        logger.error(f"Failed to get judgments: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get judgments: {str(e)}")
 
 

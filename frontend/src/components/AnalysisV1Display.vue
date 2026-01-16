@@ -184,6 +184,12 @@
       @confirm="confirmSaveJudgment"
       @cancel="showJudgmentConfirm = false"
     />
+    
+    <!-- Anchor Bind Dialog -->
+    <AnchorBindDialog
+      v-model:show="showBindDialog"
+      @bind-success="handleBindSuccess"
+    />
   </div>
 </template>
 
@@ -191,6 +197,7 @@
 import { ref } from 'vue';
 import JudgmentConfirmDialog from '@/components/WyckoffGuide/JudgmentConfirmDialog.vue';
 import JudgmentPreReminder from '@/components/WyckoffGuide/JudgmentPreReminder.vue';
+import AnchorBindDialog from '@/components/AnchorBindDialog.vue';
 import {
   NDescriptions,
   NDescriptionsItem,
@@ -239,9 +246,13 @@ const emit = defineEmits(['saved']);
 const message = useMessage();
 const selectedCandidate = ref<string>('');
 const selectedRiskChecks = ref<string[]>([]);
-const selectedPeriod = ref<number>(7);
+const selectedPeriod = ref(7); // 默认7天
 const saving = ref(false);
 const showJudgmentConfirm = ref(false);
+const showBindDialog = ref(false);
+
+// Judgment count for bind trigger
+const JUDGMENT_COUNT_KEY = 'aguai_judgment_count';
 
 // 辅助函数：结构类型
 function getStructureTypeName(type: string): string {
@@ -385,6 +396,9 @@ async function confirmSaveJudgment() {
     if (response && response.judgment_id) {
       message.success('判断已保存！可在"我的判断"中查看');
       emit('saved', response.judgment_id);
+      
+      // Trigger bind dialog on 2nd judgment
+      checkAndTriggerBind();
     } else {
       message.error('保存失败，请重试');
     }
@@ -398,6 +412,31 @@ async function confirmSaveJudgment() {
   } finally {
     saving.value = false;
   }
+}
+
+// Check if should trigger bind dialog
+function checkAndTriggerBind() {
+  // Don't show if already bound
+  const hasToken = localStorage.getItem('aguai_anchor_token');
+  if (hasToken) return;
+  
+  // Increment judgment count
+  let count = parseInt(localStorage.getItem(JUDGMENT_COUNT_KEY) || '0');
+  count++;
+  localStorage.setItem(JUDGMENT_COUNT_KEY, count.toString());
+  
+  // Show bind dialog on 2nd judgment
+  if (count === 2) {
+    setTimeout(() => {
+      showBindDialog.value = true;
+    }, 1000); // Delay 1s for better UX
+  }
+}
+
+// Handle bind success
+function handleBindSuccess(data: any) {
+  console.log('[AnalysisV1Display] Bind success:', data);
+  message.success(`已绑定邮箱,迁移了 ${data.migrated_count} 条判断`);
 }
 </script>
 

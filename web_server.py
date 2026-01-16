@@ -19,7 +19,7 @@ import json
 import secrets
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from routes import captcha, auth, judgments, quota, invite
+from routes import captcha, auth, judgments, quota, invite, anchor
 from services.quota_service import QuotaService
 from services.invite_service import InviteService
 
@@ -52,6 +52,7 @@ app.include_router(auth.router)
 app.include_router(judgments.router)
 app.include_router(quota.router)
 app.include_router(invite.router)
+app.include_router(anchor.router)  # Anchor system for email binding
 
 # 添加CORS中间件
 app.add_middleware(

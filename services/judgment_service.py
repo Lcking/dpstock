@@ -85,12 +85,13 @@ class JudgmentService:
         except Exception as e:
             logger.error(f"Failed to initialize judgment tables: {str(e)}")
 
-    def create_judgment(self, user_id: str, snapshot: JudgmentSnapshot) -> str:
+    def create_judgment(self, owner_type: str, owner_id: str, snapshot: JudgmentSnapshot) -> str:
         """
         Create a new judgment snapshot
         
         Args:
-            user_id: Anonymous user ID from cookie
+            owner_type: 'anonymous' or 'anchor'
+            owner_id: anonymous_id or anchor_id
             snapshot: JudgmentSnapshot model
             
         Returns:
@@ -98,19 +99,23 @@ class JudgmentService:
         """
         try:
             judgment_id = str(uuid.uuid4())
+            now = datetime.now().isoformat()
             
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO judgments (
-                        judgment_id, user_id, stock_code, stock_name, market_type,
+                        judgment_id, user_id, owner_type, owner_id,
+                        stock_code, stock_name, market_type,
                         snapshot_time, structure_premise, selected_candidates,
                         key_levels_snapshot, structure_type, ma200_position, phase,
-                        verification_period
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        verification_period, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     judgment_id,
-                    user_id,
+                    owner_id,  # Keep for backward compatibility
+                    owner_type,
+                    owner_id,
                     snapshot.stock_code,
                     None,  # stock_name not in JudgmentSnapshot
                     None,  # market_type not in JudgmentSnapshot
@@ -121,24 +126,27 @@ class JudgmentService:
                     snapshot.structure_type.value if hasattr(snapshot.structure_type, 'value') else snapshot.structure_type,
                     snapshot.ma200_position.value if hasattr(snapshot.ma200_position, 'value') else snapshot.ma200_position,
                     snapshot.phase.value if hasattr(snapshot.phase, 'value') else snapshot.phase,
-                    getattr(snapshot, 'verification_period', 7)
+                    getattr(snapshot, 'verification_period', 7),
+                    now,
+                    now
                 ))
                 conn.commit()
                 
-            logger.info(f"Created judgment: {judgment_id} for user: {user_id}")
+            logger.info(f"Created judgment: {judgment_id} for {owner_type}:{owner_id}")
             return judgment_id
             
         except Exception as e:
             logger.error(f"Failed to create judgment: {str(e)}")
             raise
 
-    def get_user_judgments(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_user_judgments(self, owner_type: str, owner_id: str, limit: int = 50) -> List[Dict[str, Any]]:
         """
-        Get all judgments for a user with latest check status
+        Get all judgments for an owner with latest check status
         Uses cache to avoid recalculating verification on every request
         
         Args:
-            user_id: Anonymous user ID
+            owner_type: 'anonymous' or 'anchor'
+            owner_id: anonymous_id or anchor_id
             limit: Maximum number of results
             
         Returns:
@@ -171,10 +179,10 @@ class JudgmentService:
                                ROW_NUMBER() OVER (PARTITION BY judgment_id ORDER BY created_at DESC) as rn
                         FROM judgment_checks
                     ) c ON j.judgment_id = c.judgment_id AND c.rn = 1
-                    WHERE j.user_id = ?
+                    WHERE j.owner_type = ? AND j.owner_id = ?
                     ORDER BY j.created_at DESC
                     LIMIT ?
-                """, (user_id, limit))
+                """, (owner_type, owner_id, limit))
                 
                 rows = cursor.fetchall()
                 
@@ -220,7 +228,7 @@ class JudgmentService:
                 return results
                 
         except Exception as e:
-            logger.error(f"Failed to get user judgments: {str(e)}")
+            logger.error(f"Failed to get judgments for {owner_type}:{owner_id}: {str(e)}")
             return []
 
     def get_judgment_detail(self, judgment_id: str) -> Optional[Dict[str, Any]]:

@@ -9,13 +9,27 @@ const axiosInstance = axios.create({
   baseURL: API_PREFIX
 });
 
-// 请求拦截器，添加token
+// 请求拦截器,添加token和身份headers
 axiosInstance.interceptors.request.use(
   (config) => {
+    // 1. Add legacy token (for password-based auth)
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // 2. Add anchor token (for email binding)
+    const anchorToken = localStorage.getItem('aguai_anchor_token');
+    if (anchorToken) {
+      config.headers.Authorization = `Bearer ${anchorToken}`;
+    }
+
+    // 3. Add anonymous ID header
+    const anonymousId = localStorage.getItem('aguai_anonymous_id');
+    if (anonymousId) {
+      config.headers['X-Anonymous-Id'] = anonymousId;
+    }
+
     return config;
   },
   (error) => {
@@ -302,6 +316,46 @@ export const apiService = {
     } catch (error) {
       console.error('接受邀请时出错:', error);
       throw error;
+    }
+  },
+
+  // ========== Anchor API (Email Binding) ==========
+
+  // 发送验证码到邮箱
+  sendVerificationCode: async (email: string) => {
+    try {
+      const response = await axiosInstance.post('/anchor/send_code', {
+        email
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('发送验证码时出错:', error);
+      throw error;
+    }
+  },
+
+  // 验证验证码并绑定邮箱
+  verifyAndBind: async (email: string, code: string) => {
+    try {
+      const response = await axiosInstance.post('/anchor/verify_and_bind', {
+        email,
+        code
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('验证绑定时出错:', error);
+      throw error;
+    }
+  },
+
+  // 获取anchor状态
+  getAnchorStatus: async () => {
+    try {
+      const response = await axiosInstance.get('/anchor/status');
+      return response.data;
+    } catch (error) {
+      console.error('获取anchor状态时出错:', error);
+      return { mode: 'anonymous' };
     }
   }
 };
