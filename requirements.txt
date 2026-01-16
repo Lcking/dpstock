@@ -42,3 +42,6 @@ captcha==0.4
 PyJWT==2.8.0
 Pillow==9.5.0
 pypinyin==0.50.0
+
+# Email service
+resend==2.5.0

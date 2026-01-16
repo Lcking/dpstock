@@ -107,19 +107,18 @@ async def send_verification_code(request: SendCodeRequest):
     code = anchor_service.generate_code()
     anchor_service.save_verification_code(email_hash, code)
     
-    # V-1: Print to console (no email service yet)
-    logger.info(f"=== 验证码 ===")
-    logger.info(f"邮箱: {email_masked}")
-    logger.info(f"验证码: {code}")
-    logger.info(f"有效期: 10分钟")
-    logger.info(f"=============")
+    # Send verification code via email
+    from services.email_service import send_verification_code as send_email
+    success, message = send_email(email, code, email_masked)
     
-    # TODO V-2: Send actual email via SendGrid/Resend
-    # await send_email(email, code)
+    if not success:
+        # If email fails, still return success but with fallback message
+        # Code is saved in DB, user can still try to use it
+        logger.warning(f"Email send failed for {email_masked}, but code is saved")
     
     return SendCodeResponse(
         ok=True,
-        message=f"验证码已发送到 {email_masked} (开发环境:请查看服务器日志)"
+        message=message
     )
 
 @router.post("/api/anchor/verify_and_bind", response_model=VerifyAndBindResponse)
