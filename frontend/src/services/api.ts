@@ -267,6 +267,12 @@ export const apiService = {
     }
   },
 
+  // 删除判断
+  deleteJudgment: async (judgmentId: string): Promise<void> => {
+    const response = await axiosInstance.delete(`/v1/judgments/${judgmentId}`);
+    return response.data;
+  },
+
   // ========== Quota API ==========
 
   // 获取额度状态

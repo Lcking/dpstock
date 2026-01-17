@@ -158,6 +158,7 @@ import {
   NCollapse,
   NDivider,
   NCollapseItem,
+  NPopconfirm,
   NModal,
   NDescriptions,
   NDescriptionsItem,
@@ -364,16 +365,44 @@ const columns: DataTableColumns<Judgment> = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 150,
     fixed: 'right',
     render(row: Judgment) {
       return h(
-        NButton,
+        NSpace,
+        { size: 'small' },
         {
-          size: 'small',
-          onClick: () => viewDetail(row.judgment_id)
-        },
-        { default: () => '查看详情' }
+          default: () => [
+            h(
+              NButton,
+              {
+                size: 'small',
+                onClick: () => viewDetail(row.judgment_id)
+              },
+              { default: () => '查看详情' }
+            ),
+            h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => handleDelete(row.judgment_id),
+                positiveText: '确认删除',
+                negativeText: '取消'
+              },
+              {
+                default: () => '确定要删除这条判断吗?此操作不可撤销。',
+                trigger: () => h(
+                  NButton,
+                  {
+                    size: 'small',
+                    type: 'error',
+                    secondary: true
+                  },
+                  { default: () => '删除' }
+                )
+              }
+            )
+          ]
+        }
       );
     }
   }
@@ -399,6 +428,19 @@ function handleBindSuccess(data: any) {
   message.success(`已绑定邮箱,迁移了 ${data.migrated_count} 条判断`);
   // Reload judgments to reflect ownership change
   loadJudgments();
+}
+
+// 删除判断
+async function handleDelete(judgmentId: string) {
+  try {
+    await apiService.deleteJudgment(judgmentId);
+    message.success('删除成功');
+    // Reload judgments
+    await loadJudgments();
+  } catch (error: any) {
+    console.error('删除失败:', error);
+    message.error(error.response?.data?.detail || '删除失败');
+  }
 }
 
 // 查看详情
