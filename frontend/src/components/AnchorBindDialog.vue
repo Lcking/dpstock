@@ -46,10 +46,6 @@
     <div v-if="step === 2" class="bind-step">
       <n-alert type="success" :bordered="false" style="margin-bottom: 16px;">
         验证码已发送到 <strong>{{ maskedEmail }}</strong>
-        <br/>
-        <n-text depth="3" style="font-size: 12px;">
-          开发环境:请查看服务器日志获取验证码
-        </n-text>
       </n-alert>
       
       <n-form ref="codeFormRef" :model="formData" :rules="codeRules">
