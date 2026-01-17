@@ -348,3 +348,99 @@ class JudgmentService:
         except Exception as e:
             logger.error(f"Failed to create judgment check: {str(e)}")
             raise
+    
+    def delete_judgment(self, judgment_id: str) -> bool:
+        """
+        Delete a judgment (hard delete)
+        
+        Args:
+            judgment_id: Judgment ID to delete
+            
+        Returns:
+            True if deleted, False otherwise
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute(
+                    "DELETE FROM judgments WHERE judgment_id = ?",
+                    (judgment_id,)
+                )
+                conn.commit()
+                
+                deleted = cursor.rowcount > 0
+                
+                if deleted:
+                    logger.info(f"Deleted judgment: {judgment_id}")
+                    # Invalidate cache
+                    verification_cache.invalidate(judgment_id)
+                else:
+                    logger.warning(f"Judgment not found for deletion: {judgment_id}")
+                
+                return deleted
+                
+        except Exception as e:
+            logger.error(f"Failed to delete judgment {judgment_id}: {str(e)}")
+            return False
+    
+    def check_duplicate(
+        self,
+        owner_type: str,
+        owner_id: str,
+        stock_code: str,
+        structure_type: str,
+        snapshot_date: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Check if a duplicate judgment exists
+        
+        Duplicate criteria:
+        - Same owner (type + id)
+        - Same stock_code
+        - Same structure_type
+        - Same date (YYYY-MM-DD, ignoring time)
+        
+        Args:
+            owner_type: 'anchor' or 'anonymous'
+            owner_id: Owner ID
+            stock_code: Stock code
+            structure_type: Structure type
+            snapshot_date: Snapshot date (ISO format)
+            
+        Returns:
+            Existing judgment dict if duplicate found, None otherwise
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Extract date part only (ignore time)
+                date_part = snapshot_date.split('T')[0] if 'T' in snapshot_date else snapshot_date
+                
+                cursor.execute("""
+                    SELECT * FROM judgments
+                    WHERE owner_type = ?
+                    AND owner_id = ?
+                    AND stock_code = ?
+                    AND structure_type = ?
+                    AND DATE(snapshot_time) = DATE(?)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (owner_type, owner_id, stock_code, structure_type, snapshot_date))
+                
+                row = cursor.fetchone()
+                
+                if row:
+                    logger.warning(
+                        f"Duplicate judgment found: {stock_code} {structure_type} "
+                        f"on {date_part} for {owner_type}:{owner_id[:8]}..."
+                    )
+                    return dict(row)
+                
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to check duplicate: {str(e)}")
+            return None

@@ -206,3 +206,49 @@ async def get_judgment_detail(judgment_id: str):
     except Exception as e:
         logger.error(f"Failed to get judgment detail: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get judgment detail: {str(e)}")
+
+
+@router.delete("/judgments/{judgment_id}")
+async def delete_judgment(
+    judgment_id: str,
+    request: Request
+):
+    """
+    Delete a judgment (hard delete)
+    
+    Authorization:
+    - Owner (anchor or anonymous) can delete their own judgments
+    - Returns 403 if not owner
+    - Returns 404 if judgment not found
+    """
+    try:
+        # Get actor (anchor or anonymous)
+        actor = get_actor(request)
+        
+        if not actor:
+            raise HTTPException(status_code=401, detail="未授权")
+        
+        # Get judgment to verify ownership
+        judgment = judgment_service.get_judgment_detail(judgment_id)
+        
+        if not judgment:
+            raise HTTPException(status_code=404, detail="判断不存在")
+        
+        # Verify ownership
+        if judgment['owner_type'] != actor['type'] or judgment['owner_id'] != actor['id']:
+            raise HTTPException(status_code=403, detail="无权删除此判断")
+        
+        # Delete
+        success = judgment_service.delete_judgment(judgment_id)
+        
+        if success:
+            logger.info(f"Deleted judgment: {judgment_id} by {actor['type']}:{actor['id'][:8]}...")
+            return {"success": True, "message": "删除成功"}
+        else:
+            raise HTTPException(status_code=500, detail="删除失败")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete judgment: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
