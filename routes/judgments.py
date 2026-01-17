@@ -37,9 +37,8 @@ def get_actor(request: Request) -> dict:
         try:
             from services.anchor_service import AnchorService
             import os
-            db_path = os.getenv('DB_PATH', 'data/stock_scanner.db')
             jwt_secret = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
-            anchor_service = AnchorService(db_path, jwt_secret)
+            anchor_service = AnchorService(jwt_secret)
             anchor_id = anchor_service.verify_anchor_token(token)
             if anchor_id:
                 return {'type': 'anchor', 'id': anchor_id}
