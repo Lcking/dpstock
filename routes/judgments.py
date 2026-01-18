@@ -103,6 +103,7 @@ async def create_judgment(
     request: Request,
     response: Response,
     body: CreateJudgmentRequest,
+    force: bool = False,
     aguai_uid: Optional[str] = Cookie(None)
 ):
     """
@@ -126,6 +127,29 @@ async def create_judgment(
             owner_type = 'anonymous'
             owner_id = user_id
         
+        # Check for duplicates (unless force flag is set)
+        if not force:
+            duplicate = judgment_service.check_duplicate(
+                owner_type=owner_type,
+                owner_id=owner_id,
+                stock_code=body.snapshot.stock_code,
+                structure_type=body.snapshot.structure_type,
+                snapshot_date=body.snapshot.snapshot_time
+            )
+            
+            if duplicate:
+                # Return 409 Conflict with duplicate info
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "检测到重复判断",
+                        "duplicate_id": duplicate['judgment_id'],
+                        "created_at": duplicate['created_at'],
+                        "stock_code": duplicate['stock_code'],
+                        "structure_type": duplicate['structure_type']
+                    }
+                )
+        
         # Create judgment with owner info
         judgment_id = judgment_service.create_judgment(owner_type, owner_id, body.snapshot)
         
@@ -135,6 +159,8 @@ async def create_judgment(
             created_at=datetime.now().isoformat()
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to create judgment: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create judgment: {str(e)}")
