@@ -197,7 +197,11 @@ class JudgmentService:
                         "phase": row["phase"],
                         "verification_period": row["verification_period"],
                         "selected_candidates": json.loads(row["selected_candidates"]),
-                        "created_at": row["created_at"]
+                        "created_at": row["created_at"],
+                        # Verification status fields (V1)
+                        "verification_status": row.get("verification_status", "WAITING"),
+                        "last_checked_at": row.get("last_checked_at"),
+                        "verification_reason": row.get("verification_reason")
                     }
                     
                     # Try to get from cache first
