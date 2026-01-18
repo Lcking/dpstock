@@ -82,10 +82,6 @@ defineProps<{
   judgment: Judgment;
 }>();
 
-const emit = defineEmits<{
-  view: [judgmentId: string];
-}>();
-
 // 状态类型映射
 function getStatusType(status: string): 'default' | 'info' | 'success' | 'error' {
   const map: Record<string, 'default' | 'info' | 'success' | 'error'> = {
