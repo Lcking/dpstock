@@ -36,7 +36,7 @@
           <template v-if="filteredJudgments.length > 0">
             <n-grid :cols="1" :x-gap="16" :y-gap="16">
               <n-grid-item v-for="judgment in filteredJudgments" :key="judgment.judgment_id">
-                <JudgmentCard :judgment="judgment" @view="handleViewDetail" />
+                <JudgmentCard :judgment="judgment as any" @view="handleViewDetail" />
               </n-grid-item>
             </n-grid>
           </template>
