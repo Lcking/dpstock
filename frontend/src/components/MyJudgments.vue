@@ -1,6 +1,6 @@
 <template>
   <div class="my-judgments-container">
-    <n-card title="我的判断记录">
+    <n-card title="我的判断">
       <template #header-extra>
         <n-space align="center">
           <!-- Anchor Status -->
@@ -18,31 +18,47 @@
         </n-space>
       </template>
 
-      <n-data-table
-        :columns="columns"
-        :data="judgments"
-        :loading="loading"
-        :pagination="{ pageSize: 10 }"
-        :row-key="(row: Judgment) => row.judgment_id"
-        :bordered="false"
-        striped
-      />
+      <!-- Main Content -->
+      <n-spin :show="loading">
+        <n-space vertical size="large">
+          <!-- Status Filter -->
+          <n-space align="center">
+            <n-text>筛选:</n-text>
+            <n-select
+              v-model:value="statusFilter"
+              :options="statusFilterOptions"
+              style="width: 150px;"
+              size="small"
+            />
+          </n-space>
 
-      <template v-if="judgments.length === 0 && !loading">
-        <n-empty description="暂无判断记录" size="large">
-          <template #icon>
-            <n-icon><DocumentIcon /></n-icon>
+          <!-- Judgment Cards -->
+          <template v-if="filteredJudgments.length > 0">
+            <n-grid :cols="1" :x-gap="16" :y-gap="16">
+              <n-grid-item v-for="judgment in filteredJudgments" :key="judgment.judgment_id">
+                <JudgmentCard :judgment="judgment" @view="handleViewDetail" />
+              </n-grid-item>
+            </n-grid>
           </template>
-          <template #extra>
-            <n-button @click="$router.push('/')">
-              去分析页面
-            </n-button>
+
+          <!-- Empty State -->
+          <template v-else-if="!loading">
+            <n-empty description="暂无判断记录" size="large">
+              <template #icon>
+                <n-icon><DocumentIcon /></n-icon>
+              </template>
+              <template #extra>
+                <n-button @click="$router.push('/')">
+                  去分析页面
+                </n-button>
+              </template>
+            </n-empty>
           </template>
-        </n-empty>
-      </template>
+        </n-space>
+      </n-spin>
     </n-card>
 
-    <!-- Judgment Detail Modal -->
+    <!-- Judgment Detail Modal - Simplified for V1 -->
     <n-modal
       v-model:show="showDetailModal"
       preset="card"
@@ -52,12 +68,21 @@
       size="huge"
     >
       <template v-if="selectedJudgment">
+        <!-- 1. Judgment Premise -->
+        <n-descriptions bordered :column="1">
+          <n-descriptions-item label="判断前提">
+            {{ selectedJudgment.structure_premise || '无判断前提' }}
+          </n-descriptions-item>
+        </n-descriptions>
+
+        <!-- 2. Structure Snapshot (Read-only) -->
+        <n-divider>保存时的结构</n-divider>
         <n-descriptions bordered :column="2">
           <n-descriptions-item label="股票代码">
             {{ selectedJudgment.stock_code }}
           </n-descriptions-item>
           <n-descriptions-item label="快照时间">
-            {{ new Date(selectedJudgment.snapshot_time).toLocaleString('zh-CN') }}
+            {{ formatDateTime(selectedJudgment.snapshot_time) }}
           </n-descriptions-item>
           <n-descriptions-item label="结构类型">
             {{ getStructureTypeName(selectedJudgment.structure_type) }}
@@ -68,67 +93,51 @@
           <n-descriptions-item label="阶段">
             {{ getPhaseName(selectedJudgment.phase) }}
           </n-descriptions-item>
-          <n-descriptions-item label="选择前提">
-            {{ selectedJudgment.selected_candidates.join(', ') }}
-          </n-descriptions-item>
           <n-descriptions-item label="验证周期">
-            {{ selectedJudgment.verification_period || 7 }} 天
+            {{ selectedJudgment.verification_period || 1 }} 天
           </n-descriptions-item>
         </n-descriptions>
 
-        <n-divider>当前验证状态</n-divider>
+        <!-- 3. Verification Result -->
+        <n-divider>验证结果</n-divider>
+        <n-alert 
+          :type="getVerificationAlertType(selectedJudgment.verification_status)" 
+          :title="getVerificationStatusText(selectedJudgment.verification_status)"
+        >
+          {{ selectedJudgment.verification_reason || '等待验证' }}
+        </n-alert>
 
+        <!-- 4. Verification Records (if exists) -->
         <template v-if="selectedJudgment.latest_check">
+          <n-divider>验证记录</n-divider>
           <n-space vertical>
-            <n-space align="center">
-              <n-text strong>结构状态:</n-text>
-              <n-tag
-                :type="statusConfig[selectedJudgment.latest_check.current_structure_status].color as any"
-                size="medium"
-              >
-                {{ statusConfig[selectedJudgment.latest_check.current_structure_status].icon }}
-                {{ statusConfig[selectedJudgment.latest_check.current_structure_status].text }}
-              </n-tag>
-            </n-space>
-
-            <!-- Wyckoff II Status Guide -->
-            <JudgmentStatusGuide
-              :status="selectedJudgment.latest_check.current_structure_status"
-            />
-
-            <n-space align="center">
-              <n-text strong>当前价格:</n-text>
-              <n-text>{{ selectedJudgment.latest_check.current_price.toFixed(2) }}</n-text>
-            </n-space>
-
-            <n-space align="center">
-              <n-text strong>价格变化:</n-text>
-              <n-text
-                :type="selectedJudgment.latest_check.price_change_pct >= 0 ? 'success' : 'error'"
-              >
-                {{ (selectedJudgment.latest_check.price_change_pct >= 0 ? '+' : '') }}
-                {{ selectedJudgment.latest_check.price_change_pct.toFixed(2) }}%
-              </n-text>
-            </n-space>
-
-            <n-space vertical v-if="selectedJudgment.latest_check.reasons.length > 0">
-              <n-text strong>验证原因:</n-text>
-              <ul style="margin: 0; padding-left: 20px;">
-                <li v-for="(reason, idx) in selectedJudgment.latest_check.reasons" :key="idx">
-                  {{ reason }}
-                </li>
-              </ul>
-            </n-space>
-
             <n-text depth="3" style="font-size: 12px;">
-              验证时间: {{ selectedJudgment.latest_check.verification_time ? new Date(selectedJudgment.latest_check.verification_time).toLocaleString('zh-CN') : '未知' }}
+              检查时间: {{ formatDateTime(selectedJudgment.latest_check.verification_time || selectedJudgment.last_checked_at) }}
             </n-text>
+            <n-ul v-if="selectedJudgment.latest_check.reasons && selectedJudgment.latest_check.reasons.length > 0">
+              <n-li v-for="(reason, idx) in selectedJudgment.latest_check.reasons" :key="idx">
+                {{ reason }}
+              </n-li>
+            </n-ul>
           </n-space>
         </template>
 
-        <template v-else>
-          <n-empty description="暂无验证数据" size="small" />
-        </template>
+        <!-- Delete Button -->
+        <n-divider />
+        <n-space justify="end">
+          <n-popconfirm
+            @positive-click="handleDelete(selectedJudgment.judgment_id)"
+            positive-text="确认删除"
+            negative-text="取消"
+          >
+            <template #trigger>
+              <n-button type="error" secondary>
+                删除此判断
+              </n-button>
+            </template>
+            确定要删除这条判断吗?此操作不可撤销。
+          </n-popconfirm>
+        </n-space>
       </template>
     </n-modal>
     
@@ -141,28 +150,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue';
-import JudgmentStatusGuide from '@/components/WyckoffGuide/JudgmentStatusGuide.vue';
+import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import JudgmentCard from '@/components/JudgmentCard.vue';
 import AnchorStatus from '@/components/AnchorStatus.vue';
 import AnchorBindDialog from '@/components/AnchorBindDialog.vue';
 import {
   NCard,
-  NDataTable,
   NButton,
   NSpace,
   NText,
   NIcon,
   NEmpty,
-  NTag,
-  NCollapse,
   NDivider,
-  NCollapseItem,
   NPopconfirm,
   NModal,
   NDescriptions,
   NDescriptionsItem,
-  useMessage,
-  type DataTableColumns
+  NGrid,
+  NGridItem,
+  NSpin,
+  NSelect,
+  NAlert,
+  NUl,
+  NLi,
+  useMessage
 } from 'naive-ui';
 import {
   RefreshOutline as RefreshIcon,
@@ -171,271 +183,53 @@ import {
 import { apiService } from '@/services/api';
 import type { Judgment } from '@/types/judgment';
 
+const router = useRouter();
 const message = useMessage();
 
+// State
 const loading = ref(false);
 const judgments = ref<Judgment[]>([]);
 const showDetailModal = ref(false);
 const selectedJudgment = ref<Judgment | null>(null);
 const showBindDialog = ref(false);
 
-
-// 状态标签配置
-const statusConfig = {
-  maintained: { color: 'success', icon: '🟢', text: '保持' },
-  weakened: { color: 'warning', icon: '🟡', text: '削弱' },
-  broken: { color: 'error', icon: '🔴', text: '破坏' }
-};
-
-// 表格列定义
-const columns: DataTableColumns<Judgment> = [
-  {
-    title: '股票代码',
-    key: 'stock_code',
-    width: 100,
-    fixed: 'left'
-  },
-  {
-    title: '结构类型',
-    key: 'structure_type',
-    width: 100,
-    render(row: Judgment) {
-      const typeMap: Record<string, string> = {
-        'consolidation': '盘整',
-        'uptrend': '上升',
-        'downtrend': '下降'
-      };
-      return typeMap[row.structure_type] || row.structure_type;
-    }
-  },
-  {
-    title: 'MA200位置',
-    key: 'ma200_position',
-    width: 100,
-    render(row: Judgment) {
-      const posMap: Record<string, string> = {
-        'above': '上方',
-        'below': '下方',
-        'near': '接近',
-        'no_data': '无数据'
-      };
-      return posMap[row.ma200_position] || row.ma200_position;
-    }
-  },
-  {
-    title: '阶段',
-    key: 'phase',
-    width: 80,
-    render(row: Judgment) {
-      const phaseMap: Record<string, string> = {
-        'early': '早期',
-        'middle': '中期',
-        'late': '后期',
-        'unclear': '不明'
-      };
-      return phaseMap[row.phase] || row.phase;
-    }
-  },
-  {
-    title: '选择前提',
-    key: 'selected_candidates',
-    width: 100,
-    render(row: Judgment) {
-      return row.selected_candidates.join(', ');
-    }
-  },
-  // Old columns commented out - replaced by V1 verification system
-  // {
-  //   title: '验证进度',
-  //   key: 'progress',
-  //   ...
-  // },
-  // {
-  //   title: '当前状态',
-  //   key: 'status',
-  //   ...
-  // },
-  {
-    title: '验证状态',
-    key: 'verification_status',
-    width: 100,
-    render(row: Judgment) {
-      const status = (row as any).verification_status || 'WAITING';
-      const statusMap: Record<string, { type: string; text: string }> = {
-        'WAITING': { type: 'default', text: '等待验证' },
-        'CHECKED': { type: 'info', text: '已检查' },
-        'CONFIRMED': { type: 'success', text: '前提成立' },
-        'BROKEN': { type: 'error', text: '前提失效' }
-      };
-      const config = statusMap[status] || statusMap['WAITING'];
-      return h(NTag, { size: 'small', type: config.type as any }, { default: () => config.text });
-    }
-  },
-  {
-    title: '最近检查',
-    key: 'last_checked_at',
-    width: 150,
-    render(row: Judgment) {
-      const lastChecked = (row as any).last_checked_at;
-      if (!lastChecked) return '--';
-      return new Date(lastChecked).toLocaleString('zh-CN', { 
-        month: '2-digit', 
-        day: '2-digit', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-    }
-  },
-  {
-    title: '验证说明',
-    key: 'verification_reason',
-    width: 200,
-    ellipsis: {
-      tooltip: true
-    },
-    render(row: Judgment) {
-      return (row as any).verification_reason || '--';
-    }
-  },
-  {
-    title: '价格变化',
-    key: 'price_change',
-    width: 100,
-    render(row: Judgment) {
-      if (!row.latest_check) return '--';
-      
-      const pct = row.latest_check.price_change_pct;
-      const sign = pct >= 0 ? '+' : '';
-      const color = pct >= 0 ? 'success' : 'error';
-      
-      return h(
-        NText,
-        { type: color as any },
-        { default: () => `${sign}${pct.toFixed(2)}%` }
-      );
-    }
-  },
-  {
-    title: '原因',
-    key: 'reasons',
-    width: 300,
-    render(row: Judgment) {
-      if (!row.latest_check || !row.latest_check.reasons.length) {
-        return '--';
-      }
-      
-      return h(
-        NCollapse,
-        { defaultExpandedNames: [] },
-        {
-          default: () => h(
-            NCollapseItem,
-            { title: `查看原因 (${row.latest_check!.reasons.length})`, name: '1' },
-            {
-              default: () => h(
-                'ul',
-                { style: 'margin: 0; padding-left: 20px;' },
-                row.latest_check!.reasons.map(reason => 
-                  h('li', { style: 'margin: 4px 0;' }, reason)
-                )
-              )
-            }
-          )
-        }
-      );
-    }
-  },
-  {
-    title: '快照时间',
-    key: 'snapshot_time',
-    width: 150,
-    render(row: Judgment) {
-      return new Date(row.snapshot_time).toLocaleString('zh-CN');
-    }
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 150,
-    fixed: 'right',
-    render(row: Judgment) {
-      return h(
-        NSpace,
-        { size: 'small' },
-        {
-          default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                onClick: () => viewDetail(row.judgment_id)
-              },
-              { default: () => '查看详情' }
-            ),
-            h(
-              NPopconfirm,
-              {
-                onPositiveClick: () => handleDelete(row.judgment_id),
-                positiveText: '确认删除',
-                negativeText: '取消'
-              },
-              {
-                default: () => '确定要删除这条判断吗?此操作不可撤销。',
-                trigger: () => h(
-                  NButton,
-                  {
-                    size: 'small',
-                    type: 'error',
-                    secondary: true
-                  },
-                  { default: () => '删除' }
-                )
-              }
-            )
-          ]
-        }
-      );
-    }
-  }
+// Status filter
+const statusFilter = ref<string>('all');
+const statusFilterOptions = [
+  { label: '全部', value: 'all' },
+  { label: '等待验证', value: 'WAITING' },
+  { label: '前提成立', value: 'CONFIRMED' },
+  { label: '前提失效', value: 'BROKEN' },
+  { label: '周期结束', value: 'CHECKED' }
 ];
 
-// 加载判断列表
+// Filtered judgments
+const filteredJudgments = computed(() => {
+  if (statusFilter.value === 'all') {
+    return judgments.value;
+  }
+  return judgments.value.filter(j => 
+    (j as any).verification_status === statusFilter.value
+  );
+});
+
+// Load judgments
 async function loadJudgments() {
   loading.value = true;
   try {
     const response = await apiService.getMyJudgments(50);
     judgments.value = response.judgments || [];
+    console.log('[MyJudgments] Loaded judgments:', judgments.value.length);
   } catch (error) {
-    console.error('加载判断列表失败:', error);
+    console.error('[MyJudgments] Load failed:', error);
     message.error('加载判断列表失败');
   } finally {
     loading.value = false;
   }
 }
 
-// Handle bind success
-function handleBindSuccess(data: any) {
-  console.log('[MyJudgments] Bind success:', data);
-  message.success(`已绑定邮箱,迁移了 ${data.migrated_count} 条判断`);
-  // Reload judgments to reflect ownership change
-  loadJudgments();
-}
-
-// 删除判断
-async function handleDelete(judgmentId: string) {
-  try {
-    await apiService.deleteJudgment(judgmentId);
-    message.success('删除成功');
-    // Reload judgments
-    await loadJudgments();
-  } catch (error: any) {
-    console.error('删除失败:', error);
-    message.error(error.response?.data?.detail || '删除失败');
-  }
-}
-
-// 查看详情
-function viewDetail(judgmentId: string) {
+// View detail
+function handleViewDetail(judgmentId: string) {
   const judgment = judgments.value.find(j => j.judgment_id === judgmentId);
   if (judgment) {
     selectedJudgment.value = judgment;
@@ -443,7 +237,43 @@ function viewDetail(judgmentId: string) {
   }
 }
 
-// Helper functions for display names
+// Delete judgment
+async function handleDelete(judgmentId: string) {
+  try {
+    await apiService.deleteJudgment(judgmentId);
+    message.success('删除成功');
+    
+    // Remove from list
+    judgments.value = judgments.value.filter(j => j.judgment_id !== judgmentId);
+    
+    // Close modal
+    showDetailModal.value = false;
+    selectedJudgment.value = null;
+  } catch (error: any) {
+    console.error('[MyJudgments] Delete failed:', error);
+    
+    if (error.response?.status === 403) {
+      message.error('无权删除此判断');
+    } else if (error.response?.status === 404) {
+      message.error('判断不存在');
+    } else {
+      message.error('删除失败');
+    }
+  }
+}
+
+// Handle bind success
+function handleBindSuccess(data: any) {
+  console.log('[MyJudgments] Bind success:', data);
+  message.success('绑定成功!正在重新加载判断列表...');
+  
+  // Reload judgments after binding
+  setTimeout(() => {
+    loadJudgments();
+  }, 500);
+}
+
+// Helper functions
 function getStructureTypeName(type: string): string {
   const map: Record<string, string> = {
     'consolidation': '盘整',
@@ -453,14 +283,14 @@ function getStructureTypeName(type: string): string {
   return map[type] || type;
 }
 
-function getMA200PositionName(pos: string): string {
+function getMA200PositionName(position: string): string {
   const map: Record<string, string> = {
     'above': '上方',
     'below': '下方',
     'near': '接近',
     'no_data': '无数据'
   };
-  return map[pos] || pos;
+  return map[position] || position;
 }
 
 function getPhaseName(phase: string): string {
@@ -473,7 +303,44 @@ function getPhaseName(phase: string): string {
   return map[phase] || phase;
 }
 
-// 组件挂载时加载数据
+function getVerificationStatusText(status?: string): string {
+  const map: Record<string, string> = {
+    'WAITING': '等待验证',
+    'CHECKED': '周期结束',
+    'CONFIRMED': '前提成立',
+    'BROKEN': '前提失效'
+  };
+  return map[status || 'WAITING'] || '未知状态';
+}
+
+function getVerificationAlertType(status?: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
+  const map: Record<string, 'default' | 'info' | 'success' | 'warning' | 'error'> = {
+    'WAITING': 'default',
+    'CHECKED': 'info',
+    'CONFIRMED': 'success',
+    'BROKEN': 'error'
+  };
+  return map[status || 'WAITING'] || 'default';
+}
+
+function formatDateTime(dateStr?: string): string {
+  if (!dateStr) return '--';
+  
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+// Lifecycle
 onMounted(() => {
   loadJudgments();
 });
@@ -482,13 +349,7 @@ onMounted(() => {
 <style scoped>
 .my-judgments-container {
   padding: 20px;
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
-}
-
-@media (max-width: 768px) {
-  .my-judgments-container {
-    padding: 10px;
-  }
 }
 </style>
