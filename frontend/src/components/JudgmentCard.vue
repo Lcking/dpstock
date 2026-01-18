@@ -72,7 +72,7 @@ interface Judgment {
   stock_code: string;
   stock_name?: string;
   structure_premise: string;
-  verification_period: number;
+  verification_period: number;  // Required for display
   verification_status?: string;
   last_checked_at?: string;
   key_levels_snapshot?: any;
