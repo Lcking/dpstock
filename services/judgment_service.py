@@ -188,20 +188,23 @@ class JudgmentService:
                 
                 results = []
                 for row in rows:
+                    # Convert Row to dict for safe access
+                    row_dict = dict(row)
+                    
                     result = {
-                        "judgment_id": row["judgment_id"],
-                        "stock_code": row["stock_code"],
-                        "snapshot_time": row["snapshot_time"],
-                        "structure_type": row["structure_type"],
-                        "ma200_position": row["ma200_position"],
-                        "phase": row["phase"],
-                        "verification_period": row["verification_period"],
-                        "selected_candidates": json.loads(row["selected_candidates"]),
-                        "created_at": row["created_at"],
+                        "judgment_id": row_dict["judgment_id"],
+                        "stock_code": row_dict["stock_code"],
+                        "snapshot_time": row_dict["snapshot_time"],
+                        "structure_type": row_dict["structure_type"],
+                        "ma200_position": row_dict["ma200_position"],
+                        "phase": row_dict["phase"],
+                        "verification_period": row_dict["verification_period"],
+                        "selected_candidates": json.loads(row_dict["selected_candidates"]),
+                        "created_at": row_dict["created_at"],
                         # Verification status fields (V1)
-                        "verification_status": row.get("verification_status", "WAITING"),
-                        "last_checked_at": row.get("last_checked_at"),
-                        "verification_reason": row.get("verification_reason")
+                        "verification_status": row_dict.get("verification_status", "WAITING"),
+                        "last_checked_at": row_dict.get("last_checked_at"),
+                        "verification_reason": row_dict.get("verification_reason")
                     }
                     
                     # Try to get from cache first
@@ -456,3 +459,181 @@ class JudgmentService:
         except Exception as e:
             logger.error(f"Failed to check duplicate: {str(e)}")
             return None
+    
+    # ==================== Verification Methods (V1) ====================
+    
+    def verify_judgment(self, judgment_id: str) -> Dict[str, Any]:
+        """Verify a single judgment and update status"""
+        from datetime import timedelta
+        from services.stock_data_provider import StockDataProvider
+        from services.judgment_verifier import JudgmentVerifier
+        
+        try:
+            judgment = self.get_judgment_detail(judgment_id)
+            if not judgment:
+                raise ValueError(f"Judgment {judgment_id} not found")
+            
+            expires_at = self._compute_expires_at(
+                judgment['snapshot_time'],
+                judgment.get('verification_period', 1)
+            )
+            
+            now = datetime.now()
+            latest_check = self._get_latest_check(judgment_id)
+            
+            if now >= expires_at and not latest_check:
+                self._update_verification_status(
+                    judgment_id,
+                    status='CHECKED',
+                    reason=f"验证窗口已到期({judgment.get('verification_period', 1)}日),关键条件未触发"
+                )
+                return {
+                    "judgment_id": judgment_id,
+                    "verification_status": "CHECKED",
+                    "verification_reason": f"验证窗口已到期({judgment.get('verification_period', 1)}日),关键条件未触发",
+                    "last_checked_at": datetime.now().isoformat()
+                }
+            
+            provider = StockDataProvider()
+            try:
+                data = provider.get_stock_data(
+                    judgment['stock_code'],
+                    judgment.get('market_type', 'A'),
+                    days=judgment.get('verification_period', 1) + 5
+                )
+            except Exception as e:
+                logger.error(f"Failed to get stock data: {e}")
+                self._update_verification_status(judgment_id, status='CHECKED', reason="无法获取价格数据")
+                return {"judgment_id": judgment_id, "verification_status": "CHECKED", "verification_reason": "无法获取价格数据", "last_checked_at": datetime.now().isoformat()}
+            
+            verifier = JudgmentVerifier()
+            snapshot = JudgmentSnapshot(
+                stock_code=judgment['stock_code'],
+                snapshot_time=judgment['snapshot_time'],
+                structure_premise=judgment['structure_premise'],
+                selected_candidates=judgment['selected_candidates'],
+                key_levels_snapshot=judgment['key_levels_snapshot'],
+                structure_type=judgment['structure_type'],
+                ma200_position=judgment['ma200_position'],
+                phase=judgment['phase']
+            )
+            
+            result = verifier.verify(
+                snapshot=snapshot,
+                current_price=data['close'][-1] if data.get('close') else 0,
+                ma200_value=data.get('ma200', [None])[-1] if data.get('ma200') else None,
+                price_history=data.get('close', [])[-5:] if data.get('close') else None
+            )
+            
+            structure_status = result['current_structure_status']
+            if structure_status == 'maintained':
+                v_status, v_reason = 'CONFIRMED', "结构前提保持完整"
+            elif structure_status == 'broken':
+                v_status = 'BROKEN'
+                v_reason = result['reasons'][0] if result.get('reasons') else "结构前提已被破坏"
+            else:
+                v_status = 'CHECKED'
+                v_reason = result['reasons'][0] if result.get('reasons') else "结构前提受到挑战"
+            
+            self.create_judgment_check(
+                judgment_id=judgment_id,
+                current_price=result['current_price'],
+                price_change_pct=result['price_change_pct'],
+                current_structure_status=structure_status,
+                status_description=v_reason,
+                reasons=result.get('reasons', [])
+            )
+            
+            self._update_verification_status(judgment_id, status=v_status, reason=v_reason)
+            return {"judgment_id": judgment_id, "verification_status": v_status, "verification_reason": v_reason, "last_checked_at": datetime.now().isoformat()}
+            
+        except Exception as e:
+            logger.error(f"Failed to verify judgment {judgment_id}: {str(e)}")
+            return {"judgment_id": judgment_id, "verification_status": "WAITING", "verification_reason": f"验证失败: {str(e)}", "last_checked_at": datetime.now().isoformat()}
+    
+    def verify_pending_judgments(self, owner_type: str, owner_id: str, max_checks: int = 20) -> Dict[str, int]:
+        """Verify pending judgments for a user (lazy trigger)"""
+        try:
+            judgments = self._get_judgments_needing_check(owner_type, owner_id, limit=max_checks)
+            checked, updated = 0, 0
+            for judgment in judgments:
+                try:
+                    result = self.verify_judgment(judgment['judgment_id'])
+                    checked += 1
+                    if result['verification_status'] != 'WAITING':
+                        updated += 1
+                except Exception as e:
+                    logger.error(f"Failed to verify {judgment['judgment_id']}: {e}")
+            logger.info(f"Lazy verification: checked={checked}, updated={updated}")
+            return {"checked": checked, "updated": updated}
+        except Exception as e:
+            logger.error(f"Failed to verify pending judgments: {str(e)}")
+            return {"checked": 0, "updated": 0}
+    
+    def _compute_expires_at(self, snapshot_time: str, verify_window_days: int) -> datetime:
+        """Compute expiration datetime"""
+        from datetime import timedelta
+        try:
+            if hasattr(snapshot_time, 'isoformat'):
+                snapshot_dt = snapshot_time
+            else:
+                snapshot_dt = datetime.fromisoformat(snapshot_time.replace('Z', '+00:00'))
+            return snapshot_dt + timedelta(days=verify_window_days)
+        except Exception as e:
+            logger.error(f"Failed to compute expires_at: {e}")
+            return datetime.now() + timedelta(days=verify_window_days)
+    
+    def _update_verification_status(self, judgment_id: str, status: str, reason: str):
+        """Update verification status in database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE judgments
+                    SET verification_status = ?, verification_reason = ?, last_checked_at = ?
+                    WHERE judgment_id = ?
+                """, (status, reason, datetime.now().isoformat(), judgment_id))
+                conn.commit()
+                logger.debug(f"Updated verification status for {judgment_id}: {status}")
+        except Exception as e:
+            logger.error(f"Failed to update verification status: {str(e)}")
+    
+    def _get_latest_check(self, judgment_id: str) -> Optional[Dict[str, Any]]:
+        """Get latest check record for a judgment"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM judgment_checks
+                    WHERE judgment_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (judgment_id,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Failed to get latest check: {str(e)}")
+            return None
+    
+    def _get_judgments_needing_check(self, owner_type: str, owner_id: str, limit: int = 20) -> List[Dict]:
+        """Get judgments that need verification check"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM judgments
+                    WHERE owner_type = ? AND owner_id = ?
+                    AND (verification_status IS NULL OR verification_status = 'WAITING')
+                    AND (
+                        last_checked_at IS NULL
+                        OR datetime(last_checked_at) < datetime('now', '-12 hours')
+                    )
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                """, (owner_type, owner_id, limit))
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Failed to get judgments needing check: {str(e)}")
+            return []
