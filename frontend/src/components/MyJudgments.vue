@@ -152,7 +152,6 @@ import {
   NSpace,
   NText,
   NIcon,
-  NProgress,
   NEmpty,
   NTag,
   NCollapse,
