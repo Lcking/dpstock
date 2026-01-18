@@ -404,7 +404,9 @@ async function confirmSaveJudgment() {
     }
   } catch (error: any) {
     console.error('保存判断失败:', error);
-    if (error.response?.status === 422) {
+    if (error.response?.status === 409) {
+      message.error('判断重复，保存失败');
+    } else if (error.response?.status === 422) {
       message.error('数据格式错误，请稍后重试');
     } else {
       message.error('保存失败，请重试');
