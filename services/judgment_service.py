@@ -420,6 +420,10 @@ class JudgmentService:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 
+                # Convert to string if datetime object
+                if hasattr(snapshot_date, 'isoformat'):
+                    snapshot_date = snapshot_date.isoformat()
+                
                 # Extract date part only (ignore time)
                 date_part = snapshot_date.split('T')[0] if 'T' in snapshot_date else snapshot_date
                 
