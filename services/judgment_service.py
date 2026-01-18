@@ -191,9 +191,13 @@ class JudgmentService:
                     # Convert Row to dict for safe access
                     row_dict = dict(row)
                     
+                    # Parse structure_premise JSON and convert to readable text
+                    structure_premise_text = self._format_structure_premise(row_dict.get("structure_premise"))
+                    
                     result = {
                         "judgment_id": row_dict["judgment_id"],
                         "stock_code": row_dict["stock_code"],
+                        "stock_name": row_dict.get("stock_name"),  # Add stock_name if available
                         "snapshot_time": row_dict["snapshot_time"],
                         "structure_type": row_dict["structure_type"],
                         "ma200_position": row_dict["ma200_position"],
@@ -201,6 +205,7 @@ class JudgmentService:
                         "verification_period": row_dict["verification_period"],
                         "selected_candidates": json.loads(row_dict["selected_candidates"]),
                         "created_at": row_dict["created_at"],
+                        "structure_premise": structure_premise_text,  # Add formatted premise
                         # Verification status fields (V1)
                         "verification_status": row_dict.get("verification_status", "WAITING"),
                         "last_checked_at": row_dict.get("last_checked_at"),
@@ -459,6 +464,82 @@ class JudgmentService:
         except Exception as e:
             logger.error(f"Failed to check duplicate: {str(e)}")
             return None
+    
+    def _format_structure_premise(self, premise_data: str) -> str:
+        """Convert structure_premise JSON to readable text"""
+        if not premise_data:
+            return "无判断前提"
+        
+        try:
+            # Parse JSON if it's a string
+            if isinstance(premise_data, str):
+                premise = json.loads(premise_data)
+            else:
+                premise = premise_data
+            
+            # Build readable text
+            parts = []
+            
+            # Structure type
+            structure_map = {
+                "consolidation": "盘整",
+                "uptrend": "上升趋势",
+                "downtrend": "下降趋势",
+                "UP": "上升趋势",
+                "DOWN": "下降趋势"
+            }
+            structure_type = premise.get("structure_type", "")
+            if structure_type:
+                parts.append(f"{structure_map.get(structure_type, structure_type)}结构")
+            
+            # MA200 position
+            ma200_map = {
+                "above": "MA200上方",
+                "below": "MA200下方",
+                "near": "接近MA200"
+            }
+            ma200_pos = premise.get("ma200_position", "")
+            if ma200_pos:
+                parts.append(ma200_map.get(ma200_pos, ma200_pos))
+            
+            # Phase
+            phase_map = {
+                "early": "早期阶段",
+                "middle": "中期阶段",
+                "late": "后期阶段",
+                "unclear": "阶段不明"
+            }
+            phase = premise.get("phase", "")
+            if phase and phase != "unclear":
+                parts.append(phase_map.get(phase, phase))
+            
+            # Pattern type
+            pattern_map = {
+                "channel": "通道形态",
+                "triangle": "三角形态",
+                "rectangle": "矩形形态",
+                "none": ""
+            }
+            pattern = premise.get("pattern_type", "")
+            if pattern and pattern != "none":
+                parts.append(pattern_map.get(pattern, pattern))
+            
+            # If there's an analysis_summary, use first 100 chars
+            if "analysis_summary" in premise:
+                summary = premise["analysis_summary"]
+                if len(summary) > 100:
+                    summary = summary[:100] + "..."
+                return summary
+            
+            # Join parts
+            if parts:
+                return "、".join(parts)
+            else:
+                return "无判断前提"
+                
+        except Exception as e:
+            logger.error(f"Failed to format structure_premise: {e}")
+            return "判断前提格式错误"
     
     # ==================== Verification Methods (V1) ====================
     
