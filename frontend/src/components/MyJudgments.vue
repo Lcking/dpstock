@@ -307,6 +307,48 @@ const columns: DataTableColumns<Judgment> = [
     }
   },
   {
+    title: '验证状态',
+    key: 'verification_status',
+    width: 100,
+    render(row: Judgment) {
+      const status = (row as any).verification_status || 'WAITING';
+      const statusMap: Record<string, { type: string; text: string }> = {
+        'WAITING': { type: 'default', text: '等待验证' },
+        'CHECKED': { type: 'info', text: '已检查' },
+        'CONFIRMED': { type: 'success', text: '前提成立' },
+        'BROKEN': { type: 'error', text: '前提失效' }
+      };
+      const config = statusMap[status] || statusMap['WAITING'];
+      return h(NTag, { size: 'small', type: config.type as any }, { default: () => config.text });
+    }
+  },
+  {
+    title: '最近检查',
+    key: 'last_checked_at',
+    width: 150,
+    render(row: Judgment) {
+      const lastChecked = (row as any).last_checked_at;
+      if (!lastChecked) return '--';
+      return new Date(lastChecked).toLocaleString('zh-CN', { 
+        month: '2-digit', 
+        day: '2-digit', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    }
+  },
+  {
+    title: '验证说明',
+    key: 'verification_reason',
+    width: 200,
+    ellipsis: {
+      tooltip: true
+    },
+    render(row: Judgment) {
+      return (row as any).verification_reason || '--';
+    }
+  },
+  {
     title: '价格变化',
     key: 'price_change',
     width: 100,
