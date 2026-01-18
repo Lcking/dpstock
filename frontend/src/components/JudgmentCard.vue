@@ -78,9 +78,9 @@ interface Judgment {
   key_levels_snapshot?: any;
 }
 
-interface Props {
+defineProps<{
   judgment: Judgment;
-}
+}>();
 
 const emit = defineEmits<{
   view: [judgmentId: string];

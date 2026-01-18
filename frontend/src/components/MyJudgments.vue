@@ -151,7 +151,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
 import JudgmentCard from '@/components/JudgmentCard.vue';
 import AnchorStatus from '@/components/AnchorStatus.vue';
 import AnchorBindDialog from '@/components/AnchorBindDialog.vue';
