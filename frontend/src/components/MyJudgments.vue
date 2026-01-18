@@ -183,7 +183,6 @@ import {
 import { apiService } from '@/services/api';
 import type { Judgment } from '@/types/judgment';
 
-const router = useRouter();
 const message = useMessage();
 
 // State

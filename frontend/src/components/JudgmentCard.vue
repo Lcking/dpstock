@@ -82,9 +82,7 @@ interface Props {
   judgment: Judgment;
 }
 
-const props = defineProps<Props>();
-
-defineEmits<{
+const emit = defineEmits<{
   view: [judgmentId: string];
 }>();
 

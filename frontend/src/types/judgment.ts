@@ -47,8 +47,12 @@ export interface Judgment {
     selected_candidates: string[];
     created_at: string;
     latest_check?: JudgmentCheck;
-    structure_premise?: any;
+    structure_premise: string;  // Required for V1
     key_levels_snapshot?: any[];
+    // V1 Verification fields
+    verification_status?: string;
+    verification_reason?: string;
+    last_checked_at?: string;
 }
 
 export interface SaveJudgmentRequest {
