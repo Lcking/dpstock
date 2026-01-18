@@ -194,7 +194,22 @@ async def get_my_judgments(
             owner_type = 'anonymous'
             owner_id = user_id
         
-        # Get judgments by owner
+        
+        # LAZY VERIFICATION TRIGGER (V1)
+        # Automatically verify pending judgments when user opens page
+        verify_result = {"checked": 0, "updated": 0}
+        try:
+            verify_result = judgment_service.verify_pending_judgments(
+                owner_type=owner_type,
+                owner_id=owner_id,
+                max_checks=20  # Limit to prevent timeout
+            )
+            logger.info(f"Lazy verification for {owner_type}:{owner_id[:8]}... - {verify_result}")
+        except Exception as e:
+            logger.error(f"Lazy verification failed: {e}")
+            # Don't fail the request if verification fails
+        
+        # Get judgments (now with updated verification status)
         judgments = judgment_service.get_user_judgments(owner_type, owner_id, limit)
         
         return {
@@ -202,7 +217,8 @@ async def get_my_judgments(
             "owner_type": owner_type,
             "owner_id": owner_id,
             "total": len(judgments),
-            "judgments": judgments
+            "judgments": judgments,
+            "verification_stats": verify_result  # Optional: show verification stats
         }
         
     except Exception as e:
