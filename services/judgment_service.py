@@ -262,21 +262,24 @@ class JudgmentService:
                 """, (judgment_id,))
                 check_row = cursor.fetchone()
                 
+                # Convert Row to dict for easier access
+                judgment_dict = dict(judgment_row)
+                
                 result = {
-                    "judgment_id": judgment_row["judgment_id"],
-                    "user_id": judgment_row["user_id"],
-                    "owner_type": judgment_row.get("owner_type", "anonymous"),  # Add owner_type
-                    "owner_id": judgment_row.get("owner_id", judgment_row["user_id"]),  # Add owner_id
-                    "stock_code": judgment_row["stock_code"],
-                    "snapshot_time": judgment_row["snapshot_time"],
-                    "structure_premise": json.loads(judgment_row["structure_premise"]),
-                    "selected_candidates": json.loads(judgment_row["selected_candidates"]),
-                    "key_levels_snapshot": json.loads(judgment_row["key_levels_snapshot"]),
-                    "structure_type": judgment_row["structure_type"],
-                    "ma200_position": judgment_row["ma200_position"],
-                    "phase": judgment_row["phase"],
-                    "verification_period": judgment_row["verification_period"],
-                    "created_at": judgment_row["created_at"]
+                    "judgment_id": judgment_dict["judgment_id"],
+                    "user_id": judgment_dict["user_id"],
+                    "owner_type": judgment_dict.get("owner_type", "anonymous"),
+                    "owner_id": judgment_dict.get("owner_id", judgment_dict["user_id"]),
+                    "stock_code": judgment_dict["stock_code"],
+                    "snapshot_time": judgment_dict["snapshot_time"],
+                    "structure_premise": json.loads(judgment_dict["structure_premise"]),
+                    "selected_candidates": json.loads(judgment_dict["selected_candidates"]),
+                    "key_levels_snapshot": json.loads(judgment_dict["key_levels_snapshot"]),
+                    "structure_type": judgment_dict["structure_type"],
+                    "ma200_position": judgment_dict["ma200_position"],
+                    "phase": judgment_dict["phase"],
+                    "verification_period": judgment_dict["verification_period"],
+                    "created_at": judgment_dict["created_at"]
                 }
                 
                 if check_row:
