@@ -54,8 +54,14 @@ const routes: Array<RouteRecordRaw> = [
     meta: {
       requiresAuth: false,
       title: '关于我们 - Aguai',
-      description: 'Aguai 是一个结构前提判断与验证工具,不提供买卖建议,强调专注、纪律与可证伪的判断。'
+      description: 'Aguai 是一个结构前提判断与验证工具,不提供买卖建议,强调专注、纪律 with 可证伪的判断。'
     }
+  },
+  {
+    path: '/secret-admin',
+    name: 'AdminDashboard',
+    component: () => import('@/components/AdminDashboard.vue'),
+    meta: { requiresAuth: false }
   },
   {
     path: '/:pathMatch(.*)*',

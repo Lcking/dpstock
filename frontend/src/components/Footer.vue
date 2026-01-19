@@ -13,7 +13,9 @@
         <a href="https://jsj.top/f/GXpvZu" target="_blank" rel="noopener" class="footer-link">建议意见</a>
       </div>
       <div class="footer-copyright">
-        © {{ currentYear }} Agu AI - 智能股票分析平台
+        <router-link to="/secret-admin" class="admin-entry">
+          © {{ currentYear }} Agu AI - 智能股票分析平台
+        </router-link>
       </div>
       <div class="footer-disclaimer">
         投资有风险，入市需谨慎。本平台分析仅供参考，不构成投资建议。
@@ -69,6 +71,16 @@ const currentYear = new Date().getFullYear();
   font-size: 14px;
   color: #64748b;
   margin-bottom: 8px;
+}
+
+.admin-entry {
+  color: inherit;
+  text-decoration: none;
+  cursor: default;
+}
+
+.admin-entry:active {
+  color: #667eea;
 }
 
 .footer-disclaimer {

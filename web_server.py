@@ -11,8 +11,9 @@ from services.fund_service_async import FundServiceAsync
 import os
 import asyncio
 import httpx
+from services.anchor_service import AnchorService
+from routes import admin
 from utils.logger import get_logger
-from utils.api_utils import APIUtils
 from dotenv import load_dotenv
 import uvicorn
 import json
@@ -54,6 +55,7 @@ app.include_router(judgments.router)
 app.include_router(quota.router)
 app.include_router(invite.router)
 app.include_router(anchor.router)  # Anchor system for email binding
+app.include_router(admin.router)   # Admin overview
 
 # 添加CORS中间件
 app.add_middleware(
