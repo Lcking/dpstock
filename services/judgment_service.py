@@ -601,15 +601,21 @@ class JudgmentService:
             
             provider = StockDataProvider()
             try:
-                data = provider.get_stock_data(
+                # Use synchronous method because verify_judgment is sync
+                data = provider._get_stock_data_sync(
                     judgment['stock_code'],
-                    judgment.get('market_type', 'A'),
-                    days=judgment.get('verification_period', 1) + 5
+                    judgment.get('market_type', 'A')
                 )
             except Exception as e:
-                logger.error(f"Failed to get stock data: {e}")
-                self._update_verification_status(judgment_id, status='CHECKED', reason="无法获取价格数据")
-                return {"judgment_id": judgment_id, "verification_status": "CHECKED", "verification_reason": "无法获取价格数据", "last_checked_at": datetime.now().isoformat()}
+                logger.error(f"Failed to get stock data for {judgment['stock_code']}: {e}")
+                # Don't mark as CHECKED yet if still in verification window
+                # Just return WAITING status with the error reason
+                return {
+                    "judgment_id": judgment_id, 
+                    "verification_status": "WAITING", 
+                    "verification_reason": f"验证暂缓: 无法获取价格数据({str(e)})", 
+                    "last_checked_at": datetime.now().isoformat()
+                }
             
             verifier = JudgmentVerifier()
             snapshot = JudgmentSnapshot(
