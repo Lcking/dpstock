@@ -22,6 +22,7 @@ from jose import JWTError, jwt
 from routes import captcha, auth, judgments, quota, invite, anchor
 from services.quota_service import QuotaService
 from services.invite_service import InviteService
+from services.verification_scheduler import start_verification_scheduler
 
 load_dotenv()
 
@@ -62,6 +63,12 @@ app.add_middleware(
     allow_methods=["*"],    
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Execute startup tasks"""
+    logger.info("Initializing background tasks...")
+    start_verification_scheduler()
 
 # 初始化异步服务
 us_stock_service = USStockServiceAsync()

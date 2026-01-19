@@ -739,7 +739,7 @@ class JudgmentService:
                     AND (verification_status IS NULL OR verification_status = 'WAITING')
                     AND (
                         last_checked_at IS NULL
-                        OR datetime(last_checked_at) < datetime('now', '-12 hours')
+                        OR datetime(last_checked_at) < datetime('now', '-1 hours')
                     )
                     ORDER BY created_at DESC
                     LIMIT ?
