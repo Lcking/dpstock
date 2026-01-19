@@ -596,7 +596,7 @@ class JudgmentService:
                     "judgment_id": judgment_id,
                     "verification_status": "CHECKED",
                     "verification_reason": f"验证窗口已到期({judgment.get('verification_period', 1)}日),关键条件未触发",
-                    "last_checked_at": datetime.now().isoformat()
+                    "last_checked_at": datetime.utcnow().isoformat() + 'Z'
                 }
             
             provider = StockDataProvider()
@@ -614,7 +614,7 @@ class JudgmentService:
                     "judgment_id": judgment_id, 
                     "verification_status": "WAITING", 
                     "verification_reason": f"验证暂缓: 无法获取价格数据({str(e)})", 
-                    "last_checked_at": datetime.now().isoformat()
+                    "last_checked_at": datetime.utcnow().isoformat() + 'Z'
                 }
             
             verifier = JudgmentVerifier()
@@ -656,11 +656,11 @@ class JudgmentService:
             )
             
             self._update_verification_status(judgment_id, status=v_status, reason=v_reason)
-            return {"judgment_id": judgment_id, "verification_status": v_status, "verification_reason": v_reason, "last_checked_at": datetime.now().isoformat()}
+            return {"judgment_id": judgment_id, "verification_status": v_status, "verification_reason": v_reason, "last_checked_at": datetime.utcnow().isoformat() + 'Z'}
             
         except Exception as e:
             logger.error(f"Failed to verify judgment {judgment_id}: {str(e)}")
-            return {"judgment_id": judgment_id, "verification_status": "WAITING", "verification_reason": f"验证失败: {str(e)}", "last_checked_at": datetime.now().isoformat()}
+            return {"judgment_id": judgment_id, "verification_status": "WAITING", "verification_reason": f"验证失败: {str(e)}", "last_checked_at": datetime.utcnow().isoformat() + 'Z'}
     
     def verify_pending_judgments(self, owner_type: str, owner_id: str, max_checks: int = 20) -> Dict[str, int]:
         """Verify pending judgments for a user (lazy trigger)"""
@@ -712,7 +712,7 @@ class JudgmentService:
                     UPDATE judgments
                     SET verification_status = ?, verification_reason = ?, last_checked_at = ?
                     WHERE judgment_id = ?
-                """, (status, reason, datetime.now().isoformat(), judgment_id))
+                """, (status, reason, datetime.utcnow().isoformat() + 'Z', judgment_id))
                 conn.commit()
                 logger.debug(f"Updated verification status for {judgment_id}: {status}")
         except Exception as e:

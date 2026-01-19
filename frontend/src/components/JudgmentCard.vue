@@ -196,8 +196,16 @@ function getKeyLevels(judgment: Judgment): Array<{ label: string; price: string 
 function formatSnapshotTime(time?: string): string {
   if (!time) return '';
   try {
-    const date = new Date(time);
-    return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    // Ensure 'Z' for UTC if timezone is missing, to force local conversion
+    const dateStr = (time.endsWith('Z') || time.includes('+')) ? time : time + 'Z';
+    const date = new Date(dateStr);
+    return date.toLocaleString('zh-CN', { 
+      month: '2-digit', 
+      day: '2-digit', 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
   } catch {
     return '';
   }
@@ -206,8 +214,13 @@ function formatSnapshotTime(time?: string): string {
 function formatCheckTime(time?: string): string {
   if (!time) return '未检查';
   try {
-    const date = new Date(time);
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = (time.endsWith('Z') || time.includes('+')) ? time : time + 'Z';
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString('zh-CN', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
   } catch {
     return '未检查';
   }
