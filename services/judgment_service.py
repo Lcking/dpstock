@@ -35,7 +35,7 @@ class JudgmentService:
         """Initialize database and tables"""
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # Create judgments table
@@ -112,7 +112,7 @@ class JudgmentService:
             judgment_id = str(uuid.uuid4())
             now = datetime.now().isoformat()
             
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO judgments (
@@ -345,7 +345,7 @@ class JudgmentService:
             check_id: ID of created check
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO judgment_checks (
@@ -386,7 +386,7 @@ class JudgmentService:
             True if deleted, False otherwise
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 cursor.execute(
