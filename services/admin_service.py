@@ -22,21 +22,21 @@ class AdminService:
                 cursor = conn.cursor()
                 
                 # 1. Total Bound Emails (Anchors)
-                cursor.execute("SELECT count(*) FROM anchors WHERE anchor_type = 'email'")
-                total_anchors = cursor.fetchone()[0]
+                cursor.execute("SELECT count(*) as total FROM anchors WHERE anchor_type = 'email'")
+                total_anchors = cursor.fetchone().get('total', 0)
                 
                 # 2. Total Judgments
-                cursor.execute("SELECT count(*) FROM judgments")
-                total_judgments = cursor.fetchone()[0]
+                cursor.execute("SELECT count(*) as total FROM judgments")
+                total_judgments = cursor.fetchone().get('total', 0)
                 
                 # 3. Recent Bound Emails (Last 24h)
                 yesterday = (datetime.now() - timedelta(days=1)).isoformat()
-                cursor.execute("SELECT count(*) FROM anchors WHERE anchor_type = 'email' AND created_at > ?", (yesterday,))
-                recent_anchors = cursor.fetchone()[0]
+                cursor.execute("SELECT count(*) as total FROM anchors WHERE anchor_type = 'email' AND created_at > ?", (yesterday,))
+                recent_anchors = cursor.fetchone().get('total', 0)
                 
                 # 4. Success Rates (Confirmed vs Total)
-                cursor.execute("SELECT count(*) FROM judgments WHERE verification_status = 'CONFIRMED'")
-                confirmed_judgments = cursor.fetchone()[0]
+                cursor.execute("SELECT count(*) as total FROM judgments WHERE verification_status = 'CONFIRMED'")
+                confirmed_judgments = cursor.fetchone().get('total', 0)
                 
                 return {
                     "total_anchors": total_anchors,
@@ -68,9 +68,9 @@ class AdminService:
                 users = []
                 for row in rows:
                     users.append({
-                        "anchor_id": row[0],
-                        "email": row[1],
-                        "created_at": row[2]
+                        "anchor_id": row.get('anchor_id'),
+                        "email": row.get('anchor_value_masked'),
+                        "created_at": row.get('created_at')
                     })
                 return users
         except Exception as e:
