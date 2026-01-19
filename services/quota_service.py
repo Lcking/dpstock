@@ -1,12 +1,15 @@
 """
 Quota Service
 Manages daily analysis quota for anonymous users
+
+REFACTORED: Uses DatabaseFactory for unified database access
 """
 import sqlite3
 import os
 from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple
 from utils.logger import get_logger
+from database.db_factory import DatabaseFactory
 
 logger = get_logger()
 
@@ -21,12 +24,14 @@ class QuotaService:
     
     def __init__(self, db_path: str = "data/stocks.db"):
         self.db_path = db_path
+        self.db = DatabaseFactory  # Use factory for connections
+        DatabaseFactory.initialize(db_path)
         self._ensure_tables()
     
     def _ensure_tables(self):
         """Ensure quota tables exist (defensive check)"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 # Check if analysis_records table exists
                 cursor.execute("""
@@ -62,7 +67,7 @@ class QuotaService:
             analysis_date = date.today()
         
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # Get used quota (count of analyses today)
@@ -140,7 +145,7 @@ class QuotaService:
             analysis_date = date.today()
         
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # Check if already analyzed today
@@ -198,7 +203,7 @@ class QuotaService:
             analysis_date = date.today()
         
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT OR IGNORE INTO analysis_records 

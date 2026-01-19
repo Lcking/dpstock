@@ -1,12 +1,15 @@
 """
 Invite Service
 Manages invite code generation and reward distribution
+
+REFACTORED: Uses DatabaseFactory for unified database access
 """
 import sqlite3
 import uuid
 from datetime import date, datetime
 from typing import Optional, Dict, Tuple
 from utils.logger import get_logger
+from database.db_factory import DatabaseFactory
 
 logger = get_logger()
 
@@ -18,6 +21,8 @@ class InviteService:
     
     def __init__(self, db_path: str = "data/stocks.db"):
         self.db_path = db_path
+        self.db = DatabaseFactory
+        DatabaseFactory.initialize(db_path)
     
     def generate_invite_code(self, inviter_id: str) -> Dict:
         """
@@ -33,7 +38,7 @@ class InviteService:
             }
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # Check if user already has an invite code
@@ -81,7 +86,7 @@ class InviteService:
             inviter_id if valid, None otherwise
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT inviter_id FROM invite_codes
@@ -118,7 +123,7 @@ class InviteService:
             reward_date = date.today()
         
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # Check if already rewarded
@@ -178,7 +183,7 @@ class InviteService:
             return None
         
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # Check if invitee has any analysis records

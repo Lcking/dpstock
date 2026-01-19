@@ -1,21 +1,30 @@
+"""
+Archive Service
+Manages article storage and retrieval
+
+REFACTORED: Uses DatabaseFactory for unified database access
+"""
 import sqlite3
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from utils.logger import get_logger
+from database.db_factory import DatabaseFactory
 
 logger = get_logger()
 
 class ArchiveService:
     def __init__(self, db_path: str = "data/stocks.db"):
         self.db_path = db_path
+        self.db = DatabaseFactory
+        DatabaseFactory.initialize(db_path)
         self._init_db()
 
     def _init_db(self):
         """初始化数据库和表结构"""
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS articles (
@@ -39,7 +48,7 @@ class ArchiveService:
     async def save_article(self, article_data: Dict[str, Any]) -> int:
         """保存或更新文章 (De-duplication by title)"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 # 使用 REPLACE INTO 实现去重覆盖
                 cursor.execute("""
@@ -64,8 +73,7 @@ class ArchiveService:
     async def get_articles(self, limit: int = 20, offset: int = 0, keyword: str = None) -> List[Dict[str, Any]]:
         """获取文章列表，支持关键字搜索"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 if keyword:
@@ -86,8 +94,7 @@ class ArchiveService:
                     params = (limit, offset)
                     
                 cursor.execute(sql, params)
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
+                return cursor.fetchall()  # Already list of dicts due to dict_factory
         except Exception as e:
             logger.error(f"获取文章列表出错: {str(e)}")
             return []
@@ -95,12 +102,10 @@ class ArchiveService:
     async def get_article_by_id(self, article_id: int) -> Optional[Dict[str, Any]]:
         """根据ID获取文章详情"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
-                row = cursor.fetchone()
-                return dict(row) if row else None
+                return cursor.fetchone()  # Already dict or None
         except Exception as e:
             logger.error(f"获取文章详情出错: {str(e)}")
             return None
