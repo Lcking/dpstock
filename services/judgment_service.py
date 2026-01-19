@@ -1,6 +1,9 @@
 """
 Judgment Service
 Handles CRUD operations for user judgments and verification checks
+
+REFACTORED: Now uses DatabaseFactory for consistent dict returns.
+All row.get() calls are now safe.
 """
 import sqlite3
 import os
@@ -11,13 +14,21 @@ from typing import List, Dict, Any, Optional
 from utils.logger import get_logger
 from schemas.analysis_v1 import JudgmentSnapshot, JudgmentOverview, StructureStatus
 from services.verification_cache import verification_cache
+from database.db_factory import DatabaseFactory
 
 logger = get_logger()
 
 
 class JudgmentService:
+    """
+    Judgments CRUD service.
+    Uses DatabaseFactory for all database operations to ensure dict returns.
+    """
+    
     def __init__(self, db_path: str = "data/stocks.db"):
         self.db_path = db_path
+        self.db = DatabaseFactory  # Use factory for helper methods
+        DatabaseFactory.initialize(db_path)  # Ensure initialized
         self._init_db()
 
     def _init_db(self):
@@ -141,8 +152,8 @@ class JudgmentService:
 
     def get_user_judgments(self, owner_type: str, owner_id: str, limit: int = 50) -> List[Dict[str, Any]]:
         """
-        Get all judgments for an owner with latest check status
-        Uses cache to avoid recalculating verification on every request
+        Get all judgments for an owner with latest check status.
+        Uses DatabaseFactory for safe dict access.
         
         Args:
             owner_type: 'anonymous' or 'anchor'
@@ -153,8 +164,8 @@ class JudgmentService:
             List of judgment overviews
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            # Use DatabaseFactory.get_connection() which returns dicts
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # Get judgments with latest check (if exists)
@@ -184,56 +195,57 @@ class JudgmentService:
                     LIMIT ?
                 """, (owner_type, owner_id, limit))
                 
-                rows = cursor.fetchall()
+                rows = cursor.fetchall()  # Returns List[Dict] due to dict_factory
                 
                 results = []
                 for row in rows:
-                    # Convert Row to dict for safe access
-                    row_dict = dict(row)
+                    # row is already a dict, no need for dict(row)
                     
                     # Parse structure_premise JSON and convert to readable text
-                    structure_premise_text = self._format_structure_premise(row_dict.get("structure_premise"))
+                    structure_premise_text = self._format_structure_premise(row.get("structure_premise"))
                     
                     result = {
-                        "judgment_id": row_dict["judgment_id"],
-                        "stock_code": row_dict["stock_code"],
-                        "stock_name": row_dict.get("stock_name"),  # Add stock_name if available
-                        "snapshot_time": row_dict["snapshot_time"],
-                        "structure_type": row_dict["structure_type"],
-                        "ma200_position": row_dict["ma200_position"],
-                        "phase": row_dict["phase"],
-                        "verification_period": row_dict["verification_period"],
-                        "selected_candidates": json.loads(row_dict["selected_candidates"]),
-                        "created_at": row_dict["created_at"],
-                        "structure_premise": structure_premise_text,  # Add formatted premise
+                        "judgment_id": row.get("judgment_id"),
+                        "stock_code": row.get("stock_code"),
+                        "stock_name": row.get("stock_name"),
+                        "snapshot_time": row.get("snapshot_time"),
+                        "structure_type": row.get("structure_type"),
+                        "ma200_position": row.get("ma200_position"),
+                        "phase": row.get("phase"),
+                        "verification_period": row.get("verification_period", 1),
+                        "selected_candidates": json.loads(row.get("selected_candidates", "[]")),
+                        "created_at": row.get("created_at"),
+                        "structure_premise": structure_premise_text,
                         # Verification status fields (V1)
-                        "verification_status": row_dict.get("verification_status", "WAITING"),
-                        "last_checked_at": row_dict.get("last_checked_at"),
-                        "verification_reason": row_dict.get("verification_reason")
+                        "verification_status": row.get("verification_status", "WAITING"),
+                        "last_checked_at": row.get("last_checked_at"),
+                        "verification_reason": row.get("verification_reason")
                     }
                     
                     # Try to get from cache first
-                    cached_check = verification_cache.get(row["judgment_id"])
+                    judgment_id = row.get("judgment_id")
+                    cached_check = verification_cache.get(judgment_id)
                     
                     if cached_check:
                         # Use cached verification result
                         result["latest_check"] = cached_check
-                        logger.debug(f"Using cached verification for judgment: {row['judgment_id']}")
-                    elif row["verification_time"]:
+                        logger.debug(f"Using cached verification for judgment: {judgment_id}")
+                    elif row.get("verification_time"):
                         # Use database check and cache it
+                        reasons_str = row.get("reasons")
                         check_data = {
-                            "current_price": row["current_price"],
-                            "price_change_pct": row["price_change_pct"],
-                            "current_structure_status": row["current_structure_status"],
-                            "status_description": row["status_description"],
-                            "reasons": json.loads(row["reasons"]) if row["reasons"] else [],
-                            "verification_time": row["verification_time"]
+                            "current_price": row.get("current_price"),
+                            "price_change_pct": row.get("price_change_pct"),
+                            "current_structure_status": row.get("current_structure_status"),
+                            "status_description": row.get("status_description"),
+                            "reasons": json.loads(reasons_str) if reasons_str else [],
+                            "verification_time": row.get("verification_time")
                         }
                         result["latest_check"] = check_data
                         
                         # Cache the result
-                        verification_cache.set(row["judgment_id"], check_data)
-                        logger.debug(f"Cached verification for judgment: {row['judgment_id']}")
+                        verification_cache.set(judgment_id, check_data)
+                        logger.debug(f"Cached verification for judgment: {judgment_id}")
                 
                     results.append(result)
                 
@@ -245,7 +257,8 @@ class JudgmentService:
 
     def get_judgment_detail(self, judgment_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get judgment detail with latest verification result
+        Get judgment detail with latest verification result.
+        Uses DatabaseFactory for safe dict access.
         
         Args:
             judgment_id: UUID of judgment
@@ -254,15 +267,14 @@ class JudgmentService:
             Judgment detail with latest check
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Get judgment
+                # Get judgment (returns dict or None)
                 cursor.execute("SELECT * FROM judgments WHERE judgment_id = ?", (judgment_id,))
-                judgment_row = cursor.fetchone()
+                row = cursor.fetchone()
                 
-                if not judgment_row:
+                if not row:
                     return None
                 
                 # Get latest check
@@ -274,34 +286,32 @@ class JudgmentService:
                 """, (judgment_id,))
                 check_row = cursor.fetchone()
                 
-                # Convert Row to dict for easier access
-                judgment_dict = dict(judgment_row)
-                
+                # row is already a dict, use .get() for safety
                 result = {
-                    "judgment_id": judgment_dict["judgment_id"],
-                    "user_id": judgment_dict["user_id"],
-                    "owner_type": judgment_dict.get("owner_type", "anonymous"),
-                    "owner_id": judgment_dict.get("owner_id", judgment_dict["user_id"]),
-                    "stock_code": judgment_dict["stock_code"],
-                    "snapshot_time": judgment_dict["snapshot_time"],
-                    "structure_premise": json.loads(judgment_dict["structure_premise"]),
-                    "selected_candidates": json.loads(judgment_dict["selected_candidates"]),
-                    "key_levels_snapshot": json.loads(judgment_dict["key_levels_snapshot"]),
-                    "structure_type": judgment_dict["structure_type"],
-                    "ma200_position": judgment_dict["ma200_position"],
-                    "phase": judgment_dict["phase"],
-                    "verification_period": judgment_dict["verification_period"],
-                    "created_at": judgment_dict["created_at"]
+                    "judgment_id": row.get("judgment_id"),
+                    "user_id": row.get("user_id"),
+                    "owner_type": row.get("owner_type", "anonymous"),
+                    "owner_id": row.get("owner_id") or row.get("user_id"),
+                    "stock_code": row.get("stock_code"),
+                    "snapshot_time": row.get("snapshot_time"),
+                    "structure_premise": self._safe_json_loads(row.get("structure_premise")),
+                    "selected_candidates": self._safe_json_loads(row.get("selected_candidates"), []),
+                    "key_levels_snapshot": self._safe_json_loads(row.get("key_levels_snapshot"), []),
+                    "structure_type": row.get("structure_type"),
+                    "ma200_position": row.get("ma200_position"),
+                    "phase": row.get("phase"),
+                    "verification_period": row.get("verification_period", 1),
+                    "created_at": row.get("created_at")
                 }
                 
                 if check_row:
                     result["latest_check"] = {
-                        "check_time": check_row["check_time"],
-                        "current_price": check_row["current_price"],
-                        "price_change_pct": check_row["price_change_pct"],
-                        "current_structure_status": check_row["current_structure_status"],
-                        "status_description": check_row["status_description"],
-                        "reasons": json.loads(check_row["reasons"]) if check_row["reasons"] else []
+                        "check_time": check_row.get("check_time"),
+                        "current_price": check_row.get("current_price"),
+                        "price_change_pct": check_row.get("price_change_pct"),
+                        "current_structure_status": check_row.get("current_structure_status"),
+                        "status_description": check_row.get("status_description"),
+                        "reasons": self._safe_json_loads(check_row.get("reasons"), [])
                     }
                 
                 return result
@@ -428,8 +438,7 @@ class JudgmentService:
             Existing judgment dict if duplicate found, None otherwise
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # Convert to string if datetime object
@@ -450,20 +459,35 @@ class JudgmentService:
                     LIMIT 1
                 """, (owner_type, owner_id, stock_code, structure_type, snapshot_date))
                 
-                row = cursor.fetchone()
+                row = cursor.fetchone()  # Already dict due to dict_factory
                 
                 if row:
                     logger.warning(
                         f"Duplicate judgment found: {stock_code} {structure_type} "
                         f"on {date_part} for {owner_type}:{owner_id[:8]}..."
                     )
-                    return dict(row)
+                    return row  # Already a dict, no conversion needed
                 
                 return None
                 
         except Exception as e:
             logger.error(f"Failed to check duplicate: {str(e)}")
             return None
+    
+    def _safe_json_loads(self, data: Any, default: Any = None) -> Any:
+        """
+        Safely parse JSON string. Returns default on error or if data is None.
+        This prevents crashes from malformed JSON data.
+        """
+        if data is None:
+            return default
+        if not isinstance(data, str):
+            return data  # Already parsed
+        try:
+            return json.loads(data)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(f"Failed to parse JSON: {e}")
+            return default
     
     def _format_structure_premise(self, premise_data: str) -> str:
         """Convert structure_premise JSON to readable text"""
@@ -667,7 +691,7 @@ class JudgmentService:
     def _update_verification_status(self, judgment_id: str, status: str, reason: str):
         """Update verification status in database"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     UPDATE judgments
@@ -682,8 +706,7 @@ class JudgmentService:
     def _get_latest_check(self, judgment_id: str) -> Optional[Dict[str, Any]]:
         """Get latest check record for a judgment"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT * FROM judgment_checks
@@ -691,8 +714,7 @@ class JudgmentService:
                     ORDER BY created_at DESC
                     LIMIT 1
                 """, (judgment_id,))
-                row = cursor.fetchone()
-                return dict(row) if row else None
+                return cursor.fetchone()  # Already dict or None
         except Exception as e:
             logger.error(f"Failed to get latest check: {str(e)}")
             return None
@@ -700,8 +722,7 @@ class JudgmentService:
     def _get_judgments_needing_check(self, owner_type: str, owner_id: str, limit: int = 20) -> List[Dict]:
         """Get judgments that need verification check"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT * FROM judgments
@@ -714,7 +735,7 @@ class JudgmentService:
                     ORDER BY created_at DESC
                     LIMIT ?
                 """, (owner_type, owner_id, limit))
-                return [dict(row) for row in cursor.fetchall()]
+                return cursor.fetchall()  # Already list of dicts
         except Exception as e:
             logger.error(f"Failed to get judgments needing check: {str(e)}")
             return []
