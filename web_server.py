@@ -12,7 +12,11 @@ import os
 import asyncio
 import httpx
 from services.anchor_service import AnchorService
-from routes import admin
+from services.quota_service import QuotaService
+from services.invite_service import InviteService
+from services.verification_scheduler import start_verification_scheduler
+from routes import captcha, auth, judgments, quota, invite, anchor, admin
+
 from utils.logger import get_logger
 from dotenv import load_dotenv
 import uvicorn
@@ -20,10 +24,6 @@ import json
 import secrets
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from routes import captcha, auth, judgments, quota, invite, anchor
-from services.quota_service import QuotaService
-from services.invite_service import InviteService
-from services.verification_scheduler import start_verification_scheduler
 
 load_dotenv()
 

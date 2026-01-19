@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
-from services.database_service import DatabaseService
+from database.db_factory import DatabaseFactory
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -11,7 +11,7 @@ class AdminService:
     """
     
     def __init__(self):
-        self.db = DatabaseService()
+        self.db = DatabaseFactory()
 
     def get_system_stats(self) -> Dict[str, Any]:
         """
