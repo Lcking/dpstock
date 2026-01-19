@@ -1,3 +1,7 @@
+import os
+from dotenv import load_dotenv
+load_dotenv()  # Initialize environment variables BEFORE any other local imports
+
 from fastapi import FastAPI, Request, Response, Depends, HTTPException, BackgroundTasks, Cookie
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,7 +12,6 @@ from typing import List, Optional, Dict, Any, Generator
 from services.stock_analyzer_service import StockAnalyzerService
 from services.us_stock_service_async import USStockServiceAsync
 from services.fund_service_async import FundServiceAsync
-import os
 import asyncio
 import httpx
 from services.anchor_service import AnchorService
@@ -18,14 +21,11 @@ from services.verification_scheduler import start_verification_scheduler
 from routes import captcha, auth, judgments, quota, invite, anchor, admin
 
 from utils.logger import get_logger
-from dotenv import load_dotenv
 import uvicorn
 import json
 import secrets
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-
-load_dotenv()
 
 # 获取日志器
 logger = get_logger()
