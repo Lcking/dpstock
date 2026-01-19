@@ -676,13 +676,22 @@ class JudgmentService:
             return {"checked": 0, "updated": 0}
     
     def _compute_expires_at(self, snapshot_time: str, verify_window_days: int) -> datetime:
-        """Compute expiration datetime"""
+        """
+        Compute expiration datetime.
+        Returns timezone-naive datetime for comparison with datetime.now().
+        """
         from datetime import timedelta
         try:
             if hasattr(snapshot_time, 'isoformat'):
                 snapshot_dt = snapshot_time
             else:
                 snapshot_dt = datetime.fromisoformat(snapshot_time.replace('Z', '+00:00'))
+            
+            # Convert to timezone-naive for comparison with datetime.now()
+            if snapshot_dt.tzinfo is not None:
+                # Convert to local time and remove timezone info
+                snapshot_dt = snapshot_dt.replace(tzinfo=None)
+            
             return snapshot_dt + timedelta(days=verify_window_days)
         except Exception as e:
             logger.error(f"Failed to compute expires_at: {e}")
