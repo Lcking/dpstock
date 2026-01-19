@@ -13,28 +13,28 @@
             <n-icon><UserIcon /></n-icon>
           </template>
         </n-statistic>
-      </gi>
+      </n-gi>
       <n-gi>
         <n-statistic label="总判断数" :value="stats.total_judgments">
           <template #prefix>
             <n-icon><FileIcon /></n-icon>
           </template>
         </n-statistic>
-      </gi>
+      </n-gi>
       <n-gi>
         <n-statistic label="24h新增用户" :value="stats.recent_anchors_24h">
           <template #prefix>
             <n-icon><TrendIcon /></n-icon>
           </template>
         </n-statistic>
-      </gi>
+      </n-gi>
       <n-gi>
         <n-statistic label="结构成立数" :value="stats.confirmed_judgments">
           <template #prefix>
             <n-icon><CheckIcon /></n-icon>
           </template>
         </n-statistic>
-      </gi>
+      </n-gi>
     </n-grid>
 
     <n-divider />
