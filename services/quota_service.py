@@ -72,23 +72,25 @@ class QuotaService:
                 
                 # Get used quota (count of analyses today)
                 cursor.execute("""
-                    SELECT COUNT(*), GROUP_CONCAT(stock_code)
+                    SELECT COUNT(*) as cnt, GROUP_CONCAT(stock_code) as stocks
                     FROM analysis_records
                     WHERE user_id = ? AND analysis_date = ?
                 """, (user_id, analysis_date))
                 
                 result = cursor.fetchone()
-                used_quota = result[0] if result else 0
-                analyzed_stocks = result[1].split(',') if result and result[1] else []
+                used_quota = result.get('cnt', 0) if result else 0
+                stocks_str = result.get('stocks') if result else None
+                analyzed_stocks = stocks_str.split(',') if stocks_str else []
                 
                 # Get invite quota (sum of rewards today, capped at limit)
                 cursor.execute("""
-                    SELECT COALESCE(SUM(reward_quota), 0)
+                    SELECT COALESCE(SUM(reward_quota), 0) as total
                     FROM invite_rewards
                     WHERE inviter_id = ? AND reward_date = ?
                 """, (user_id, analysis_date))
                 
-                invite_quota = min(cursor.fetchone()[0], self.DAILY_INVITE_LIMIT)
+                invite_result = cursor.fetchone()
+                invite_quota = min(invite_result.get('total', 0) if invite_result else 0, self.DAILY_INVITE_LIMIT)
                 
                 # Calculate totals
                 total_quota = self.BASE_QUOTA + invite_quota
