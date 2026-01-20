@@ -85,11 +85,12 @@ class AnchorService:
             
             # Check daily limit (10 times)
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            today_count = cursor.execute("""
-                SELECT COUNT(*) FROM email_codes
+            today_result = cursor.execute("""
+                SELECT COUNT(*) as cnt FROM email_codes
                 WHERE email_hash = ?
                 AND created_at > ?
-            """, (email_hash, today_start.isoformat())).fetchone()[0]
+            """, (email_hash, today_start.isoformat())).fetchone()
+            today_count = today_result.get('cnt', 0) if today_result else 0
             
             if today_count >= 10:
                 return False, "今日发送次数已达上限"

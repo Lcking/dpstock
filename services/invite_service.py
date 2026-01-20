@@ -94,7 +94,7 @@ class InviteService:
                 """, (invite_code,))
                 
                 result = cursor.fetchone()
-                return result[0] if result else None
+                return result.get('inviter_id') if result else None
                 
         except Exception as e:
             logger.error(f"Failed to validate invite code: {str(e)}")
@@ -138,12 +138,13 @@ class InviteService:
                 
                 # Check daily invite limit
                 cursor.execute("""
-                    SELECT COALESCE(SUM(reward_quota), 0)
+                    SELECT COALESCE(SUM(reward_quota), 0) as total
                     FROM invite_rewards
                     WHERE inviter_id = ? AND reward_date = ?
                 """, (inviter_id, reward_date))
                 
-                daily_total = cursor.fetchone()[0]
+                daily_result = cursor.fetchone()
+                daily_total = daily_result.get('total', 0) if daily_result else 0
                 if daily_total >= 20:  # Daily limit
                     logger.info(f"Daily invite limit reached for user: {inviter_id}")
                     return (False, "daily_limit_reached")
@@ -188,11 +189,12 @@ class InviteService:
                 
                 # Check if invitee has any analysis records
                 cursor.execute("""
-                    SELECT COUNT(*) FROM analysis_records
+                    SELECT COUNT(*) as cnt FROM analysis_records
                     WHERE user_id = ?
                 """, (invitee_id,))
                 
-                analysis_count = cursor.fetchone()[0]
+                count_result = cursor.fetchone()
+                analysis_count = count_result.get('cnt', 0) if count_result else 0
                 
                 # Only reward on first analysis
                 if analysis_count != 1:
@@ -211,7 +213,7 @@ class InviteService:
                     logger.warning(f"No invite code found for inviter: {referrer_id}")
                     return None
                 
-                invite_code = code_result[0]
+                invite_code = code_result.get('invite_code')
                 
                 # Record reward
                 success, message = self.record_invite_reward(
