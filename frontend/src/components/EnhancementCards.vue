@@ -4,21 +4,21 @@
       <!-- 相对强弱 -->
       <n-collapse-item 
         name="relative_strength" 
-        :disabled="!isModuleAvailable('relative_strength')"
+        :disabled="!relativeStrength"
       >
         <template #header>
           <div class="card-header">
             <n-icon :component="TrendingUpOutline" class="header-icon" />
             <span>对照表现</span>
-            <n-tag v-if="!isModuleAvailable('relative_strength')" size="small" type="warning">不可用</n-tag>
-            <n-tag v-else-if="getModule('relative_strength')?.degraded" size="small" type="warning">部分数据</n-tag>
+            <n-tag v-if="!relativeStrength" size="small" type="warning">不可用</n-tag>
+            <n-tag v-else-if="relativeStrength.degraded" size="small" type="warning">部分数据</n-tag>
           </div>
         </template>
-        <div class="card-content" v-if="getModule('relative_strength')">
-          <p class="summary">{{ getModule('relative_strength').summary }}</p>
+        <div class="card-content" v-if="relativeStrength">
+          <p class="summary">{{ relativeStrength.summary }}</p>
           <div class="key-metrics">
             <n-tag 
-              v-for="metric in getModule('relative_strength').key_metrics" 
+              v-for="metric in relativeStrength.key_metrics" 
               :key="metric.key"
               :type="getMetricTagType(metric)"
               size="small"
@@ -32,20 +32,20 @@
       <!-- 行业位置 -->
       <n-collapse-item 
         name="industry_position"
-        :disabled="!isModuleAvailable('industry_position')"
+        :disabled="!industryPosition"
       >
         <template #header>
           <div class="card-header">
             <n-icon :component="BusinessOutline" class="header-icon" />
             <span>行业位置</span>
-            <n-tag v-if="!isModuleAvailable('industry_position')" size="small" type="warning">不可用</n-tag>
+            <n-tag v-if="!industryPosition" size="small" type="warning">不可用</n-tag>
           </div>
         </template>
-        <div class="card-content" v-if="getModule('industry_position')">
-          <p class="summary">{{ getModule('industry_position').summary }}</p>
+        <div class="card-content" v-if="industryPosition">
+          <p class="summary">{{ industryPosition.summary }}</p>
           <div class="key-metrics">
             <n-tag 
-              v-for="metric in getModule('industry_position').key_metrics" 
+              v-for="metric in industryPosition.key_metrics" 
               :key="metric.key"
               type="info"
               size="small"
@@ -59,21 +59,21 @@
       <!-- 资金流向 -->
       <n-collapse-item 
         name="capital_flow"
-        :disabled="!isModuleAvailable('capital_flow')"
+        :disabled="!capitalFlow"
       >
         <template #header>
           <div class="card-header">
             <n-icon :component="CashOutline" class="header-icon" />
             <span>资金语言</span>
-            <n-tag v-if="!isModuleAvailable('capital_flow')" size="small" type="warning">不可用</n-tag>
-            <n-tag v-else-if="getModule('capital_flow')?.degraded" size="small" type="warning">推算数据</n-tag>
+            <n-tag v-if="!capitalFlow" size="small" type="warning">不可用</n-tag>
+            <n-tag v-else-if="capitalFlow.degraded" size="small" type="warning">推算数据</n-tag>
           </div>
         </template>
-        <div class="card-content" v-if="getModule('capital_flow')">
-          <p class="summary">{{ getModule('capital_flow').summary }}</p>
+        <div class="card-content" v-if="capitalFlow">
+          <p class="summary">{{ capitalFlow.summary }}</p>
           <div class="key-metrics">
             <n-tag 
-              v-for="metric in getModule('capital_flow').key_metrics" 
+              v-for="metric in capitalFlow.key_metrics" 
               :key="metric.key"
               :type="getFlowTagType(metric)"
               size="small"
@@ -87,20 +87,20 @@
       <!-- 事件提醒 -->
       <n-collapse-item 
         name="events"
-        :disabled="!isModuleAvailable('events')"
+        :disabled="!eventsModule"
       >
         <template #header>
           <div class="card-header">
             <n-icon :component="CalendarOutline" class="header-icon" />
             <span>事件提醒</span>
-            <n-tag v-if="!isModuleAvailable('events')" size="small" type="warning">不可用</n-tag>
+            <n-tag v-if="!eventsModule" size="small" type="warning">不可用</n-tag>
           </div>
         </template>
-        <div class="card-content" v-if="getModule('events')">
-          <p class="summary">{{ getModule('events').summary }}</p>
+        <div class="card-content" v-if="eventsModule">
+          <p class="summary">{{ eventsModule.summary }}</p>
           <div class="key-metrics">
             <n-tag 
-              v-for="metric in getModule('events').key_metrics" 
+              v-for="metric in eventsModule.key_metrics" 
               :key="metric.key"
               :type="metric.value > 0 ? 'warning' : 'default'"
               size="small"
@@ -135,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { 
   NCollapse, NCollapseItem, NTag, NIcon, NText, NSpin, NAlert 
 } from 'naive-ui';
@@ -179,6 +179,27 @@ const enhancements = ref<EnhancementsData | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
+// Computed properties to avoid repeated optional chaining in template
+const relativeStrength = computed(() => {
+  const m = enhancements.value?.relative_strength;
+  return m?.available ? m : null;
+});
+
+const industryPosition = computed(() => {
+  const m = enhancements.value?.industry_position;
+  return m?.available ? m : null;
+});
+
+const capitalFlow = computed(() => {
+  const m = enhancements.value?.capital_flow;
+  return m?.available ? m : null;
+});
+
+const eventsModule = computed(() => {
+  const m = enhancements.value?.events;
+  return m?.available ? m : null;
+});
+
 async function fetchEnhancements() {
   if (!props.stockCode) return;
   
@@ -199,16 +220,6 @@ async function fetchEnhancements() {
   } finally {
     loading.value = false;
   }
-}
-
-function isModuleAvailable(moduleName: string): boolean {
-  const module = getModule(moduleName);
-  return module?.available === true;
-}
-
-function getModule(moduleName: string): ModuleResult | undefined {
-  if (!enhancements.value) return undefined;
-  return (enhancements.value as any)[moduleName];
 }
 
 function formatMetricValue(metric: KeyMetric): string {
