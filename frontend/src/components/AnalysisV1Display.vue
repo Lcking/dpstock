@@ -96,6 +96,12 @@
       </n-alert>
     </div>
 
+    <!-- Tushare Enhancement Cards (新增增强数据卡片区) -->
+    <div class="analysis-section enhancements-section" v-if="stockCode">
+      <h3 class="section-title">📊 数据增强</h3>
+      <EnhancementCards :stock-code="stockCode" />
+    </div>
+
     <!-- Section 5: 判断区 -->
     <!-- Wyckoff II Pre-Judgment Reminder -->
     <JudgmentPreReminder
@@ -198,6 +204,7 @@ import { ref } from 'vue';
 import JudgmentConfirmDialog from '@/components/WyckoffGuide/JudgmentConfirmDialog.vue';
 import JudgmentPreReminder from '@/components/WyckoffGuide/JudgmentPreReminder.vue';
 import AnchorBindDialog from '@/components/AnchorBindDialog.vue';
+import EnhancementCards from '@/components/EnhancementCards.vue';
 import {
   NDescriptions,
   NDescriptionsItem,

@@ -18,7 +18,7 @@ from services.anchor_service import AnchorService
 from services.quota_service import QuotaService
 from services.invite_service import InviteService
 from services.verification_scheduler import start_verification_scheduler
-from routes import captcha, auth, judgments, quota, invite, anchor, admin
+from routes import captcha, auth, judgments, quota, invite, anchor, admin, enhancements
 
 from utils.logger import get_logger
 import uvicorn
@@ -56,6 +56,7 @@ app.include_router(quota.router)
 app.include_router(invite.router)
 app.include_router(anchor.router)  # Anchor system for email binding
 app.include_router(admin.router)   # Admin overview
+app.include_router(enhancements.router)  # Tushare data enhancements
 
 # 添加CORS中间件
 app.add_middleware(
