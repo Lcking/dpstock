@@ -5,6 +5,7 @@ import StockAnalysisApp from '@/components/StockAnalysisApp.vue';
 import LoginPage from '@/components/LoginPage.vue';
 import AnalysisList from '@/components/AnalysisList.vue';
 import ArticleDetail from '@/components/ArticleDetail.vue';
+import WatchlistList from '@/components/Watchlist/WatchlistList.vue';
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -36,6 +37,24 @@ const routes: Array<RouteRecordRaw> = [
     name: 'MyJudgments',
     component: () => import('@/components/MyJudgments.vue'),
     meta: { requiresAuth: false }  // Anonymous via cookie
+  },
+  {
+    path: '/watchlist',
+    name: 'Watchlist',
+    component: WatchlistList,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/compare',
+    name: 'Compare',
+    component: () => import('@/components/Compare/CompareView.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/journal',
+    name: 'Journal',
+    component: () => import('@/components/Journal/JournalList.vue'),
+    meta: { requiresAuth: false }
   },
   {
     path: '/help/judgment-verification',
