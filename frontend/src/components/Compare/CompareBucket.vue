@@ -73,6 +73,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NTag, NText, NSpace } from 'naive-ui'
 import type { CompareBucket } from '@/types/compare'
 
@@ -137,11 +138,6 @@ const formatPercent = (value: number | null) => {
   const str = (value * 100).toFixed(2)
   return value >= 0 ? `+${str}%` : `${str}%`
 }
-</script>
-
-<script lang="ts">
-import { computed } from 'vue'
-export default { name: 'CompareBucket' }
 </script>
 
 <style scoped>
