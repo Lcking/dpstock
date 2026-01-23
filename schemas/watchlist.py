@@ -70,9 +70,6 @@ class WatchlistItemSummary(BaseModel):
     risk: RiskSummary
     events: EventSummary
     judgement: JudgementSummary
-    
-    # 用于排序的结构评分 (不对用户显示)
-    _structure_score: Optional[int] = Field(None, exclude=True)
 
 
 class Watchlist(BaseModel):
