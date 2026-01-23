@@ -14,6 +14,10 @@ services:
       - API_TIMEOUT=${API_TIMEOUT}
       - LOGIN_PASSWORD=${LOGIN_PASSWORD}
       - ANNOUNCEMENT_TEXT=${ANNOUNCEMENT_TEXT}
+      - TUSHARE_TOKEN=${TUSHARE_TOKEN}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - SEND_REAL_EMAIL=${SEND_REAL_EMAIL}
+      - FROM_EMAIL=${FROM_EMAIL}
       - STREAM=true
     volumes:
       - ./logs:/app/logs
