@@ -18,13 +18,13 @@
 
     <!-- Due Notification -->
     <div v-if="dueCount > 0" class="due-notification">
-      <n-alert type="warning" :showIcon="true">
-        你有 {{ dueCount }} 条判断记录已到期待复盘
-        <template #action>
+      <n-alert type="warning" :show-icon="true">
+        <n-space justify="space-between" align="center">
+          <span>你有 {{ dueCount }} 条判断记录已到期待复盘</span>
           <n-button size="small" @click="statusFilter = 'due'; loadRecords()">
             查看
           </n-button>
-        </template>
+        </n-space>
       </n-alert>
     </div>
 
@@ -134,13 +134,13 @@ const message = useMessage()
 const loading = ref(false)
 const records = ref<JournalRecord[]>([])
 const dueCount = ref(0)
-const statusFilter = ref<string | null>(null)
+const statusFilter = ref<string>('')
 const showReview = ref(false)
 const selectedRecord = ref<JournalRecord | null>(null)
 
 // Options
 const statusOptions = [
-  { label: '全部', value: null },
+  { label: '全部', value: '' },
   { label: '活跃中', value: 'active' },
   { label: '待复盘', value: 'due' },
   { label: '已复盘', value: 'reviewed' }
