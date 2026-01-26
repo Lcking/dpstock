@@ -367,6 +367,11 @@ class StockDataProvider:
                             df['成交量'] = df['成交量'] * 100
                             # 调整单位: amount 从千元转为元
                             df['成交额'] = df['成交额'] * 1000
+                            
+                            # 确保列顺序和数量与后续标准化代码一致 (12列)
+                            # ['Date', 'Code', 'Open', 'Close', 'High', 'Low', 'Volume', 'Amount', 'Amplitude', 'Change_pct', 'Change', 'Turnover']
+                            df = df[['日期', '股票代码', '开盘', '收盘', '最高', '最低', '成交量', '成交额', '振幅', '涨跌幅', '涨跌额', '换手率']]
+                            
                             # 按日期排序（tushare默认是降序）
                             df = df.sort_values('日期').reset_index(drop=True)
                             logger.info(f"[A] tushare成功获取 {stock_code} 数据, {len(df)} 行")
