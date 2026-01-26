@@ -61,12 +61,13 @@ class TushareClient:
         """Check if Tushare is available"""
         return TushareClient._pro is not None
     
-    def query(self, api_name: str, **kwargs) -> Optional[Any]:
+    def query(self, api_name: str, retries: int = 3, **kwargs) -> Optional[Any]:
         """
-        Execute Tushare API query with error handling
+        Execute Tushare API query with error handling and retry
         
         Args:
             api_name: Tushare API name (e.g., 'daily', 'index_daily')
+            retries: Number of retry attempts for network errors
             **kwargs: API parameters
             
         Returns:
@@ -76,18 +77,38 @@ class TushareClient:
             logger.warning(f"[Tushare] Query '{api_name}' skipped - client not available")
             return None
         
-        try:
-            result = getattr(self.pro, api_name)(**kwargs)
-            logger.debug(f"[Tushare] Query '{api_name}' returned {len(result) if result is not None else 0} rows")
-            return result
-        except Exception as e:
-            error_msg = str(e)
-            # Don't retry on permission errors
-            if 'permission' in error_msg.lower() or '权限' in error_msg:
-                logger.warning(f"[Tushare] Permission denied for '{api_name}': {error_msg}")
-            else:
-                logger.error(f"[Tushare] Query '{api_name}' failed: {error_msg}")
-            return None
+        import time
+        
+        for attempt in range(retries):
+            try:
+                result = getattr(self.pro, api_name)(**kwargs)
+                logger.debug(f"[Tushare] Query '{api_name}' returned {len(result) if result is not None else 0} rows")
+                return result
+            except Exception as e:
+                error_msg = str(e)
+                
+                # Don't retry on permission errors
+                if 'permission' in error_msg.lower() or '权限' in error_msg:
+                    logger.warning(f"[Tushare] Permission denied for '{api_name}': {error_msg}")
+                    return None
+                
+                # Network errors - retry with exponential backoff
+                is_network_error = any(x in error_msg.lower() for x in [
+                    'connection', 'timeout', 'disconnected', 'remote end closed',
+                    'connectionreset', 'connectionaborted', 'networkunreachable'
+                ])
+                
+                if is_network_error and attempt < retries - 1:
+                    wait_time = (2 ** attempt) + 0.5  # 0.5s, 2.5s, 4.5s
+                    logger.warning(f"[Tushare] Network error on '{api_name}', retry {attempt + 1}/{retries} in {wait_time}s: {error_msg}")
+                    time.sleep(wait_time)
+                    continue
+                
+                # Final failure
+                logger.error(f"[Tushare] Query '{api_name}' failed after {attempt + 1} attempts: {error_msg}")
+                return None
+        
+        return None
     
     def get_daily(self, ts_code: str, start_date: str = None, end_date: str = None, days: int = 60):
         """
