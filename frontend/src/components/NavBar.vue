@@ -11,10 +11,14 @@
           <span class="btn-text">分析专栏</span>
           <span class="btn-glow"></span>
         </router-link>
+        
         <router-link to="/my-judgments" class="nav-btn">
-          <span class="btn-text">我的判断</span>
+          <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[6, -6]">
+            <span class="btn-text">我的判断</span>
+          </n-badge>
           <span class="btn-glow"></span>
         </router-link>
+        
         <a
           v-for="link in links"
           :key="link.text"
@@ -49,6 +53,10 @@ import { ref, onMounted } from 'vue';
 import QuotaStatus from './QuotaStatus.vue';
 import InviteDialog from './InviteDialog.vue';
 import { apiService } from '@/services/api';
+import { NBadge } from 'naive-ui';
+import { useNotificationStore } from '@/stores/notification';
+
+const notificationStore = useNotificationStore();
 
 interface NavLink {
   text: string

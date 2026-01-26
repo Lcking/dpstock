@@ -267,6 +267,17 @@ export const apiService = {
     }
   },
 
+  // 获取待复盘数量
+  getDueCount: async (): Promise<number> => {
+    try {
+      const response = await axiosInstance.get('/journal/due-count');
+      return response.data.due_count || 0;
+    } catch (error) {
+      console.error('获取待复盘数量时出错:', error);
+      return 0;
+    }
+  },
+
   // 删除判断
   deleteJudgment: async (judgmentId: string): Promise<void> => {
     const response = await axiosInstance.delete(`/v1/judgments/${judgmentId}`);

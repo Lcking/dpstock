@@ -32,9 +32,12 @@ import {
 } from 'naive-ui'
 import { getOrCreateUserId } from '@/utils/cookies'
 import { getOrCreateAnonymousId } from '@/utils/anonymousId'
+import { useNotificationStore } from '@/stores/notification'
 
 // 主题设置 (默认使用亮色主题)
 const theme = ref<any>(null) // 可以切换为 darkTheme 以启用暗色模式
+
+const notificationStore = useNotificationStore()
 
 // Initialize user identity on app mount
 onMounted(() => {
@@ -43,6 +46,9 @@ onMounted(() => {
   
   // Initialize anonymous ID (for anchor system)
   getOrCreateAnonymousId();
+  
+  // Start polling for notifications
+  notificationStore.startPolling();
   
   console.log('[App] User identity initialized');
 });
