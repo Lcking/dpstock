@@ -86,22 +86,7 @@ async def get_judgment_zone_v11(
 
 def normalize_ts_code(code: str) -> str:
     """
-    标准化股票代码为 Tushare 格式
-    
-    输入: '600519', '600519.SH', '000001', '000001.SZ'
-    输出: '600519.SH', '000001.SZ'
+    标准化股票代码为 Tushare 格式 (使用共享验证模块)
     """
-    code = code.upper().strip()
-    
-    # 如果已经有后缀，直接返回
-    if '.' in code:
-        return code
-    
-    # 根据代码前缀判断市场
-    if code.startswith(('6', '9')):
-        return f"{code}.SH"
-    elif code.startswith(('0', '3', '2')):
-        return f"{code}.SZ"
-    else:
-        # 默认上海
-        return f"{code}.SH"
+    from utils.validation import normalize_ts_code as _normalize
+    return _normalize(code)

@@ -12,10 +12,12 @@ os.makedirs(log_dir, exist_ok=True)
 logger.remove()  # 移除默认的处理器
 
 # 添加标准输出处理器（控制台）
+# 生产环境可设置 LOG_LEVEL=WARNING 减少日志输出
+console_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logger.add(
     sys.stdout,
     format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    level="INFO",   # 同时显示在控制台和写入到日志文件中
+    level=console_level,
 )
 
 # 添加统一的日志文件处理器，按日期自动轮转
