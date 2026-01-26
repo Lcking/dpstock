@@ -372,13 +372,92 @@ class StockDataProvider:
                             # ['Date', 'Code', 'Open', 'Close', 'High', 'Low', 'Volume', 'Amount', 'Amplitude', 'Change_pct', 'Change', 'Turnover']
                             df = df[['日期', '股票代码', '开盘', '收盘', '最高', '最低', '成交量', '成交额', '振幅', '涨跌幅', '涨跌额', '换手率']]
                             
+                            # 调整单位: vol 从手转为股
+                            df['成交量'] = df['成交量'] * 100
+                            # 调整单位: amount 从千元转为元
+                            df['成交额'] = df['成交额'] * 1000
+                            
+                            # 确保列顺序和数量与后续标准化代码一致 (12列)
+                            # ['Date', 'Code', 'Open', 'Close', 'High', 'Low', 'Volume', 'Amount', 'Amplitude', 'Change_pct', 'Change', 'Turnover']
+                            df = df[['日期', '股票代码', '开盘', '收盘', '最高', '最低', '成交量', '成交额', '振幅', '涨跌幅', '涨跌额', '换手率']]
+                            
                             # 按日期排序（tushare默认是降序）
                             df = df.sort_values('日期').reset_index(drop=True)
                             logger.info(f"[A] tushare成功获取 {stock_code} 数据, {len(df)} 行")
                         else:
-                            raise ValueError(f"tushare也无法获取 {stock_code} 数据")
+                            logger.warning(f"[A] tushare未获取到数据 {stock_code}")
+                            akshare_failed = True # 继续尝试下一级备用
                     else:
-                        raise ValueError(f"akshare失败且tushare不可用")
+                         logger.warning(f"[A] tushare客户端不可用")
+                         akshare_failed = True
+                
+                # 如果前两级都失败，尝试 YFinance (Yahoo Finance)
+                if akshare_failed:
+                    logger.info(f"[A]尝试使用Yahoo Finance获取 {stock_code}...")
+                    try:
+                        import yfinance as yf
+                        # 转换A股代码: 600519 -> 600519.SS, 000001 -> 000001.SZ
+                        if stock_code.startswith('6'):
+                            yf_code = f"{stock_code}.SS"
+                        else:
+                            yf_code = f"{stock_code}.SZ"
+                            
+                        ticker = yf.Ticker(yf_code)
+                        # 获取数据
+                        yf_df = ticker.history(period="1y") 
+                        # 如果指定了日期，可能需要更精确的获取，这里简化为1年以覆盖大部分需求
+                        
+                        if not yf_df.empty:
+                            # Yahoo Finance 返回索引是Date(Timestamp)，列: Open, High, Low, Close, Volume, Dividends, Stock Splits
+                            # 需要重置索引把Date变成列
+                            yf_df = yf_df.reset_index()
+                            
+                            # 格式化日期列 YYYYMMDD
+                            yf_df['Date'] = yf_df['Date'].dt.strftime('%Y%m%d')
+                            
+                            # 筛选日期范围
+                            if start_date:
+                                yf_df = yf_df[yf_df['Date'] >= start_date]
+                            if end_date:
+                                yf_df = yf_df[yf_df['Date'] <= end_date]
+                                
+                            # 构造标准数据框
+                            df = pd.DataFrame()
+                            df['日期'] = yf_df['Date']
+                            df['股票代码'] = stock_code
+                            df['开盘'] = yf_df['Open']
+                            df['收盘'] = yf_df['Close']
+                            df['最高'] = yf_df['High']
+                            df['最低'] = yf_df['Low']
+                            df['成交量'] = yf_df['Volume']
+                            
+                            # 计算近似成交额 (Volume * Close) - Yahoo一般不提供成交额
+                            df['成交额'] = df['成交量'] * df['收盘']
+                            
+                            # 计算涨跌幅和涨跌额 (需要前一日收盘价)
+                            df['Pre_Close'] = df['收盘'].shift(1)
+                            # 第一天用开盘价填充Pre_Close防止NaN
+                            df.loc[df.index[0], 'Pre_Close'] = df.loc[df.index[0], '开盘']
+                            
+                            df['涨跌额'] = df['收盘'] - df['Pre_Close']
+                            df['涨跌幅'] = (df['涨跌额'] / df['Pre_Close']) * 100
+                            
+                            # 振幅 = (High - Low) / Pre_Close * 100
+                            df['振幅'] = ((df['最高'] - df['最低']) / df['Pre_Close']) * 100
+                            
+                            # 换手率 - Yahoo没有流通股本数据，暂时填0
+                            df['换手率'] = 0.0
+                            
+                            # 选择并排序12列
+                            df = df[['日期', '股票代码', '开盘', '收盘', '最高', '最低', '成交量', '成交额', '振幅', '涨跌幅', '涨跌额', '换手率']]
+                            
+                            logger.info(f"[A] Yahoo Finance成功获取 {stock_code} 数据, {len(df)} 行")
+                        else:
+                            raise ValueError(f"Yahoo Finance返回空数据 {yf_code}")
+                            
+                    except Exception as yf_e:
+                        logger.error(f"[A] Yahoo Finance获取失败: {str(yf_e)}")
+                        raise ValueError(f"所有数据源(Akshare, Tushare, YFinance)均无法获取 {stock_code} 数据")
                 
             elif market_type in ['HK']:
                 logger.debug(f"获取港股数据: {stock_code} (使用 yfinance)")
