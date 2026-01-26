@@ -210,7 +210,17 @@ class WatchlistService:
         ts_code: str, 
         asof: str
     ) -> WatchlistItemSummary:
-        """生成单个标的摘要"""
+        """生成单个标的摘要（带缓存）"""
+        from .cache import watchlist_summary_cache
+        
+        # Check cache first
+        cached = watchlist_summary_cache.get(ts_code, asof)
+        if cached is not None:
+            logger.debug(f"[Watchlist] Cache HIT for {ts_code}")
+            return cached
+        
+        logger.debug(f"[Watchlist] Cache MISS for {ts_code}, generating...")
+        
         # 获取增强数据
         enhancements = enhancement_orchestrator.enhance(ts_code, asof)
         
@@ -240,7 +250,7 @@ class WatchlistService:
         # 获取价格信息
         price, change_pct, name = self._get_price_info(ts_code, asof)
         
-        return WatchlistItemSummary(
+        summary = WatchlistItemSummary(
             ts_code=ts_code,
             name=name or ts_code,
             asof=asof,
@@ -253,6 +263,11 @@ class WatchlistService:
             events=events,
             judgement=judgement
         )
+        
+        # Store in cache
+        watchlist_summary_cache.set(ts_code, asof, summary)
+        
+        return summary
     
     def _build_trend(self, ts_code: str, asof: str) -> TrendResult:
         """构建趋势数据"""
