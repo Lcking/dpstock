@@ -205,21 +205,54 @@ class StockDataProvider:
     
     def _get_stock_data_sync(self, stock_code: str, market_type: str = 'A', 
                            start_date: Optional[str] = None, 
-                           end_date: Optional[str] = None) -> pd.DataFrame:
+                           end_date: Optional[str] = None,
+                           retries: int = 3) -> pd.DataFrame:
         """
-        同步获取股票数据的实现
+        同步获取股票数据的实现（带重试机制）
         将被异步方法调用
         """
         # 增加递归深度限制,防止pandas比较操作时出现递归错误
         import sys
+        import time
         old_limit = sys.getrecursionlimit()
         sys.setrecursionlimit(10000)  # 临时增加到10000
         
-        try:
-            return self._fetch_stock_data_internal(stock_code, market_type, start_date, end_date)
-        finally:
-            # 恢复原始递归限制
-            sys.setrecursionlimit(old_limit)
+        last_error = None
+        for attempt in range(retries):
+            try:
+                result = self._fetch_stock_data_internal(stock_code, market_type, start_date, end_date)
+                return result
+            except Exception as e:
+                last_error = e
+                error_msg = str(e).lower()
+                
+                # 检测网络错误
+                is_network_error = any(x in error_msg for x in [
+                    'connection', 'timeout', 'disconnected', 'remote end closed',
+                    'connectionreset', 'connectionaborted', 'networkunreachable',
+                    'remotedisconnected', 'connectionerror'
+                ])
+                
+                if is_network_error and attempt < retries - 1:
+                    wait_time = (2 ** attempt) + 0.5  # 0.5s, 2.5s, 4.5s
+                    logger.warning(f"[{market_type}] 网络错误获取 {stock_code}, 第 {attempt + 1}/{retries} 次重试, 等待 {wait_time}s: {str(e)[:100]}")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    # 非网络错误或最后一次尝试，直接失败
+                    break
+            finally:
+                # 恢复原始递归限制
+                sys.setrecursionlimit(old_limit)
+        
+        # 所有重试都失败了
+        if last_error:
+            logger.error(f"[{market_type}] 获取 {stock_code} 数据失败 (已重试 {retries} 次): {str(last_error)}")
+            df = pd.DataFrame()
+            df.error = f"获取{market_type}数据失败 {stock_code}: {str(last_error)}"
+            return df
+        
+        return pd.DataFrame()
     
     def _fetch_stock_data_internal(self, stock_code: str, market_type: str = 'A',
                                    start_date: Optional[str] = None,
