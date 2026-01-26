@@ -418,13 +418,25 @@ class StockDataProvider:
             return df
             
         except Exception as e:
-            error_msg = f"获取{market_type}数据失败 {stock_code}: {str(e)}"
-            logger.error(error_msg)
+            error_msg = str(e).lower()
+            
+            # 检测网络错误 - 让它们向上传播以便重试
+            is_network_error = any(x in error_msg for x in [
+                'connection', 'timeout', 'disconnected', 'remote end closed',
+                'connectionreset', 'connectionaborted', 'networkunreachable',
+                'remotedisconnected', 'connectionerror'
+            ])
+            
+            if is_network_error:
+                # 重新抛出网络错误，让上层 _get_stock_data_sync 处理重试
+                raise
+            
+            # 非网络错误：记录并返回空 DataFrame
+            full_error_msg = f"获取{market_type}数据失败 {stock_code}: {str(e)}"
+            logger.error(full_error_msg)
             logger.exception(e)
-            # 使用空的DataFrame并添加错误信息，而不是抛出异常
-            # 这样上层调用者可以检查是否有错误并适当处理
             df = pd.DataFrame()
-            df.error = error_msg  # 添加错误属性
+            df.error = full_error_msg
             return df
             
     async def get_multiple_stocks_data(self, stock_codes: List[str], 
