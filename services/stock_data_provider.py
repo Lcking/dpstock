@@ -317,12 +317,63 @@ class StockDataProvider:
             if market_type == 'A':
                 logger.debug(f"获取A股数据: {stock_code}")
                 
-                df = ak.stock_zh_a_hist(
-                    symbol=stock_code,
-                    start_date=start_date,
-                    end_date=end_date,
-                    adjust="qfq"
-                )
+                # 首先尝试 akshare
+                akshare_failed = False
+                try:
+                    df = ak.stock_zh_a_hist(
+                        symbol=stock_code,
+                        start_date=start_date,
+                        end_date=end_date,
+                        adjust="qfq"
+                    )
+                except Exception as ak_error:
+                    logger.warning(f"[A] akshare获取 {stock_code} 失败: {str(ak_error)[:80]}, 尝试tushare备用...")
+                    akshare_failed = True
+                
+                # 如果 akshare 失败，尝试 tushare
+                if akshare_failed:
+                    from services.tushare.client import tushare_client
+                    if tushare_client.is_available:
+                        # 转换股票代码格式: 600519 -> 600519.SH, 000001 -> 000001.SZ
+                        if stock_code.startswith('6'):
+                            ts_code = f"{stock_code}.SH"
+                        else:
+                            ts_code = f"{stock_code}.SZ"
+                        
+                        logger.info(f"[A] 使用tushare获取 {ts_code}")
+                        ts_df = tushare_client.get_daily(ts_code, start_date=start_date, end_date=end_date)
+                        
+                        if ts_df is not None and not ts_df.empty:
+                            # 转换 tushare 格式到标准格式
+                            # tushare 列: ts_code, trade_date, open, high, low, close, pre_close, change, pct_chg, vol, amount
+                            df = ts_df.rename(columns={
+                                'trade_date': '日期',
+                                'ts_code': '股票代码',
+                                'open': '开盘',
+                                'close': '收盘',
+                                'high': '最高',
+                                'low': '最低',
+                                'vol': '成交量',  # tushare vol 单位是手(100股)
+                                'amount': '成交额',  # tushare amount 单位是千元
+                                'pct_chg': '涨跌幅',
+                                'change': '涨跌额'
+                            })
+                            # 添加缺失列
+                            if '振幅' not in df.columns:
+                                df['振幅'] = 0.0
+                            if '换手率' not in df.columns:
+                                df['换手率'] = 0.0
+                            # 调整单位: vol 从手转为股
+                            df['成交量'] = df['成交量'] * 100
+                            # 调整单位: amount 从千元转为元
+                            df['成交额'] = df['成交额'] * 1000
+                            # 按日期排序（tushare默认是降序）
+                            df = df.sort_values('日期').reset_index(drop=True)
+                            logger.info(f"[A] tushare成功获取 {stock_code} 数据, {len(df)} 行")
+                        else:
+                            raise ValueError(f"tushare也无法获取 {stock_code} 数据")
+                    else:
+                        raise ValueError(f"akshare失败且tushare不可用")
                 
             elif market_type in ['HK']:
                 logger.debug(f"获取港股数据: {stock_code} (使用 yfinance)")
