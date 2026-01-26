@@ -260,8 +260,8 @@ class StockDataProvider:
         """
         内部数据获取实现
         """
-        # Monkey patch requests库以禁用SSL验证
-        # 这是为了解决东方财富API的SSL连接问题
+        # Monkey patch requests库以禁用SSL验证并添加必要的请求头
+        # 这是为了解决东方财富API的SSL连接问题和反爬虫措施
         import requests
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -269,9 +269,32 @@ class StockDataProvider:
         # 保存原始的request方法
         original_request = requests.Session.request
         
-        # 创建新的request方法,强制设置verify=False
+        # 常用浏览器 User-Agent 列表
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+        ]
+        
+        import random
+        
+        # 创建新的request方法,强制设置verify=False并添加headers
         def patched_request(self, method, url, **kwargs):
             kwargs['verify'] = False
+            # 设置超时防止长时间挂起
+            if 'timeout' not in kwargs:
+                kwargs['timeout'] = (10, 30)  # (connect timeout, read timeout)
+            # 添加请求头
+            headers = kwargs.get('headers', {})
+            if 'User-Agent' not in headers:
+                headers['User-Agent'] = random.choice(user_agents)
+            if 'Accept' not in headers:
+                headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            if 'Accept-Language' not in headers:
+                headers['Accept-Language'] = 'zh-CN,zh;q=0.9,en;q=0.8'
+            if 'Connection' not in headers:
+                headers['Connection'] = 'keep-alive'
+            kwargs['headers'] = headers
             return original_request(self, method, url, **kwargs)
         
         # 应用monkey patch
