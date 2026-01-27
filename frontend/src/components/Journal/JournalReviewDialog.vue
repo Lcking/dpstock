@@ -58,6 +58,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { NModal, NInput, NTag, NButton, NSpace, NAlert, useMessage } from 'naive-ui'
+import { apiService } from '@/services/api'
 import type { JournalRecord } from '@/types/journal'
 
 interface Props {
@@ -91,15 +92,7 @@ const handleReview = async () => {
 
   reviewing.value = true
   try {
-    const response = await fetch(`/api/journal/${props.record.id}/review`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        notes: notes.value || undefined
-      })
-    })
-
-    if (!response.ok) throw new Error('Failed to review')
+    await apiService.reviewRecord(props.record.id, notes.value)
 
     message.success('复盘完成')
     emit('reviewed')

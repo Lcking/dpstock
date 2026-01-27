@@ -139,6 +139,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { apiService } from '@/services/api'
 import { 
   NButton, NSpace, NSelect, NTag, NAlert, NSkeleton, useMessage 
 } from 'naive-ui'
@@ -169,15 +170,9 @@ const statusOptions = [
 const loadRecords = async () => {
   loading.value = true
   try {
-    const params = new URLSearchParams()
-    if (statusFilter.value) {
-      params.append('status', statusFilter.value)
-    }
-
-    const response = await fetch(`/api/journal?${params}`)
-    if (!response.ok) throw new Error('Failed to load records')
-
-    const data = await response.json()
+    const data = await apiService.getJournalRecords({
+      status: statusFilter.value || undefined
+    })
     records.value = data.records || []
   } catch (error) {
     console.error('Load records error:', error)
@@ -190,11 +185,7 @@ const loadRecords = async () => {
 // Load due count
 const loadDueCount = async () => {
   try {
-    const response = await fetch('/api/journal/due-count')
-    if (!response.ok) throw new Error('Failed to load due count')
-
-    const data = await response.json()
-    dueCount.value = data.due_count || 0
+    dueCount.value = await apiService.getDueCount()
   } catch (error) {
     console.error('Load due count error:', error)
   }

@@ -233,7 +233,7 @@ export const apiService = {
   // 保存判断快照 (迁移至 Journal 系统)
   saveJudgment: async (data: any) => {
     try {
-      const response = await axiosInstance.post('/api/journal', data);
+      const response = await axiosInstance.post('/journal', data);
       return response.data;
     } catch (error) {
       console.error('保存判断时出错:', error);
@@ -273,6 +273,28 @@ export const apiService = {
     } catch (error) {
       console.error('获取待复盘数量时出错:', error);
       return 0;
+    }
+  },
+
+  // 获取判断记录列表 (新版 Journal)
+  getJournalRecords: async (params: { status?: string, ts_code?: string, page?: number } = {}) => {
+    try {
+      const response = await axiosInstance.get('/journal', { params });
+      return response.data;
+    } catch (error) {
+      console.error('获取日记列表时出错:', error);
+      throw error;
+    }
+  },
+
+  // 复盘判断记录
+  reviewRecord: async (recordId: string, notes: string | null) => {
+    try {
+      const response = await axiosInstance.post(`/journal/${recordId}/review`, { notes });
+      return response.data;
+    } catch (error) {
+      console.error('复盘保存时出错:', error);
+      throw error;
     }
   },
 

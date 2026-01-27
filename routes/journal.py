@@ -2,10 +2,12 @@
 Journal API Routes
 判断记录 API 端点
 """
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request, Response, Cookie
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+import uuid
 from services.journal import journal_service
+from routes.judgments import get_actor, get_or_create_user_id
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -13,9 +15,19 @@ logger = get_logger()
 router = APIRouter(prefix="/api/journal", tags=["journal"])
 
 
-def get_current_user_id() -> str:
-    """获取当前用户ID"""
-    return "anonymous"
+def get_journal_user(
+    request: Request,
+    response: Response,
+    aguai_uid: Optional[str] = Cookie(None)
+) -> str:
+    """获取当前用户ID (支持 AnchorToken, Anonymous Header 和 Cookie)"""
+    # 1. Check for actor (Anchor or Header-based Anonymous)
+    actor = get_actor(request)
+    if actor:
+        return actor['id']
+    
+    # 2. Fallback to Cookie-based Anonymous
+    return get_or_create_user_id(request, response, aguai_uid)
 
 
 class CreateRecordRequest(BaseModel):
@@ -36,7 +48,7 @@ class ReviewRequest(BaseModel):
 @router.post("")
 async def create_record(
     request: CreateRecordRequest,
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_journal_user)
 ):
     """创建判断记录"""
     try:
@@ -60,7 +72,7 @@ async def list_records(
     status: Optional[str] = Query(None, description="状态过滤: active/due/reviewed"),
     ts_code: Optional[str] = Query(None, description="股票代码过滤"),
     page: int = Query(1, ge=1),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_journal_user)
 ):
     """获取判断记录列表"""
     try:
@@ -77,7 +89,7 @@ async def list_records(
 
 
 @router.get("/due-count")
-async def get_due_count(user_id: str = Depends(get_current_user_id)):
+async def get_due_count(user_id: str = Depends(get_journal_user)):
     """获取待复盘记录数量"""
     try:
         count = journal_service.get_due_count(user_id)
@@ -90,7 +102,7 @@ async def get_due_count(user_id: str = Depends(get_current_user_id)):
 @router.get("/{record_id}")
 async def get_record(
     record_id: str,
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_journal_user)
 ):
     """获取单个判断记录"""
     try:
@@ -110,7 +122,7 @@ async def get_record(
 async def review_record(
     record_id: str,
     request: ReviewRequest,
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_journal_user)
 ):
     """复盘判断记录"""
     try:
