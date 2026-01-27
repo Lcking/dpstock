@@ -633,31 +633,26 @@ async function saveJudgment() {
 
   savingJudgment.value = true;
   try {
-    // 构造简化的 judgment snapshot
-    const snapshot = {
-      stock_code: props.stock.code,
-      snapshot_time: new Date().toISOString(),
-      structure_premise: {
-        structure_type: props.stock.maTrend || 'consolidation',
-        analysis_summary: props.stock.analysis.substring(0, 200)
-      },
-      selected_candidates: ['A'], // 默认选项
-      key_levels_snapshot: [
-        {
-          price: props.stock.price || 0,
-          label: '当前价格'
-        }
+    // 构造 Journal 系统需要的记录格式
+    const recordRequest = {
+      ts_code: props.stock.code,
+      selected_candidate: 'A', // 默认设为候选A，后续可从分析中提取或让用户选择
+      selected_premises: [
+        `趋势: ${getChineseTrend(props.stock.maTrend || 'NEUTRAL')}`,
+        `RSI: ${props.stock.rsi ? props.stock.rsi.toFixed(2) : 'N/A'}`
       ],
-      structure_type: props.stock.maTrend === 'UP' ? 'uptrend' : 
-                      props.stock.maTrend === 'DOWN' ? 'downtrend' : 'consolidation',
-      ma200_position: 'above', // 默认值
-      phase: 'middle' // 默认值
+      selected_risk_checks: [],
+      constraints: {
+        price: props.stock.price || 0,
+        analysis_date: props.stock.analysisDate || new Date().toISOString()
+      },
+      validation_period_days: 7 // 默认验证周期为7天
     };
 
-    const response = await apiService.saveJudgment(snapshot);
+    const response = await apiService.saveJudgment(recordRequest);
     
-    if (response && response.judgment_id) {
-      message.success('判断已保存！可在"我的判断"中查看');
+    if (response && (response.id || response.judgment_id)) {
+      message.success('判断已保存！可在"交易日记"中查看');
     } else {
       message.error('保存失败，请重试');
     }

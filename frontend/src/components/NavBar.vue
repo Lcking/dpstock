@@ -12,7 +12,7 @@
           <span class="btn-glow"></span>
         </router-link>
         
-        <router-link to="/my-judgments" class="nav-btn">
+        <router-link to="/journal" class="nav-btn">
           <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[6, -6]">
             <span class="btn-text">我的判断</span>
           </n-badge>

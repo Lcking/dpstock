@@ -230,12 +230,10 @@ export const apiService = {
 
   // ========== Judgment API ==========
 
-  // 保存判断快照
-  saveJudgment: async (snapshot: any) => {
+  // 保存判断快照 (迁移至 Journal 系统)
+  saveJudgment: async (data: any) => {
     try {
-      const response = await axiosInstance.post('/v1/judgments', {
-        snapshot
-      });
+      const response = await axiosInstance.post('/api/journal', data);
       return response.data;
     } catch (error) {
       console.error('保存判断时出错:', error);

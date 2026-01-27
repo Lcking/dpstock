@@ -34,9 +34,7 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: '/my-judgments',
-    name: 'MyJudgments',
-    component: () => import('@/components/MyJudgments.vue'),
-    meta: { requiresAuth: false }  // Anonymous via cookie
+    redirect: '/journal'
   },
   {
     path: '/watchlist',
