@@ -145,7 +145,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { apiService } from '@/services/api'
 import { 
   NButton, NSpace, NSelect, NTag, NAlert, NSkeleton, useMessage 
@@ -155,7 +154,6 @@ import JournalDetailDialog from './JournalDetailDialog.vue'
 import EmptyState from '../common/EmptyState.vue'
 import type { JournalRecord } from '@/types/journal'
 
-const router = useRouter()
 const message = useMessage()
 
 // State
