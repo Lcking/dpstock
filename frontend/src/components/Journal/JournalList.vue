@@ -127,6 +127,13 @@
       </empty-state>
     </div>
 
+    <!-- Detail Dialog -->
+    <journal-detail-dialog
+      v-model:show="showDetail"
+      :record="selectedRecord"
+      @review="handleOpenReview"
+    />
+
     <!-- Review Dialog -->
     <journal-review-dialog
       v-model:show="showReview"
@@ -144,6 +151,7 @@ import {
   NButton, NSpace, NSelect, NTag, NAlert, NSkeleton, useMessage 
 } from 'naive-ui'
 import JournalReviewDialog from './JournalReviewDialog.vue'
+import JournalDetailDialog from './JournalDetailDialog.vue'
 import EmptyState from '../common/EmptyState.vue'
 import type { JournalRecord } from '@/types/journal'
 
@@ -156,6 +164,7 @@ const records = ref<JournalRecord[]>([])
 const dueCount = ref(0)
 const statusFilter = ref<string>('')
 const showReview = ref(false)
+const showDetail = ref(false)
 const selectedRecord = ref<JournalRecord | null>(null)
 
 // Options
@@ -191,14 +200,21 @@ const loadDueCount = async () => {
   }
 }
 
-// Record click
+// Record click - show detail dialog
 const handleRecordClick = (record: JournalRecord) => {
-  // Navigate to analysis page for the stock
-  router.push(`/analysis/${record.ts_code}`)
+  selectedRecord.value = record
+  showDetail.value = true
 }
 
 // Show review dialog
 const showReviewDialog = (record: JournalRecord) => {
+  selectedRecord.value = record
+  showReview.value = true
+}
+
+// Open review from detail dialog
+const handleOpenReview = (record: JournalRecord) => {
+  showDetail.value = false
   selectedRecord.value = record
   showReview.value = true
 }
