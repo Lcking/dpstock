@@ -381,28 +381,33 @@ async function handleSaveJudgment() {
 async function confirmSaveJudgment() {
   saving.value = true;
   try {
-    const snapshot = {
-      stock_code: props.stockCode,
-      snapshot_time: new Date().toISOString(),
-      structure_premise: {
+    // 构造符合 Journal API CreateRecordRequest 的数据格式
+    const recordRequest = {
+      ts_code: props.stockCode,
+      selected_candidate: selectedCandidate.value, // 单个字符: A/B/C
+      selected_premises: [
+        `结构类型: ${getStructureTypeName(props.data.structure_snapshot.structure_type)}`,
+        `MA200位置: ${getMA200PositionName(props.data.structure_snapshot.ma200_position)}`,
+        `阶段: ${getPhaseName(props.data.structure_snapshot.phase)}`,
+        `形态: ${getPatternTypeName(props.data.pattern_fitting.pattern_type)}`
+      ],
+      selected_risk_checks: selectedRiskChecks.value,
+      constraints: {
         structure_type: props.data.structure_snapshot.structure_type,
         ma200_position: props.data.structure_snapshot.ma200_position,
         phase: props.data.structure_snapshot.phase,
-        pattern_type: props.data.pattern_fitting.pattern_type
+        pattern_type: props.data.pattern_fitting.pattern_type,
+        key_levels: props.data.structure_snapshot.key_levels,
+        snapshot_time: new Date().toISOString()
       },
-      selected_candidates: [selectedCandidate.value],
-      key_levels_snapshot: props.data.structure_snapshot.key_levels,
-      structure_type: props.data.structure_snapshot.structure_type,
-      ma200_position: props.data.structure_snapshot.ma200_position,
-      phase: props.data.structure_snapshot.phase,
-      verification_period: selectedPeriod.value
+      validation_period_days: selectedPeriod.value
     };
 
-    const response = await apiService.saveJudgment(snapshot);
+    const response = await apiService.saveJudgment(recordRequest);
     
-    if (response && response.judgment_id) {
-      message.success('判断已保存！可在"我的判断"中查看');
-      emit('saved', response.judgment_id);
+    if (response && (response.id || response.judgment_id)) {
+      message.success('判断已保存！可在"交易日记"中查看');
+      emit('saved', response.id || response.judgment_id);
       
       // Trigger bind dialog on 2nd judgment
       checkAndTriggerBind();
@@ -414,7 +419,11 @@ async function confirmSaveJudgment() {
     if (error.response?.status === 409) {
       message.error('判断重复，保存失败');
     } else if (error.response?.status === 422) {
-      message.error('数据格式错误，请稍后重试');
+      const details = error.response.data?.detail;
+      const detailStr = Array.isArray(details) 
+        ? details.map((d: any) => `${d.loc?.join('.') || 'field'}: ${d.msg}`).join('; ')
+        : JSON.stringify(details);
+      message.error(`数据格式错误: ${detailStr}`);
     } else {
       message.error('保存失败，请重试');
     }
