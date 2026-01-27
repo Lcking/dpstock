@@ -74,6 +74,16 @@ app.add_middleware(
 async def startup_event():
     """Execute startup tasks"""
     logger.info("Initializing background tasks...")
+    
+    # Auto-run migrations to ensure DB schema is up to date
+    try:
+        from scripts.run_migrations import run_migrations
+        logger.info("[Startup] Running database migrations...")
+        await asyncio.to_thread(run_migrations)
+        logger.info("[Startup] Database migrations completed.")
+    except Exception as e:
+        logger.error(f"[Startup] Failed to run migrations: {e}")
+        
     start_verification_scheduler()
 
 # 初始化异步服务

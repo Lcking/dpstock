@@ -61,31 +61,37 @@ class JournalService:
             snapshot = {"error": str(e)}
         
         # 插入记录 (使用现有 judgments 表)
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO judgments (
-                    id, user_id, stock_code, candidate, 
-                    selected_premises, selected_risk_checks,
-                    constraints, snapshot,
-                    validation_date, status,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                record_id,
-                user_id,
-                ts_code,
-                selected_candidate,
-                str(selected_premises),  # JSON
-                str(selected_risk_checks),  # JSON
-                str(constraints),  # JSON
-                str(snapshot),  # JSON
-                due_at.isoformat() + 'Z',
-                'active',
-                now.isoformat() + 'Z',
-                now.isoformat() + 'Z'
-            ))
-            conn.commit()
+        try:
+            import json
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO judgments (
+                        id, user_id, stock_code, candidate, 
+                        selected_premises, selected_risk_checks,
+                        constraints, snapshot,
+                        validation_date, status,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    record_id,
+                    user_id,
+                    ts_code,
+                    selected_candidate,
+                    json.dumps(selected_premises, ensure_ascii=False),
+                    json.dumps(selected_risk_checks, ensure_ascii=False),
+                    json.dumps(constraints, ensure_ascii=False),
+                    json.dumps(snapshot, ensure_ascii=False),
+                    due_at.isoformat() + 'Z',
+                    'active',
+                    now.isoformat() + 'Z',
+                    now.isoformat() + 'Z'
+                ))
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Failed to insert judgment record: {e}")
+            logger.error(f"Data types: premises={type(selected_premises)}, risks={type(selected_risk_checks)}")
+            raise e
         
         return {
             "id": record_id,
