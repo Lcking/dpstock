@@ -14,7 +14,7 @@
         
         <router-link to="/journal" class="nav-btn">
           <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[6, -6]">
-            <span class="btn-text">我的判断</span>
+            <span class="btn-text">交易日记</span>
           </n-badge>
           <span class="btn-glow"></span>
         </router-link>

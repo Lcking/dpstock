@@ -2,7 +2,7 @@
   <div class="journal-list">
     <!-- Header -->
     <div class="journal-header">
-      <h2>判断记录</h2>
+      <h2>交易日记</h2>
       <div class="header-filters">
         <n-space>
           <n-select
@@ -20,7 +20,7 @@
     <div v-if="dueCount > 0" class="due-notification">
       <n-alert type="warning" :show-icon="true">
         <n-space justify="space-between" align="center">
-          <span>你有 {{ dueCount }} 条判断记录已到期待复盘</span>
+          <span>你有 {{ dueCount }} 条日记已到期待复盘</span>
           <n-button size="small" @click="statusFilter = 'due'; loadRecords()">
             查看
           </n-button>
@@ -118,7 +118,7 @@
     <div v-else class="empty-state-container">
       <empty-state
         type="journal"
-        title="还没有判断记录"
+        title="还没有交易日记"
         description="记录你的判断，验证你的逻辑，提升交易水平"
       >
         <n-button type="primary" @click="$router.push('/')">
