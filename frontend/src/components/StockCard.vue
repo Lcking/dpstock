@@ -661,7 +661,11 @@ async function saveJudgment() {
     if (error.response?.status === 409) {
       message.error('判断重复，保存失败');
     } else if (error.response?.status === 422) {
-      message.error('数据格式错误，请稍后重试');
+      const details = error.response.data?.detail;
+      const detailStr = Array.isArray(details) 
+        ? details.map((d: any) => `${d.loc.join('.')}: ${d.msg}`).join('; ')
+        : JSON.stringify(details);
+      message.error(`数据格式错误: ${detailStr}`);
     } else {
       message.error('保存失败，请重试');
     }

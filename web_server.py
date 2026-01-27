@@ -70,6 +70,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 添加验证错误处理器
+from fastapi.exceptions import RequestValidationError
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"Validation error for {request.url}: {exc.errors()}")
+    logger.error(f"Request body: {await request.body()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": str(await request.body())},
+    )
+
 @app.on_event("startup")
 async def startup_event():
     """Execute startup tasks"""
