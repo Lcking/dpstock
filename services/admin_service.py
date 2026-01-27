@@ -92,9 +92,16 @@ class AdminService:
             # 4. Success Rates (Confirmed vs Total)
             confirmed_judgments = 0
             if judgments_exists:
-                cursor.execute("SELECT count(*) as cnt FROM judgments WHERE verification_status = 'CONFIRMED'")
-                row = cursor.fetchone()
-                confirmed_judgments = row['cnt'] if row else 0
+                # Check for column existence first to avoid crash if schema mismatch
+                cursor.execute("PRAGMA table_info(judgments)")
+                columns = [r['name'] for r in cursor.fetchall()]
+                
+                if 'verification_status' in columns:
+                    cursor.execute("SELECT count(*) as cnt FROM judgments WHERE verification_status = 'CONFIRMED'")
+                    row = cursor.fetchone()
+                    confirmed_judgments = row['cnt'] if row else 0
+                else:
+                    logger.warning("[AdminStats] Column 'verification_status' missing from judgments table")
             
             logger.info(f"[AdminStats] Results - Anchors: {total_anchors}, Judgments: {total_judgments}, Recent: {recent_anchors}, Confirmed: {confirmed_judgments}")
             
