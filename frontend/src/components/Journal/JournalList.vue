@@ -28,9 +28,23 @@
       </n-alert>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="loading-container">
-      <n-spin size="large" />
+    <!-- Loading: Skeletons -->
+    <div v-if="loading" class="records-list">
+      <div v-for="i in 3" :key="i" class="record-card skeleton-card">
+        <div class="record-header">
+          <n-skeleton text style="width: 120px" />
+          <n-skeleton text style="width: 60px" />
+        </div>
+        <div class="record-body">
+          <n-space vertical>
+            <n-skeleton text :repeat="2" />
+            <n-skeleton text style="width: 80%" />
+          </n-space>
+        </div>
+        <div class="record-footer">
+          <n-skeleton text style="width: 80px" />
+        </div>
+      </div>
     </div>
 
     <!-- Records List -->
@@ -101,14 +115,16 @@
     </div>
 
     <!-- Empty State -->
-    <div v-else class="empty-state">
-      <n-empty description="还没有判断记录">
-        <template #extra>
-          <n-button @click="$router.push('/')">
-            去分析
-          </n-button>
-        </template>
-      </n-empty>
+    <div v-else class="empty-state-container">
+      <empty-state
+        type="journal"
+        title="还没有判断记录"
+        description="记录你的判断，验证你的逻辑，提升交易水平"
+      >
+        <n-button type="primary" @click="$router.push('/')">
+          去分析
+        </n-button>
+      </empty-state>
     </div>
 
     <!-- Review Dialog -->
@@ -123,8 +139,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NSpace, NSelect, NSpin, NTag, NEmpty, NAlert, useMessage } from 'naive-ui'
+import { 
+  NButton, NSpace, NSelect, NTag, NAlert, NSkeleton, useMessage 
+} from 'naive-ui'
 import JournalReviewDialog from './JournalReviewDialog.vue'
+import EmptyState from '../common/EmptyState.vue'
 import type { JournalRecord } from '@/types/journal'
 
 const router = useRouter()

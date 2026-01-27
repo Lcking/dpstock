@@ -275,9 +275,17 @@ class WatchlistService:
         # 暂时返回降级结果
         try:
             from services.tushare.client import tushare_client
+            from datetime import timedelta
+            
+            # 计算日期范围
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=400) # 获取足够多的数据以计算MA200
+            
+            start_str = start_date.strftime('%Y%m%d')
+            end_str = end_date.strftime('%Y%m%d')
             
             # 获取日线数据
-            df = tushare_client.daily(ts_code, days=250)
+            df = tushare_client.get_daily(ts_code, start_date=start_str, end_date=end_str)
             
             if df is None or df.empty:
                 return TrendResult(
@@ -286,6 +294,9 @@ class WatchlistService:
                     degraded=True,
                     evidence=["无法获取行情数据"]
                 )
+            
+            # Tushare 返回的数据通常是倒序的 (最新在前)，需要反转为时间正序以计算 rolling
+            df = df.sort_values('trade_date')
             
             # 计算MA
             df['ma5'] = df['close'].rolling(5).mean()

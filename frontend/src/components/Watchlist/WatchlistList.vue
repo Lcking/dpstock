@@ -21,18 +21,27 @@
       @update:filters="handleFiltersChange"
     />
 
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-container">
-      <n-spin size="large" />
+    <!-- 加载状态：骨架屏 -->
+    <div v-if="loading" class="watchlist-grid">
+      <n-card v-for="i in 6" :key="i" class="watchlist-skeleton">
+        <template #header>
+          <n-skeleton text style="width: 40%" />
+        </template>
+        <template #header-extra>
+          <n-skeleton text style="width: 60px" />
+        </template>
+        <n-space vertical>
+          <n-skeleton text :repeat="2" />
+          <n-skeleton text style="width: 60%" />
+        </n-space>
+      </n-card>
     </div>
 
     <!-- 列表内容 -->
     <div v-else-if="summaryData && summaryData.items.length > 0" class="watchlist-content">
       <div class="watchlist-stats">
         <n-text depth="3">
-          共 {{ summaryData.total_count }} 只，筛选后
-
- {{ summaryData.filtered_count }} 只
+          共 {{ summaryData.total_count }} 只，筛选后 {{ summaryData.filtered_count }} 只
         </n-text>
       </div>
 
@@ -58,12 +67,14 @@
     </div>
 
     <!-- 空状态 -->
-    <div v-else class="empty-state">
-      <n-empty description="还没有添加自选股">
-        <template #extra>
-          <n-button @click="showAddDialog = true">添加标的</n-button>
-        </template>
-      </n-empty>
+    <div v-else class="empty-state-container">
+      <empty-state
+        type="watchlist"
+        title="还没有添加自选股"
+        description="添加关注的股票，随时追踪趋势评分和结构变化"
+      >
+        <n-button type="primary" @click="showAddDialog = true">添加标的</n-button>
+      </empty-state>
     </div>
 
     <!-- 添加标的对话框 -->
@@ -93,10 +104,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NIcon, NSpin, NText, NEmpty, NModal, NForm, NFormItem, NInput, NSpace, useMessage } from 'naive-ui'
+import { 
+  NButton, NIcon, NText, NModal, NForm, NFormItem, 
+  NInput, NSpace, NCard, NSkeleton, useMessage 
+} from 'naive-ui'
 import { AddCircleOutline } from '@vicons/ionicons5'
 import WatchlistFilters from './WatchlistFilters.vue'
 import WatchlistItemCard from './WatchlistItemCard.vue'
+import EmptyState from '../common/EmptyState.vue'
 import type { WatchlistSummary } from '@/types/watchlist'
 
 const router = useRouter()
@@ -136,6 +151,7 @@ const loadSummary = async () => {
 
 // 初始化：创建或获取默认自选股
 const initWatchlist = async () => {
+  loading.value = true // Ensure loading state covers initialization
   try {
     // 获取用户的自选股列表
     const response = await fetch('/api/watchlists')
@@ -162,6 +178,7 @@ const initWatchlist = async () => {
   } catch (error) {
     console.error('Init watchlist error:', error)
     message.error('初始化失败')
+    loading.value = false
   }
 }
 
