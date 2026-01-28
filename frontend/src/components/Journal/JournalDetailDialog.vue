@@ -3,51 +3,88 @@
     :show="show"
     preset="card"
     title="判断详情"
-    style="width: 600px; max-width: 95vw"
+    style="width: 700px; max-width: 95vw"
     @update:show="$emit('update:show', $event)"
   >
     <div v-if="record" class="detail-dialog-content">
       <!-- Stock Info -->
-      <div class="detail-section">
+      <div class="detail-section stock-header">
         <div class="section-header">
           <span class="stock-code">{{ record.ts_code }}</span>
-          <n-tag :type="statusTagType(record.status)" size="small">
-            {{ statusLabel(record.status) }}
-          </n-tag>
+          <n-space>
+            <n-tag :type="candidateTagType(record.candidate)" size="medium">
+              候选 {{ record.candidate }}
+            </n-tag>
+            <n-tag :type="statusTagType(record.status)" size="medium">
+              {{ statusLabel(record.status) }}
+            </n-tag>
+          </n-space>
         </div>
       </div>
 
-      <!-- Judgment Info -->
+      <!-- Your Judgment -->
       <div class="detail-section">
-        <div class="section-title">判断信息</div>
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="label">选择候选:</span>
-            <n-tag :type="candidateTagType(record.candidate)" size="small">
-              候选 {{ record.candidate }}
-            </n-tag>
+        <div class="section-title">📝 你的判断</div>
+        <div class="judgment-content">
+          <div class="judgment-choice">
+            <div class="choice-label">选择的候选项:</div>
+            <div class="choice-value">
+              <n-tag :type="candidateTagType(record.candidate)" size="large">
+                {{ candidateDescription(record.candidate) }}
+              </n-tag>
+            </div>
           </div>
-          <div class="info-item">
+          
+          <!-- Selected Premises -->
+          <div v-if="record.selected_premises && record.selected_premises.length > 0" class="premises-section">
+            <div class="sub-title">判断依据:</div>
+            <ul class="premises-list">
+              <li v-for="(premise, idx) in record.selected_premises" :key="idx">
+                {{ premise }}
+              </li>
+            </ul>
+          </div>
+
+          <!-- Risk Checks -->
+          <div v-if="record.selected_risk_checks && record.selected_risk_checks.length > 0" class="risks-section">
+            <div class="sub-title">风险检查项:</div>
+            <n-space wrap>
+              <n-tag v-for="(check, idx) in record.selected_risk_checks" :key="idx" size="small" type="warning">
+                {{ check }}
+              </n-tag>
+            </n-space>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timeline Info -->
+      <div class="detail-section">
+        <div class="section-title">⏱️ 时间线</div>
+        <div class="timeline-grid">
+          <div class="timeline-item">
+            <n-icon size="16" color="#667eea"><CalendarOutline /></n-icon>
             <span class="label">创建时间:</span>
             <span class="value">{{ formatDate(record.created_at) }}</span>
           </div>
-          <div class="info-item" v-if="record.validation_date">
+          <div class="timeline-item" v-if="record.validation_date">
+            <n-icon size="16" color="#f0a020"><TimeOutline /></n-icon>
             <span class="label">验证截止:</span>
             <span class="value">{{ formatDate(record.validation_date) }}</span>
           </div>
-          <div class="info-item" v-if="record.days_left !== null && record.status === 'active'">
+          <div class="timeline-item highlight" v-if="record.days_left !== null && record.status === 'active'">
+            <n-icon size="16" color="#18a058"><HourglassOutline /></n-icon>
             <span class="label">剩余天数:</span>
-            <span class="value highlight">{{ record.days_left }} 天</span>
+            <span class="value highlight-text">{{ record.days_left }} 天</span>
           </div>
         </div>
       </div>
 
       <!-- Review Result (if reviewed) -->
       <div class="detail-section" v-if="record.review && record.status === 'reviewed'">
-        <div class="section-title">复盘结果</div>
+        <div class="section-title">✅ 复盘结果</div>
         <div class="review-info">
           <div class="outcome-row">
-            <n-tag :type="outcomeTagType(record.review.outcome)" size="medium">
+            <n-tag :type="outcomeTagType(record.review.outcome)" size="large">
               {{ outcomeLabel(record.review.outcome) }}
             </n-tag>
             <span class="review-time">
@@ -61,12 +98,41 @@
         </div>
       </div>
 
+      <!-- Action Guidance -->
+      <div class="detail-section action-guidance">
+        <div class="section-title">🎯 下一步行动</div>
+        <div class="action-cards">
+          <!-- Active status guidance -->
+          <n-alert v-if="record.status === 'active'" type="info" :show-icon="true">
+            <template #header>等待验证中</template>
+            <p>你的判断正在验证期内，还有 <strong>{{ record.days_left }}</strong> 天到期。</p>
+            <p>建议：持续观察该股票走势，关注是否符合你的判断逻辑。</p>
+          </n-alert>
+          
+          <!-- Due status guidance -->
+          <n-alert v-else-if="record.status === 'due'" type="warning" :show-icon="true">
+            <template #header>需要复盘</template>
+            <p>验证期已到，是时候回顾你的判断是否正确了。</p>
+            <p>复盘可以帮助你改进分析逻辑，提升交易水平。</p>
+          </n-alert>
+          
+          <!-- Reviewed status guidance -->
+          <n-alert v-else-if="record.status === 'reviewed'" type="success" :show-icon="true">
+            <template #header>已完成复盘</template>
+            <p>这条判断已复盘完成，结果: <strong>{{ outcomeLabel(record.review?.outcome || 'uncertain') }}</strong></p>
+            <p>你可以重新分析该股票，或查看其他判断记录。</p>
+          </n-alert>
+        </div>
+      </div>
+
       <!-- Actions -->
       <div class="action-section">
-        <n-button type="primary" @click="goToAnalyze">
+        <n-button type="primary" size="large" @click="goToAnalyze">
+          <template #icon><n-icon><AnalyticsOutline /></n-icon></template>
           重新分析该股票
         </n-button>
-        <n-button v-if="record.status === 'due'" @click="$emit('review', record)">
+        <n-button v-if="record.status === 'due'" type="warning" size="large" @click="$emit('review', record)">
+          <template #icon><n-icon><CheckmarkCircleOutline /></n-icon></template>
           立即复盘
         </n-button>
       </div>
@@ -81,7 +147,14 @@
 </template>
 
 <script setup lang="ts">
-import { NModal, NTag, NButton, NSpace } from 'naive-ui'
+import { NModal, NTag, NButton, NSpace, NAlert, NIcon } from 'naive-ui'
+import { 
+  CalendarOutline, 
+  TimeOutline, 
+  HourglassOutline,
+  AnalyticsOutline,
+  CheckmarkCircleOutline
+} from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
 import type { JournalRecord } from '@/types/journal'
 
@@ -115,6 +188,15 @@ const candidateTagType = (candidate: string) => {
   return map[candidate] || 'info'
 }
 
+const candidateDescription = (candidate: string) => {
+  const map: Record<string, string> = {
+    A: 'A - 看涨/做多',
+    B: 'B - 看跌/做空',
+    C: 'C - 观望/不确定'
+  }
+  return map[candidate] || `候选 ${candidate}`
+}
+
 const statusTagType = (status: string) => {
   const map: Record<string, 'info' | 'warning' | 'success' | 'default'> = { 
     active: 'info', 
@@ -127,7 +209,7 @@ const statusTagType = (status: string) => {
 
 const statusLabel = (status: string) => {
   const map: Record<string, string> = { 
-    active: '活跃中', 
+    active: '验证中', 
     due: '待复盘', 
     reviewed: '已复盘',
     archived: '已归档'
@@ -174,64 +256,116 @@ const formatDate = (dateStr: string) => {
   margin-bottom: 20px;
   padding: 16px;
   background: var(--n-color-hover);
-  border-radius: 8px;
+  border-radius: 12px;
+}
+
+.stock-header {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .stock-code {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--n-text-color);
 }
 
 .section-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  margin-bottom: 12px;
-  color: var(--n-text-color-2);
+  margin-bottom: 14px;
+  color: var(--n-text-color);
 }
 
-.info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.judgment-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.judgment-choice {
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
 
-.info-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.info-item .label {
+.choice-label {
   color: var(--n-text-color-3);
-  font-size: 13px;
+  font-size: 14px;
 }
 
-.info-item .value {
-  font-size: 14px;
+.sub-title {
+  font-size: 13px;
+  color: var(--n-text-color-2);
+  margin-bottom: 8px;
   font-weight: 500;
 }
 
-.info-item .value.highlight {
-  color: var(--n-color-target);
+.premises-list {
+  margin: 0;
+  padding-left: 20px;
 }
 
-.review-info {
+.premises-list li {
+  margin-bottom: 6px;
+  color: var(--n-text-color);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.timeline-grid {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+.timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--n-color);
+  border-radius: 8px;
+}
+
+.timeline-item .label {
+  color: var(--n-text-color-3);
+  font-size: 13px;
+  min-width: 80px;
+}
+
+.timeline-item .value {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.timeline-item.highlight {
+  background: rgba(24, 160, 88, 0.1);
+  border: 1px solid rgba(24, 160, 88, 0.2);
+}
+
+.highlight-text {
+  color: #18a058;
+  font-weight: 600;
+}
+
+.review-info {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .outcome-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .review-time {
@@ -242,26 +376,50 @@ const formatDate = (dateStr: string) => {
 .notes-label {
   font-size: 13px;
   color: var(--n-text-color-3);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .notes-content {
   font-size: 14px;
   line-height: 1.6;
-  padding: 8px;
+  padding: 12px;
   background: var(--n-color);
-  border-radius: 4px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+
+.action-guidance {
+  background: transparent;
+  padding: 0;
+}
+
+.action-guidance .section-title {
+  margin-bottom: 12px;
 }
 
 .action-section {
   display: flex;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 20px;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 480px) {
-  .info-grid {
-    grid-template-columns: 1fr;
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .stock-code {
+    font-size: 24px;
+  }
+  
+  .action-section {
+    flex-direction: column;
+  }
+  
+  .action-section .n-button {
+    width: 100%;
   }
 }
 </style>

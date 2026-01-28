@@ -6,6 +6,10 @@ export interface JournalRecord {
     user_id: string
     ts_code: string
     candidate: 'A' | 'B' | 'C'
+    selected_premises?: string[]
+    selected_risk_checks?: string[]
+    constraints?: Record<string, any>
+    snapshot?: Record<string, any>
     validation_date: string | null
     days_left: number | null
     status: 'active' | 'due' | 'reviewed' | 'archived'

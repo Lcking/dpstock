@@ -7,88 +7,93 @@
 
     <article class="help-content">
       <header class="help-header">
-        <h1>📚 判断验证功能说明</h1>
-        <p class="subtitle">了解如何使用判断追踪功能，提升投资分析能力</p>
+        <h1>📚 交易日记功能说明</h1>
+        <p class="subtitle">了解如何使用交易日记，记录判断、验证逻辑、提升交易水平</p>
       </header>
 
       <section class="help-section">
         <h2>🎯 功能概述</h2>
         <p>
-          判断验证是一个自动化系统，用于追踪您保存的判断是否准确。系统会在您保存判断后的一段时间内，
-          自动检查市场走势是否符合您的判断，帮助您回顾和改进分析方法。
+          交易日记是一个帮助您记录和验证投资判断的工具。当您对某只股票做出分析后，可以保存您的判断（选择候选项A/B/C），
+          系统会在验证期到期后提醒您复盘，帮助您回顾判断是否正确，不断改进分析方法。
         </p>
+        <n-alert type="info" :bordered="false" style="margin-top: 16px;">
+          <strong>核心流程：</strong> 分析股票 → 保存判断 → 等待验证期 → 到期复盘 → 改进分析
+        </n-alert>
       </section>
 
       <section class="help-section">
-        <h2>📊 字段说明</h2>
+        <h2>📊 状态说明</h2>
         
         <div class="field-explanation">
-          <h3>1. 当前状态（Current Status）</h3>
+          <h3>1. 活跃中 (Active)</h3>
           <n-alert type="info" :bordered="false">
-            <strong>可能的值：</strong>
-            <ul>
-              <li><strong>未验证（Unverified）</strong>：判断刚保存，还未到验证时间</li>
-              <li><strong>已验证（Verified）</strong>：系统已完成验证</li>
-              <li><strong>验证中（Verifying）</strong>：正在验证过程中</li>
-            </ul>
-          </n-alert>
-          <p class="field-note">
-            <strong>为什么显示"未验证"？</strong><br>
-            判断刚保存时，默认状态是"未验证"。系统需要等待一段时间（如7天、30天）后才能验证判断是否准确。
-            这是正常的初始状态。
-          </p>
-        </div>
-
-        <div class="field-explanation">
-          <h3>2. 价格变化（Price Change）</h3>
-          <n-alert type="success" :bordered="false">
             <strong>含义：</strong>
-            <p>从保存判断时的价格到验证时的价格变化百分比</p>
+            <p>判断已保存，正在验证期内，还未到复盘时间。</p>
             <ul>
-              <li>例如：<span class="example-positive">+5.2%</span> 表示价格上涨了5.2%</li>
-              <li>例如：<span class="example-negative">-3.1%</span> 表示价格下跌了3.1%</li>
+              <li>系统会显示"剩余 X 天"倒计时</li>
+              <li>您可以随时查看判断详情</li>
+              <li>建议持续关注股票走势，观察是否符合判断</li>
             </ul>
           </n-alert>
-          <p class="field-note">
-            <strong>用途：</strong>帮助您了解市场实际走势，与您的判断对比，评估判断准确性。<br>
-            <strong>为什么现在是空的？</strong>判断还未验证，验证完成后会自动填充。
-          </p>
         </div>
 
         <div class="field-explanation">
-          <h3>3. 原因（Reason）</h3>
+          <h3>2. 待复盘 (Due)</h3>
           <n-alert type="warning" :bordered="false">
             <strong>含义：</strong>
-            <p>系统对验证结果的解释，说明为什么判断被认为是正确或错误的</p>
-            <strong>可能的内容：</strong>
+            <p>验证期已到，需要您进行复盘操作。</p>
             <ul>
-              <li>"价格突破了关键压力位，符合上升结构判断"</li>
-              <li>"价格跌破支撑位，结构前提被破坏"</li>
-              <li>"价格在区间内震荡，结构维持判断正确"</li>
+              <li>系统会在页面顶部提醒您有待复盘的记录</li>
+              <li>点击"立即复盘"按钮进入复盘流程</li>
+              <li>可以添加复盘笔记，记录判断得失</li>
             </ul>
           </n-alert>
-          <p class="field-note">
-            <strong>为什么现在是空的？</strong>判断还未验证，验证完成后会自动生成。
-          </p>
+        </div>
+
+        <div class="field-explanation">
+          <h3>3. 已复盘 (Reviewed)</h3>
+          <n-alert type="success" :bordered="false">
+            <strong>含义：</strong>
+            <p>您已完成复盘，判断周期结束。</p>
+            <strong>复盘结果类型：</strong>
+            <ul>
+              <li><strong>前提得到支持</strong>：市场走势符合您的判断</li>
+              <li><strong>前提被证伪</strong>：市场走势与您的判断相反</li>
+              <li><strong>结果不确定</strong>：无法明确判断对错</li>
+            </ul>
+          </n-alert>
+        </div>
+
+        <div class="field-explanation">
+          <h3>4. 候选项 A/B/C</h3>
+          <n-alert type="default" :bordered="false">
+            <strong>含义：</strong>
+            <ul>
+              <li><strong>候选 A</strong>：看涨/做多方向</li>
+              <li><strong>候选 B</strong>：看跌/做空方向</li>
+              <li><strong>候选 C</strong>：观望/不确定</li>
+            </ul>
+          </n-alert>
         </div>
       </section>
 
       <section class="help-section">
-        <h2>🔄 验证流程</h2>
+        <h2>🔄 使用流程</h2>
         <div class="flow-diagram">
           <div class="flow-step">
             <div class="step-number">1</div>
             <div class="step-content">
-              <h4>用户保存判断</h4>
-              <p>选择候选项和风险检查项</p>
+              <h4>分析股票</h4>
+              <p>在首页输入股票代码进行AI分析</p>
             </div>
           </div>
           <div class="flow-arrow">↓</div>
           <div class="flow-step">
             <div class="step-number">2</div>
             <div class="step-content">
-              <h4>状态：未验证</h4>
-              <p>系统记录判断和当前价格</p>
+              <h4>保存判断</h4>
+              <p>选择候选项A/B/C，确认风险检查项</p>
             </div>
           </div>
           <div class="flow-arrow">↓</div>
@@ -96,23 +101,23 @@
             <div class="step-number">3</div>
             <div class="step-content">
               <h4>等待验证期</h4>
-              <p>通常为7天或30天</p>
+              <p>默认7天，可选1/3/7/30天</p>
             </div>
           </div>
           <div class="flow-arrow">↓</div>
           <div class="flow-step">
             <div class="step-number">4</div>
             <div class="step-content">
-              <h4>系统自动验证</h4>
-              <p>获取最新行情数据并分析</p>
+              <h4>到期提醒</h4>
+              <p>系统提醒您进行复盘</p>
             </div>
           </div>
           <div class="flow-arrow">↓</div>
           <div class="flow-step">
             <div class="step-number">5</div>
             <div class="step-content">
-              <h4>状态：已验证</h4>
-              <p>填充价格变化和原因</p>
+              <h4>复盘总结</h4>
+              <p>记录判断结果，改进分析逻辑</p>
             </div>
           </div>
         </div>
@@ -197,21 +202,41 @@
       <section class="help-section">
         <h2>❓ 常见问题</h2>
         <n-collapse>
-          <n-collapse-item title="为什么我的判断一直显示'未验证'？" name="1">
-            <p>这是正常的。系统需要等待一段时间后才能验证。验证周期通常是7天或30天。</p>
+          <n-collapse-item title="为什么我的判断一直显示'活跃中'？" name="1">
+            <p>这是正常的。判断保存后会进入"活跃中"状态，等待验证期结束后才会变成"待复盘"状态。验证周期默认为7天。</p>
           </n-collapse-item>
-          <n-collapse-item title="价格变化和原因什么时候会显示？" name="2">
-            <p>验证完成后会自动显示。在验证之前，这两个字段都是空的。</p>
-          </n-collapse-item>
-          <n-collapse-item title="我可以手动触发验证吗？" name="3">
-            <p>目前不支持手动验证。系统会自动在设定的时间后进行验证。</p>
-          </n-collapse-item>
-          <n-collapse-item title="验证结果会影响什么？" name="4">
-            <p>验证结果主要用于：</p>
+          <n-collapse-item title="如何进行复盘？" name="2">
+            <p>当判断状态变为"待复盘"后：</p>
             <ul>
-              <li>帮助您回顾和学习</li>
-              <li>统计判断准确率</li>
-              <li>改进分析方法</li>
+              <li>在交易日记页面会看到待复盘提醒</li>
+              <li>点击判断卡片查看详情</li>
+              <li>点击"立即复盘"按钮</li>
+              <li>可选填写复盘笔记，记录判断得失</li>
+            </ul>
+          </n-collapse-item>
+          <n-collapse-item title="候选项A/B/C分别代表什么？" name="3">
+            <p>这是您对股票走势的判断：</p>
+            <ul>
+              <li><strong>A</strong>：看涨/做多 - 您认为股票会上涨</li>
+              <li><strong>B</strong>：看跌/做空 - 您认为股票会下跌</li>
+              <li><strong>C</strong>：观望/不确定 - 暂时没有明确方向判断</li>
+            </ul>
+          </n-collapse-item>
+          <n-collapse-item title="如何绑定邮箱？" name="4">
+            <p>绑定邮箱后可以长期保存判断记录，跨设备访问：</p>
+            <ul>
+              <li>进入交易日记页面</li>
+              <li>点击页面顶部的"绑定邮箱"按钮</li>
+              <li>输入邮箱地址，接收验证码</li>
+              <li>验证成功后，您的判断记录会自动迁移到云端</li>
+            </ul>
+          </n-collapse-item>
+          <n-collapse-item title="复盘结果有什么作用？" name="5">
+            <p>复盘结果主要用于：</p>
+            <ul>
+              <li>帮助您回顾和学习交易逻辑</li>
+              <li>积累判断经验，提高分析能力</li>
+              <li>记录判断得失，避免重复犯错</li>
             </ul>
           </n-collapse-item>
         </n-collapse>

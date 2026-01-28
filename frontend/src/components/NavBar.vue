@@ -117,7 +117,7 @@ onMounted(() => {
 
 /* Push body content below the fixed bar */
 :global(body) {
-  padding-top: 80px;
+  padding-top: 95px;
 }
 
 .nav-inner {
@@ -227,7 +227,7 @@ onMounted(() => {
   }
   
   :global(body) {
-    padding-top: 56px;
+    padding-top: 71px;
   }
   
   .nav-logo {

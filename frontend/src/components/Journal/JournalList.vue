@@ -2,7 +2,10 @@
   <div class="journal-list">
     <!-- Header -->
     <div class="journal-header">
-      <h2>交易日记</h2>
+      <div class="header-title-row">
+        <h2>交易日记</h2>
+        <AnchorStatus @show-bind="showBindDialog = true" />
+      </div>
       <div class="header-filters">
         <n-space>
           <n-select
@@ -140,6 +143,12 @@
       :record="selectedRecord"
       @reviewed="handleReviewed"
     />
+
+    <!-- Anchor Bind Dialog -->
+    <AnchorBindDialog
+      v-model:show="showBindDialog"
+      @bind-success="handleBindSuccess"
+    />
   </div>
 </template>
 
@@ -151,6 +160,8 @@ import {
 } from 'naive-ui'
 import JournalReviewDialog from './JournalReviewDialog.vue'
 import JournalDetailDialog from './JournalDetailDialog.vue'
+import AnchorStatus from '../AnchorStatus.vue'
+import AnchorBindDialog from '../AnchorBindDialog.vue'
 import EmptyState from '../common/EmptyState.vue'
 import type { JournalRecord } from '@/types/journal'
 
@@ -163,6 +174,7 @@ const dueCount = ref(0)
 const statusFilter = ref<string>('')
 const showReview = ref(false)
 const showDetail = ref(false)
+const showBindDialog = ref(false)
 const selectedRecord = ref<JournalRecord | null>(null)
 
 // Options
@@ -222,6 +234,12 @@ const handleReviewed = () => {
   showReview.value = false
   loadRecords()
   loadDueCount()
+}
+
+// After bind success
+const handleBindSuccess = (data: any) => {
+  message.success(`已绑定邮箱，迁移了 ${data.migrated_count || 0} 条记录`)
+  loadRecords()
 }
 
 // Tag types
@@ -296,6 +314,15 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .journal-header h2 {

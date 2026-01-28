@@ -146,6 +146,8 @@ class JournalService:
     
     def _row_to_record(self, row: Dict) -> Dict[str, Any]:
         """转换数据库行为记录"""
+        import json
+        
         validation_date = row.get('validation_date')
         days_left = None
         
@@ -158,16 +160,57 @@ class JournalService:
             except:
                 pass
         
+        # Parse JSON fields
+        selected_premises = []
+        selected_risk_checks = []
+        constraints = {}
+        snapshot = {}
+        review = None
+        
+        try:
+            if row.get('selected_premises'):
+                selected_premises = json.loads(row['selected_premises'])
+        except:
+            pass
+        
+        try:
+            if row.get('selected_risk_checks'):
+                selected_risk_checks = json.loads(row['selected_risk_checks'])
+        except:
+            pass
+        
+        try:
+            if row.get('constraints'):
+                constraints = json.loads(row['constraints'])
+        except:
+            pass
+            
+        try:
+            if row.get('snapshot'):
+                snapshot = json.loads(row['snapshot'])
+        except:
+            pass
+            
+        try:
+            if row.get('review'):
+                review = eval(row['review']) if isinstance(row['review'], str) else row['review']
+        except:
+            review = row.get('review')
+        
         return {
             "id": row.get('id'),
             "user_id": row.get('user_id'),
             "ts_code": row.get('stock_code'),
             "candidate": row.get('candidate'),
+            "selected_premises": selected_premises,
+            "selected_risk_checks": selected_risk_checks,
+            "constraints": constraints,
+            "snapshot": snapshot,
             "validation_date": validation_date,
             "days_left": days_left,
             "status": row.get('status'),
             "created_at": row.get('created_at'),
-            "review": row.get('review')
+            "review": review
         }
     
     def run_due_check(self) -> int:
