@@ -305,6 +305,7 @@ onMounted(() => {
 <style scoped>
 .journal-list {
   padding: 20px;
+  padding-top: 35px;
   max-width: 1200px;
   margin: 0 auto;
 }

@@ -986,7 +986,7 @@ function handleOpenInviteFromQuota() {
 .main-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1rem 1.5rem 2rem;
+  padding: 2rem 1.5rem 2rem;
   width: 100%;
   box-sizing: border-box;
   background: transparent !important;
