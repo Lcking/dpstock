@@ -652,7 +652,7 @@ async function saveJudgment() {
     const response = await apiService.saveJudgment(recordRequest);
     
     if (response && (response.id || response.judgment_id)) {
-      message.success('判断已保存！可在"交易日记"中查看');
+      message.success('判断已保存！可在"判断日记"中查看');
     } else {
       message.error('保存失败，请重试');
     }

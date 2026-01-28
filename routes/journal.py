@@ -24,10 +24,13 @@ def get_journal_user(
     # 1. Check for actor (Anchor or Header-based Anonymous)
     actor = get_actor(request)
     if actor:
+        logger.info(f"[Journal] User identified via actor: type={actor['type']}, id={actor['id'][:16]}...")
         return actor['id']
     
     # 2. Fallback to Cookie-based Anonymous
-    return get_or_create_user_id(request, response, aguai_uid)
+    user_id = get_or_create_user_id(request, response, aguai_uid)
+    logger.info(f"[Journal] User identified via cookie/fallback: id={user_id[:16] if user_id else 'None'}...")
+    return user_id
 
 
 class CreateRecordRequest(BaseModel):

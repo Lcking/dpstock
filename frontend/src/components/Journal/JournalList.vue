@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="journal-header">
       <div class="header-title-row">
-        <h2>交易日记</h2>
+        <h2>判断日记</h2>
         <AnchorStatus @show-bind="showBindDialog = true" />
       </div>
       <div class="header-filters">
@@ -121,7 +121,7 @@
     <div v-else class="empty-state-container">
       <empty-state
         type="journal"
-        title="还没有交易日记"
+        title="还没有判断日记"
         description="记录你的判断，验证你的逻辑，提升交易水平"
       >
         <n-button type="primary" @click="$router.push('/')">
@@ -305,7 +305,7 @@ onMounted(() => {
 <style scoped>
 .journal-list {
   padding: 20px;
-  padding-top: 35px;
+  padding-top: 40px;
   max-width: 1200px;
   margin: 0 auto;
 }
