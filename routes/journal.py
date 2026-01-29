@@ -79,6 +79,11 @@ async def list_records(
 ):
     """获取判断记录列表"""
     try:
+        # 先更新到期记录的状态
+        due_updated = journal_service.run_due_check()
+        if due_updated > 0:
+            logger.info(f"[Journal] Updated {due_updated} records to 'due' status")
+        
         records = journal_service.get_records(
             user_id=user_id,
             status=status,

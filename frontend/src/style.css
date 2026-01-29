@@ -207,6 +207,28 @@ input::-moz-focus-inner {
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4) !important;
 }
 
+/* 确保所有 primary 按钮的文字和图标都是白色 */
+.n-button--primary-type .n-button__content,
+.n-button--primary-type .n-icon,
+.n-button--primary-type span,
+.n-button--primary-type svg {
+  color: white !important;
+  fill: white !important;
+}
+
+/* 确保 info 类型按钮也使用白色文字 */
+.n-button--info-type {
+  color: white !important;
+}
+
+.n-button--info-type .n-button__content,
+.n-button--info-type .n-icon,
+.n-button--info-type span,
+.n-button--info-type svg {
+  color: white !important;
+  fill: white !important;
+}
+
 .n-button:focus,
 .n-button:focus-visible,
 .n-tag:focus {
