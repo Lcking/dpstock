@@ -110,6 +110,7 @@
                 </div>
                 
                 <template v-if="analyzedStocks.length === 0 && !isAnalyzing">
+                  <AiScorePanel :loading="true" :compact="false" style="margin-bottom: 12px;" />
                   <n-empty description="尚未分析" size="large">
                     <template #icon>
                       <n-icon :component="DocumentTextIcon" />
@@ -188,6 +189,7 @@ import {
 
 import MarketTimeDisplay from './MarketTimeDisplay.vue';
 import StockCard from './StockCard.vue';
+import AiScorePanel from './AiScorePanel.vue';
 import AnnouncementBanner from './AnnouncementBanner.vue';
 import QuotaExceededModal from './QuotaExceededModal.vue';
 
@@ -526,6 +528,14 @@ function handleStreamUpdate(data: StreamAnalysisUpdate) {
     // ✅ 若收到 Analysis V1 数据，直接更新
     if (data.analysis_v1 !== undefined) {
       stock.analysisV1 = data.analysis_v1;
+    }
+
+    // ✅ 若收到 ai_score（Spec v1.0），写入并同步到 analysis_v1.ai_score（若存在）
+    if ((data as any).ai_score !== undefined) {
+      stock.aiScore = (data as any).ai_score;
+      if (stock.analysisV1 && typeof stock.analysisV1 === 'object') {
+        (stock.analysisV1 as any).ai_score = (data as any).ai_score;
+      }
     }
 
     // ✅ 若收到增量片段，则拼接

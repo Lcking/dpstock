@@ -169,6 +169,9 @@ class AnalysisV1Response(BaseModel):
     market_type: str = Field(..., description="市场类型", examples=["A", "HK", "US"])
     analysis_date: datetime = Field(..., description="分析日期")
     
+    # AI 综合评分（Spec v1.0），由后端注入；为了避免强耦合，这里使用 Dict 承载
+    ai_score: Optional[Dict[str, Any]] = Field(default=None, description="AI综合评分（Spec v1.0）")
+    
     # 固定五段式结构
     structure_snapshot: StructureSnapshot = Field(..., description="Section 1: 结构快照")
     pattern_fitting: PatternFitting = Field(..., description="Section 2: 形态拟合")

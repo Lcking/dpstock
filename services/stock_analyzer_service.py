@@ -161,6 +161,8 @@ class StockAnalyzerService:
             
             # 使用AI进行深入分析
             full_analysis = ""
+            ai_score = None
+            analysis_v1 = None
             async for analysis_chunk in self.ai_analyzer.get_ai_analysis(df_with_indicators, stock_code, stock_name, market_type, stream):
                 if stream:
                     # 尝试从片段中提取纯文本 (如果 ai_analyzer 返回的是 JSON 字符串片段)
@@ -170,6 +172,10 @@ class StockAnalyzerService:
                             full_analysis += chunk_data["ai_analysis_chunk"]
                         elif "analysis" in chunk_data:
                             full_analysis = chunk_data["analysis"]
+                        if "ai_score" in chunk_data:
+                            ai_score = chunk_data.get("ai_score")
+                        if "analysis_v1" in chunk_data:
+                            analysis_v1 = chunk_data.get("analysis_v1")
                     except:
                         pass
                 else:
@@ -177,6 +183,8 @@ class StockAnalyzerService:
                     try:
                         chunk_data = json.loads(analysis_chunk)
                         full_analysis = chunk_data.get("analysis", "")
+                        ai_score = chunk_data.get("ai_score")
+                        analysis_v1 = chunk_data.get("analysis_v1")
                     except:
                         pass
                 
@@ -188,17 +196,30 @@ class StockAnalyzerService:
                 category_map = {'A': '股票', 'HK': '股票', 'US': '股票', 'ETF': 'ETF', 'LOF': 'LOF'}
                 category_name = category_map.get(market_type, '股票')
                 title = f"{datetime.now().strftime('%Y年%m月%d日')} {stock_name} {stock_code} {category_name}行情走势异动分析"
+                score_version = None
+                ai_score_json = None
+                overall_score = score
+                if isinstance(ai_score, dict):
+                    try:
+                        overall_score = int(ai_score.get("overall", {}).get("score", score))
+                        score_version = str(ai_score.get("version", "1.0.0"))
+                        ai_score_json = json.dumps(ai_score, ensure_ascii=False)
+                    except Exception as e:
+                        logger.warning(f"[Archive] Failed to serialize ai_score for {stock_code}: {e}")
                 article_data = {
                     "title": title,
                     "stock_code": stock_code,
                     "stock_name": stock_name,
                     "market_type": market_type,
                     "content": full_analysis,
-                    "score": score,
+                    "score": overall_score,
+                    "legacy_score": score,
+                    "score_version": score_version,
+                    "ai_score_json": ai_score_json,
                     "publish_date": analysis_date
                 }
                 await self.archive_service.save_article(article_data)
-                logger.info(f"文章已自动归档: {title}, 评分: {score}")
+                logger.info(f"文章已自动归档: {title}, 评分: {overall_score} (legacy={score})")
                 
             logger.info(f"完成股票分析: {stock_code}")
             

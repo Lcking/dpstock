@@ -35,15 +35,43 @@ class ArchiveService:
                         market_type TEXT NOT NULL,
                         content TEXT NOT NULL,
                         score INTEGER,
+                        legacy_score INTEGER,
+                        score_version TEXT,
+                        ai_score_json TEXT,
                         publish_date TEXT NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE(title)
                     )
                 """)
+                # Backward-compatible migration for existing DBs
+                self._ensure_article_columns(conn)
                 conn.commit()
                 logger.debug(f"数据库初始化成功: {self.db_path}")
         except Exception as e:
             logger.error(f"数据库初始化失败: {str(e)}")
+
+    def _ensure_article_columns(self, conn: sqlite3.Connection):
+        """
+        Ensure new columns exist for backward compatibility.
+        SQLite supports ADD COLUMN but not DROP COLUMN.
+        """
+        try:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(articles)")
+            existing = {row["name"] for row in cursor.fetchall() if row and row.get("name")}
+
+            columns: Dict[str, str] = {
+                "legacy_score": "INTEGER",
+                "score_version": "TEXT",
+                "ai_score_json": "TEXT",
+            }
+
+            for col, col_type in columns.items():
+                if col not in existing:
+                    logger.info(f"[Archive] Migrating articles: ADD COLUMN {col} {col_type}")
+                    cursor.execute(f"ALTER TABLE articles ADD COLUMN {col} {col_type}")
+        except Exception as e:
+            logger.warning(f"[Archive] Failed to ensure article columns: {e}")
 
     async def save_article(self, article_data: Dict[str, Any]) -> int:
         """保存或更新文章 (De-duplication by title)"""
@@ -53,8 +81,8 @@ class ArchiveService:
                 # 使用 REPLACE INTO 实现去重覆盖
                 cursor.execute("""
                     REPLACE INTO articles 
-                    (title, stock_code, stock_name, market_type, content, score, publish_date)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (title, stock_code, stock_name, market_type, content, score, legacy_score, score_version, ai_score_json, publish_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     article_data['title'],
                     article_data['stock_code'],
@@ -62,6 +90,9 @@ class ArchiveService:
                     article_data['market_type'],
                     article_data['content'],
                     article_data.get('score'),
+                    article_data.get('legacy_score'),
+                    article_data.get('score_version'),
+                    article_data.get('ai_score_json'),
                     article_data.get('publish_date', datetime.now().strftime("%Y-%m-%d"))
                 ))
                 conn.commit()

@@ -27,8 +27,14 @@
             <h2 class="stock-name">{{ article.stock_name }}</h2>
             <span class="stock-code">{{ article.stock_code }}</span>
           </div>
-          <div class="score-badge" :class="getScoreClass(article.score)">
-            <div class="score-label">AI 综合评分</div>
+          <AiScorePanel
+            v-if="aiScoreForArticle"
+            :ai-score="aiScoreForArticle"
+            :compact="true"
+            style="min-width: 240px;"
+          />
+          <div v-else class="score-badge" :class="getScoreClass(article.score)">
+            <div class="score-label">AI 综合评分 (legacy)</div>
             <div class="score-value">{{ article.score }}</div>
           </div>
         </div>
@@ -85,10 +91,30 @@ import { apiService } from '@/services/api';
 import { parseMarkdown, getCategoryName } from '@/utils';
 import ShareButtons from './ShareButtons.vue';
 import AnalysisV1Display from './AnalysisV1Display.vue';
+import AiScorePanel from './AiScorePanel.vue';
+import type { AiScore } from '@/types';
 
 const route = useRoute();
 const article = ref<any>(null);
 const loading = ref(true);
+
+const aiScoreForArticle = computed<AiScore | null>(() => {
+  // 1) Prefer stored ai_score_json (new articles)
+  const raw = article.value?.ai_score_json;
+  if (raw && typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to parse ai_score_json:', e);
+    }
+  }
+  // 2) Fallback: parse from AnalysisV1 content if embedded
+  const v1 = analysisV1Data.value;
+  if (v1 && (v1 as any).ai_score) {
+    return (v1 as any).ai_score as AiScore;
+  }
+  return null;
+});
 
 async function fetchArticle() {
   const id = Number(route.params.id);
@@ -124,9 +150,11 @@ function updateMetaTags() {
   if (analysisV1Data.value) {
     // 从 Analysis V1 提取有意义的描述
     const structureDesc = analysisV1Data.value.structure_snapshot?.trend_description || '';
-    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${article.value.score}。${structureDesc.substring(0, 150)}...`;
+    const s = aiScoreForArticle.value?.overall?.score ?? article.value.score;
+    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${s}。${structureDesc.substring(0, 150)}...`;
   } else {
-    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${article.value.score}。${article.value.content.substring(0, 150)}...`;
+    const s = aiScoreForArticle.value?.overall?.score ?? article.value.score;
+    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${s}。${article.value.content.substring(0, 150)}...`;
   }
   
   const keywords = `${article.value.stock_name}, ${article.value.stock_code}, ${categoryName}分析, 智能辅助, 投资辅助, ${article.value.market_type}`;

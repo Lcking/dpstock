@@ -28,6 +28,7 @@ export interface StockInfo {
   marketValue?: number;
   analysis?: string;
   analysisV1?: any; // Analysis V1 结构化数据
+  aiScore?: import('./aiScore').AiScore | null;
   analysisStatus: 'waiting' | 'analyzing' | 'completed' | 'error';
   error?: string;
   score?: number;
@@ -109,7 +110,9 @@ export interface StreamAnalysisUpdate {
   volume_status?: string;
   analysis_date?: string;
   ai_analysis_chunk?: string;
+  ai_score?: import('./aiScore').AiScore | null;
 }
 
 // Judgment types
 export * from './judgment';
+export * from './aiScore';

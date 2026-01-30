@@ -84,16 +84,12 @@
       </div>
     </div>
     
-    <div class="stock-summary" v-if="stock.score !== undefined || stock.recommendation">
-      <div class="summary-item score-item" v-if="stock.score !== undefined">
-        <div class="summary-value" :class="getScoreClass(stock.score)">{{ stock.score }}</div>
-        <div class="summary-label">评分</div>
-      </div>
-      <div class="summary-item recommendation-item" v-if="stock.recommendation">
-        <div class="summary-value recommendation">{{ stock.recommendation }}</div>
-        <div class="summary-label">推荐</div>
-      </div>
-    </div>
+    <AiScorePanel
+      :ai-score="(stock.aiScore || stock.analysisV1?.ai_score) ?? null"
+      :loading="stock.analysisStatus === 'waiting' || stock.analysisStatus === 'analyzing'"
+      :compact="false"
+      style="margin-top: 10px;"
+    />
     
     <div class="analysis-date" v-if="stock.analysisDate">
       <n-tag type="info" size="small">
@@ -235,6 +231,7 @@ import { apiService } from '@/services/api';
 import { getCategoryName, parseMarkdown } from '@/utils';
 import type { StockInfo } from '@/types';
 import AnalysisV1Display from './AnalysisV1Display.vue';
+import AiScorePanel from './AiScorePanel.vue';
 
 const props = defineProps<{
   stock: StockInfo;

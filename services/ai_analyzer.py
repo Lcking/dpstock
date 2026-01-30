@@ -9,6 +9,7 @@ from utils.logger import get_logger
 from utils.api_utils import APIUtils
 from datetime import datetime
 from services.stock_scorer import StockScorer
+from services.ai_score.calculator import AiScoreCalculator
 
 # 获取日志器
 logger = get_logger()
@@ -35,6 +36,7 @@ class AIAnalyzer:
         
         # 初始化统一评分器
         self.scorer = StockScorer()
+        self.ai_score_calc = AiScoreCalculator()
         
         logger.debug(f"初始化AIAnalyzer: API_URL={self.API_URL}, API_MODEL={self.API_MODEL}, API_KEY={'已提供' if self.API_KEY else '未提供'}, API_TIMEOUT={self.API_TIMEOUT}")
     
@@ -527,16 +529,32 @@ class AIAnalyzer:
                         
                         # 使用统一评分器获取投资建议
                         recommendation = self.scorer.get_recommendation(score)
+
+                        # 计算 AI 综合评分（Spec v1.0）
+                        try:
+                            ai_score_obj = self.ai_score_calc.calculate(
+                                df=df,
+                                stock_code=stock_code,
+                                market_type=market_type,
+                                analysis_v1=analysis_v1_json,
+                            )
+                            ai_score = ai_score_obj.model_dump()
+                        except Exception as e:
+                            logger.warning(f"[AiScore] Failed to calculate for {stock_code}: {e}")
+                            ai_score = None
                         
                         # 如果成功解析 Analysis V1 JSON，发送结构化数据
                         if analysis_v1_json:
+                            if ai_score is not None:
+                                analysis_v1_json["ai_score"] = ai_score
                             yield json.dumps({
                                 "stock_code": stock_code,
                                 "analysis_v1": analysis_v1_json,  # 新增：Analysis V1 结构化数据
                                 "analysis": full_content,  # 保留原始文本，用于降级
                                 "status": "completed",
                                 "score": score,
-                                "recommendation": recommendation
+                                "recommendation": recommendation,
+                                "ai_score": ai_score
                             })
                         else:
                             # 降级：作为普通文本处理
@@ -546,7 +564,8 @@ class AIAnalyzer:
                                     "analysis": full_content,
                                     "status": "completed",
                                     "score": score,
-                                    "recommendation": recommendation
+                                    "recommendation": recommendation,
+                                    "ai_score": ai_score
                                 })
                 else:
                     # 非流式响应处理
@@ -571,6 +590,19 @@ class AIAnalyzer:
                     
                     # 使用统一评分器获取投资建议
                     recommendation = self.scorer.get_recommendation(score)
+
+                    # 计算 AI 综合评分（Spec v1.0）
+                    try:
+                        ai_score_obj = self.ai_score_calc.calculate(
+                            df=df,
+                            stock_code=stock_code,
+                            market_type=market_type,
+                            analysis_v1=None,
+                        )
+                        ai_score = ai_score_obj.model_dump()
+                    except Exception as e:
+                        logger.warning(f"[AiScore] Failed to calculate for {stock_code}: {e}")
+                        ai_score = None
                     
                     # 发送完整的分析结果
                     yield json.dumps({
@@ -579,6 +611,7 @@ class AIAnalyzer:
                         "analysis": analysis_text,
                         "score": score,
                         "recommendation": recommendation,
+                        "ai_score": ai_score,
                         "rsi": rsi,
                         "price": price,
                         "price_change": price_change,
