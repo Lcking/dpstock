@@ -12,7 +12,8 @@ const routes: Array<RouteRecordRaw> = [
     path: '/',
     name: 'Home',
     component: StockAnalysisApp,
-    meta: { requiresAuth: true }
+    // 首页应始终可访问；否则点击 Logo 会因守卫跳转到 /login
+    meta: { requiresAuth: false }
   },
   {
     path: '/login',
@@ -24,13 +25,13 @@ const routes: Array<RouteRecordRaw> = [
     path: '/analysis',
     name: 'AnalysisList',
     component: AnalysisList,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: false }
   },
   {
     path: '/analysis/:id',
     name: 'ArticleDetail',
     component: ArticleDetail,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: false }
   },
   {
     path: '/my-judgments',
@@ -78,7 +79,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/secret-admin',
     name: 'AdminDashboard',
     component: () => import('@/components/AdminDashboard.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: true }
   },
   {
     path: '/:pathMatch(.*)*',
