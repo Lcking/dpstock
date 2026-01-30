@@ -217,6 +217,24 @@ echo "DATA_DIR=/var/lib/aguai/data" >> .env
 
 之后正常部署/重建容器都不会影响数据库文件。
 
+### 一键初始化（推荐）
+
+项目根目录提供脚本 `setup-persistence.sh`，会自动：
+- 生成并写入固定的 `JWT_SECRET_KEY`
+- 写入 `DATA_DIR` / `DB_PATH`
+- 迁移现有 `./data` 到外部数据目录
+- 重新构建并启动容器
+
+```bash
+chmod +x setup-persistence.sh
+./setup-persistence.sh
+```
+
+如果你只想写入配置但不重启：
+```bash
+./setup-persistence.sh --no-restart
+```
+
 ## Nginx 端口映射（非常重要）
 
 `docker-compose.yml` 已默认开放 80/443 端口，部署后可直接访问网站。
