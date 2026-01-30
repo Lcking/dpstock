@@ -20,7 +20,8 @@ class TechnicalIndicator:
         """
         # 默认参数设置
         self.params = params or {
-            'ma_periods': {'short': 5, 'medium': 20, 'long': 60},
+            # 同时支持 MA200（用于趋势/结构评分与验证）
+            'ma_periods': {'short': 5, 'medium': 20, 'long': 60, 'xlong': 200},
             'rsi_period': 14,
             'bollinger_period': 20,
             'bollinger_std': 2,

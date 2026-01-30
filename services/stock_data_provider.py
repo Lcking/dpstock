@@ -303,7 +303,9 @@ class StockDataProvider:
         import akshare as ak
         
         if start_date is None:
-            start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
+            # A股需要更长窗口以稳定计算 MA200（约 200 个交易日）
+            lookback_days = 400 if market_type == 'A' else 365
+            start_date = (datetime.now() - timedelta(days=lookback_days)).strftime('%Y%m%d')
         if end_date is None:
             end_date = datetime.now().strftime('%Y%m%d')
             
@@ -404,7 +406,8 @@ class StockDataProvider:
                             
                         ticker = yf.Ticker(yf_code)
                         # 获取数据
-                        yf_df = ticker.history(period="1y") 
+                        # 需要更长窗口以覆盖 MA200（若只取 1y 可能不足）
+                        yf_df = ticker.history(period="2y")
                         # 如果指定了日期，可能需要更精确的获取，这里简化为1年以覆盖大部分需求
                         
                         if not yf_df.empty:

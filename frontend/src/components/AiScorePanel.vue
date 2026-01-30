@@ -33,7 +33,7 @@
 
       <div class="overall">
         <div class="overall-left">
-          <div class="overall-score">{{ aiScore.overall.score }}</div>
+          <div class="overall-score" :class="scoreClass">{{ aiScore.overall.score }}</div>
           <div class="overall-label">
             <n-tag :type="labelTagType" size="small" :bordered="false">
               {{ aiScore.overall.label }}
@@ -146,6 +146,14 @@ const labelTagType = computed(() => {
   return 'error'
 })
 
+const scoreClass = computed(() => {
+  const s = props.aiScore?.overall?.score ?? 0
+  if (s >= 80) return 'score-high'
+  if (s >= 65) return 'score-medium-high'
+  if (s >= 45) return 'score-medium'
+  return 'score-low'
+})
+
 function formatConfidence(v: number) {
   return `${Math.round(v * 100)}%`
 }
@@ -214,6 +222,11 @@ function formatImpact(v: number) {
   font-weight: 800;
   color: #111827;
 }
+
+.overall-score.score-high { color: #059669; }
+.overall-score.score-medium-high { color: #16a34a; }
+.overall-score.score-medium { color: #d97706; }
+.overall-score.score-low { color: #dc2626; }
 
 .confidence-row {
   display: flex;

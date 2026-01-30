@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
+import math
 
 from utils.logger import get_logger
 from utils.validation import normalize_ts_code
@@ -41,7 +42,10 @@ def _safe_float(v: Any) -> Optional[float]:
     try:
         if v is None:
             return None
-        return float(v)
+        f = float(v)
+        if math.isnan(f):
+            return None
+        return f
     except Exception:
         return None
 
