@@ -25,6 +25,25 @@ def get_journal_user(
     actor = get_actor(request)
     if actor:
         logger.info(f"[Journal] User identified via actor: type={actor['type']}, id={actor['id'][:16]}...")
+
+        # If anchor is present, proactively merge other identities into anchor
+        if actor.get("type") == "anchor":
+            anchor_id = actor["id"]
+            header_anon = request.headers.get("X-Anonymous-Id")
+
+            migrated_total = 0
+            try:
+                if header_anon and header_anon != anchor_id:
+                    migrated_total += journal_service.migrate_user_records(header_anon, anchor_id)
+                # Cookie-based anonymous ID (legacy / quota uid) may have journal data from older versions
+                if aguai_uid and aguai_uid != anchor_id:
+                    migrated_total += journal_service.migrate_user_records(aguai_uid, anchor_id)
+            except Exception as e:
+                logger.warning(f"[Journal] Migration skipped due to error: {e}")
+
+            if migrated_total > 0:
+                logger.info(f"[Journal] Auto-merged records into anchor: migrated={migrated_total}")
+
         return actor['id']
     
     # 2. Fallback to Cookie-based Anonymous

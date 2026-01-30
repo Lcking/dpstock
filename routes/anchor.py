@@ -12,6 +12,7 @@ from typing import Optional
 import os
 import re
 from services.anchor_service import AnchorService
+from services.journal import journal_service
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -159,6 +160,14 @@ async def verify_and_bind(
         anonymous_id=x_anonymous_id,
         anchor_id=anchor_id
     )
+
+    # Also migrate Journal (判断日记) records that use user_id (new system)
+    try:
+        journal_migrated = journal_service.migrate_user_records(x_anonymous_id, anchor_id)
+        if journal_migrated:
+            logger.info(f"[AnchorBind] Migrated Journal records: {journal_migrated}")
+    except Exception as e:
+        logger.warning(f"[AnchorBind] Failed to migrate Journal records: {e}")
     
     # Generate token
     token = anchor_service.generate_anchor_token(anchor_id)

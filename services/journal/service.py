@@ -143,6 +143,35 @@ class JournalService:
             rows = cursor.fetchall()
         
         return [self._row_to_record(row) for row in rows]
+
+    def migrate_user_records(self, from_user_id: str, to_user_id: str) -> int:
+        """
+        Migrate journal records from one user_id to another.
+
+        This is used to merge anonymous records into an anchor account.
+        Idempotent: safe to call multiple times.
+        """
+        if not from_user_id or not to_user_id or from_user_id == to_user_id:
+            return 0
+
+        now = datetime.utcnow().isoformat() + 'Z'
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE judgments
+                SET user_id = ?, updated_at = ?
+                WHERE user_id = ?
+                """,
+                (to_user_id, now, from_user_id),
+            )
+            updated = cursor.rowcount
+            conn.commit()
+
+        if updated > 0:
+            logger.info(f"[Journal] Migrated {updated} records: {from_user_id[:8]}... -> {to_user_id[:8]}...")
+
+        return updated
     
     def _row_to_record(self, row: Dict) -> Dict[str, Any]:
         """转换数据库行为记录"""
