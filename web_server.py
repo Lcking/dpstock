@@ -202,6 +202,11 @@ async def get_config():
     return {
         'announcement': os.getenv('ANNOUNCEMENT_TEXT') or ''
     }
+
+# 健康检查（用于 Docker healthcheck）
+@app.get("/api/health")
+async def health():
+    return {"ok": True, "ts": datetime.utcnow().isoformat() + "Z"}
     
 # AI分析股票
 @app.post("/api/analyze")

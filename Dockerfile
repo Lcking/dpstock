@@ -67,7 +67,7 @@ EXPOSE 8888
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8888/api/config || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/api/health', timeout=5).read()"
 
 # 启动命令
 CMD ["python", "web_server.py"]

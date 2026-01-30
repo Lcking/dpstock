@@ -27,7 +27,7 @@ services:
       - ${DATA_DIR:-./data}:/app/data
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8888/api/config" ]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/api/health', timeout=5).read()" ]
       interval: 30s
       timeout: 10s
       retries: 3
