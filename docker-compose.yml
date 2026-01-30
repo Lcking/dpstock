@@ -19,9 +19,12 @@ services:
       - SEND_REAL_EMAIL=${SEND_REAL_EMAIL}
       - FROM_EMAIL=${FROM_EMAIL}
       - STREAM=true
+      - DB_PATH=/app/data/stocks.db
     volumes:
       - ./logs:/app/logs
-      - ./data:/app/data
+      # IMPORTANT: persist SQLite DB outside container
+      # You can override with DATA_DIR=/var/lib/aguai/data
+      - ${DATA_DIR:-./data}:/app/data
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8888/api/config" ]

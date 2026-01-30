@@ -16,9 +16,12 @@ services:
       - API_TIMEOUT=${API_TIMEOUT}
       - LOGIN_PASSWORD=${LOGIN_PASSWORD}
       - ANNOUNCEMENT_TEXT=${ANNOUNCEMENT_TEXT}
+      - DB_PATH=/app/data/stocks.db
     volumes:
       - ./logs:/app/logs
-      - ./data:/app/data
+      # IMPORTANT: persist SQLite DB outside container
+      # You can override with DATA_DIR=/var/lib/aguai/data
+      - ${DATA_DIR:-./data}:/app/data
     restart: unless-stopped
     networks:
       - stock-scanner-network

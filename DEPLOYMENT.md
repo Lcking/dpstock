@@ -197,6 +197,37 @@ docker-compose -f docker-compose.prod.yml down
 docker-compose -f docker-compose.prod.yml up -d --build
 ```
 
+## 数据持久化（非常重要）
+
+本项目使用 SQLite 数据库，默认路径为：`data/stocks.db`（容器内：`/app/data/stocks.db`）。
+
+如果你在服务器上 **删除/重建代码目录**（例如重新 `git clone` 到新目录），而数据库文件保存在 `./data` 目录内，则会表现为“判断数据丢失”。
+
+### 推荐做法：把数据目录放到仓库外
+
+例如把数据放到 `/var/lib/aguai/data`：
+
+```bash
+sudo mkdir -p /var/lib/aguai/data
+sudo chown -R $USER:$USER /var/lib/aguai/data
+
+# 写入 .env（或直接导出环境变量）
+echo "DATA_DIR=/var/lib/aguai/data" >> .env
+```
+
+之后正常部署/重建容器都不会影响数据库文件。
+
+### 快速确认数据是否真的“被删了”
+
+在服务器上执行（需要安装 sqlite3：`apt-get install -y sqlite3`）：
+
+```bash
+sqlite3 ./data/stocks.db "select count(*) as judgments_count from judgments;"
+sqlite3 ./data/stocks.db "select user_id, count(*) as c from judgments group by user_id order by c desc limit 10;"
+```
+
+如果表里还有数据但前端看不到，通常是 **当前浏览器的 user_id（cookie/匿名ID/anchor）变化**导致查到的是另一个账号。
+
 ### 备份证书
 ```bash
 tar -czf ssl-backup-$(date +%Y%m%d).tar.gz certbot/conf/
