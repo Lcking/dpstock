@@ -335,14 +335,6 @@ function formatDate(dateStr: string | undefined | null): string {
   }
 }
 
-function getScoreClass(score: number): string {
-  if (score >= 80) return 'score-high';
-  if (score >= 70) return 'score-medium-high';
-  if (score >= 60) return 'score-medium';
-  if (score >= 40) return 'score-medium-low';
-  return 'score-low';
-}
-
 function getRsiClass(rsi: number): string {
   if (rsi >= 70) return 'rsi-overbought';
   if (rsi <= 30) return 'rsi-oversold';
