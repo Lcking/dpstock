@@ -13,7 +13,7 @@
         </router-link>
         
         <router-link to="/journal" class="nav-btn">
-          <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[6, -6]">
+          <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[0, -6]">
             <span class="btn-text">判断日记</span>
           </n-badge>
           <span class="btn-glow"></span>
@@ -171,7 +171,7 @@ onMounted(() => {
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 8px 20px;
+  padding: 8px 28px 8px 20px;
   border-radius: 24px;
   font-size: 14px;
   font-weight: 500;
@@ -179,7 +179,7 @@ onMounted(() => {
   color: #667eea;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
   border: 1px solid rgba(102, 126, 234, 0.3);
-  overflow: visible;
+  overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -207,16 +207,10 @@ onMounted(() => {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border-color: transparent;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.35);
 }
 
-.nav-btn:hover .btn-glow {
-  left: 100%;
-}
-
-.nav-btn:active {
-  transform: translateY(0);
+.btn-glow {
+  display: none;
 }
 
 /* Mobile Responsive */
