@@ -140,7 +140,7 @@
 
     <template #footer>
       <n-space justify="end">
-        <n-button type="error" secondary @click="$emit('delete', record)">
+        <n-button type="error" secondary :disabled="!record" @click="handleDelete">
           删除
         </n-button>
         <n-button @click="$emit('update:show', false)">关闭</n-button>
@@ -182,6 +182,11 @@ const goToAnalyze = () => {
     emit('update:show', false)
     router.push({ path: '/', query: { code: props.record.ts_code } })
   }
+}
+
+const handleDelete = () => {
+  if (!props.record) return
+  emit('delete', props.record)
 }
 
 // Helpers
