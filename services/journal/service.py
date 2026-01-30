@@ -144,6 +144,37 @@ class JournalService:
         
         return [self._row_to_record(row) for row in rows]
 
+    def get_records_count(self, user_id: str) -> int:
+        """获取用户记录数量"""
+        if not user_id:
+            return 0
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) AS c FROM judgments WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+        if not row:
+            return 0
+        try:
+            return int(row["c"])
+        except Exception:
+            return int(row[0])
+
+    def get_single_anchor_id(self) -> Optional[str]:
+        """若仅存在一个 anchor，则返回其 ID，否则返回 None"""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT anchor_id FROM anchors ORDER BY created_at DESC LIMIT 2"
+            )
+            rows = cursor.fetchall()
+        if not rows or len(rows) != 1:
+            return None
+        row = rows[0]
+        try:
+            return row["anchor_id"]
+        except Exception:
+            return row[0]
+
     def migrate_user_records(self, from_user_id: str, to_user_id: str) -> int:
         """
         Migrate journal records from one user_id to another.

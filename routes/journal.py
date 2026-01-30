@@ -44,6 +44,19 @@ def get_journal_user(
             if migrated_total > 0:
                 logger.info(f"[Journal] Auto-merged records into anchor: migrated={migrated_total}")
 
+        # If anonymous but only one anchor exists, fall back to anchor when anonymous has no records
+        if actor.get("type") == "anonymous":
+            try:
+                anchor_id = journal_service.get_single_anchor_id()
+                if anchor_id:
+                    anon_count = journal_service.get_records_count(actor["id"])
+                    anchor_count = journal_service.get_records_count(anchor_id)
+                    if anon_count == 0 and anchor_count > 0:
+                        logger.info("[Journal] Fallback to single anchor for anonymous session")
+                        return anchor_id
+            except Exception as e:
+                logger.warning(f"[Journal] Anchor fallback skipped: {e}")
+
         return actor['id']
     
     # 2. Fallback to Cookie-based Anonymous
