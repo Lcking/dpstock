@@ -217,6 +217,18 @@ echo "DATA_DIR=/var/lib/aguai/data" >> .env
 
 之后正常部署/重建容器都不会影响数据库文件。
 
+## Nginx 端口映射（非常重要）
+
+`docker-compose.yml` 已默认开放 80/443 端口，部署后可直接访问网站。
+
+验证：
+```bash
+docker compose ps
+```
+
+应看到：
+`0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp`
+
 ### 快速确认数据是否真的“被删了”
 
 在服务器上执行（需要安装 sqlite3：`apt-get install -y sqlite3`）：
