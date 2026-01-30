@@ -265,6 +265,14 @@ class AnchorService:
         now = datetime.utcnow()
         
         try:
+            # This migration targets legacy judgments schema (owner_type/owner_id).
+            # New Journal system stores identity in `user_id` and is migrated elsewhere.
+            cursor.execute("PRAGMA table_info(judgments)")
+            cols = {row["name"] if isinstance(row, dict) else row[1] for row in cursor.fetchall()}
+            if "owner_type" not in cols or "owner_id" not in cols:
+                logger.info("[Anchor] Skip legacy migration: judgments.owner_type/owner_id not present")
+                return 0
+
             # Update judgments
             cursor.execute("""
                 UPDATE judgments 
