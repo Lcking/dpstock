@@ -13,7 +13,7 @@
         </router-link>
         
         <router-link to="/journal" class="nav-btn">
-          <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[0, -6]">
+          <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[0, 4]">
             <span class="btn-text">判断日记</span>
           </n-badge>
           <span class="btn-glow"></span>
@@ -179,7 +179,7 @@ onMounted(() => {
   color: #667eea;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
   border: 1px solid rgba(102, 126, 234, 0.3);
-  overflow: hidden;
+  overflow: visible;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
