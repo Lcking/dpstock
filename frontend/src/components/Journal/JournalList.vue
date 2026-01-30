@@ -15,6 +15,21 @@
             style="width: 140px"
             @update:value="loadRecords"
           />
+          <n-checkbox
+            :checked="allSelected"
+            :disabled="records.length === 0"
+            @update:checked="toggleSelectAll"
+          >
+            全选本页
+          </n-checkbox>
+          <n-button
+            size="small"
+            type="error"
+            :disabled="selectedIds.size === 0"
+            @click="confirmBatchDelete"
+          >
+            批量删除
+          </n-button>
         </n-space>
       </div>
     </div>
@@ -62,6 +77,11 @@
         <!-- Header -->
         <div class="record-header">
           <div class="stock-info">
+            <n-checkbox
+              :checked="selectedIds.has(record.id)"
+              @update:checked="(checked) => toggleSelected(record.id, checked)"
+              @click.stop
+            />
             <span class="ts-code">{{ record.ts_code }}</span>
             <n-tag :type="candidateTagType(record.candidate)" size="small">
               候选 {{ record.candidate }}
@@ -113,6 +133,14 @@
           >
             查看详情
           </n-button>
+          <n-button
+            text
+            type="error"
+            size="small"
+            @click.stop="confirmDelete(record)"
+          >
+            删除
+          </n-button>
         </div>
       </div>
     </div>
@@ -135,6 +163,7 @@
       v-model:show="showDetail"
       :record="selectedRecord"
       @review="handleOpenReview"
+      @delete="confirmDelete"
     />
 
     <!-- Review Dialog -->
@@ -153,10 +182,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { apiService } from '@/services/api'
 import { 
-  NButton, NSpace, NSelect, NTag, NAlert, NSkeleton, useMessage 
+  NButton, NSpace, NSelect, NTag, NAlert, NSkeleton, NCheckbox, useDialog, useMessage 
 } from 'naive-ui'
 import JournalReviewDialog from './JournalReviewDialog.vue'
 import JournalDetailDialog from './JournalDetailDialog.vue'
@@ -166,6 +195,7 @@ import EmptyState from '../common/EmptyState.vue'
 import type { JournalRecord } from '@/types/journal'
 
 const message = useMessage()
+const dialog = useDialog()
 
 // State
 const loading = ref(false)
@@ -176,6 +206,11 @@ const showReview = ref(false)
 const showDetail = ref(false)
 const showBindDialog = ref(false)
 const selectedRecord = ref<JournalRecord | null>(null)
+const selectedIds = ref<Set<string>>(new Set())
+const allSelected = computed(() => {
+  if (records.value.length === 0) return false
+  return records.value.every(record => selectedIds.value.has(record.id))
+})
 
 // Options
 const statusOptions = [
@@ -193,6 +228,7 @@ const loadRecords = async () => {
       status: statusFilter.value || undefined
     })
     records.value = data.records || []
+    selectedIds.value = new Set()
   } catch (error) {
     console.error('Load records error:', error)
     message.error('加载失败')
@@ -234,6 +270,66 @@ const handleReviewed = () => {
   showReview.value = false
   loadRecords()
   loadDueCount()
+}
+
+const toggleSelected = (id: string, checked: boolean) => {
+  const next = new Set(selectedIds.value)
+  if (checked) {
+    next.add(id)
+  } else {
+    next.delete(id)
+  }
+  selectedIds.value = next
+}
+
+const toggleSelectAll = (checked: boolean) => {
+  if (!checked) {
+    selectedIds.value = new Set()
+    return
+  }
+  selectedIds.value = new Set(records.value.map(record => record.id))
+}
+
+const confirmDelete = (record: JournalRecord) => {
+  if (!record?.id) return
+  dialog.warning({
+    title: '确认删除',
+    content: `确定要删除 ${record.ts_code} 的判断记录吗？此操作不可恢复。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      await handleDeleteRecords([record.id])
+    }
+  })
+}
+
+const confirmBatchDelete = () => {
+  if (selectedIds.value.size === 0) return
+  dialog.warning({
+    title: '确认批量删除',
+    content: `确定要删除选中的 ${selectedIds.value.size} 条记录吗？此操作不可恢复。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      await handleDeleteRecords(Array.from(selectedIds.value))
+    }
+  })
+}
+
+const handleDeleteRecords = async (ids: string[]) => {
+  try {
+    for (const id of ids) {
+      await apiService.deleteJournalRecord(id)
+    }
+    message.success('删除成功')
+    showDetail.value = false
+    selectedRecord.value = null
+    loadRecords()
+    loadDueCount()
+  } catch (error) {
+    console.error('Delete record error:', error)
+    message.error('删除失败')
+  }
 }
 
 // After bind success

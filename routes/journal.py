@@ -181,6 +181,24 @@ async def review_record(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/{record_id}")
+async def delete_record(
+    record_id: str,
+    user_id: str = Depends(get_journal_user)
+):
+    """删除判断记录（硬删除）"""
+    try:
+        ok = journal_service.delete_record(record_id=record_id, user_id=user_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Record not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete record error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/run_due_check")
 async def run_due_check():
     """运行到期检查 (内部cron调用)"""

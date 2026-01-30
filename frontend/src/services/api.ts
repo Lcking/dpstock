@@ -298,6 +298,17 @@ export const apiService = {
     }
   },
 
+  // 删除判断记录（Journal）
+  deleteJournalRecord: async (recordId: string) => {
+    try {
+      const response = await axiosInstance.delete(`/journal/${recordId}`);
+      return response.data;
+    } catch (error) {
+      console.error('删除判断记录时出错:', error);
+      throw error;
+    }
+  },
+
   // 删除判断
   deleteJudgment: async (judgmentId: string): Promise<void> => {
     const response = await axiosInstance.delete(`/v1/judgments/${judgmentId}`);

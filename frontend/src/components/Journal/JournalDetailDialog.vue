@@ -140,6 +140,9 @@
 
     <template #footer>
       <n-space justify="end">
+        <n-button type="error" secondary @click="$emit('delete', record)">
+          删除
+        </n-button>
         <n-button @click="$emit('update:show', false)">关闭</n-button>
       </n-space>
     </template>
@@ -168,6 +171,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'update:show', value: boolean): void
   (e: 'review', record: JournalRecord): void
+  (e: 'delete', record: JournalRecord): void
 }>()
 
 const router = useRouter()

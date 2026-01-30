@@ -144,6 +144,20 @@ class JournalService:
         
         return [self._row_to_record(row) for row in rows]
 
+    def delete_record(self, record_id: str, user_id: str) -> bool:
+        """删除判断记录（硬删除）"""
+        if not record_id or not user_id:
+            return False
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM judgments WHERE id = ? AND user_id = ?",
+                (record_id, user_id),
+            )
+            deleted = cursor.rowcount > 0
+            conn.commit()
+        return deleted
+
     def get_records_count(self, user_id: str) -> int:
         """获取用户记录数量"""
         if not user_id:
