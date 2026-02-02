@@ -87,6 +87,14 @@
       </div>
 
       <div class="details" v-if="expanded && !compact">
+        <div class="detail-hint">
+          <div class="hint-title">评分说明</div>
+          <ul>
+            <li>置信度表示评分依据的完整性，非预测准确率；缺数据或高风险会降低。</li>
+            <li>相对强弱按 ±10% 封顶映射，超出区间会被压缩到 0~100。</li>
+            <li>“强弱信号冲突”表示 5/20/60 日方向不一致，会有稳定性扣分。</li>
+          </ul>
+        </div>
         <div class="detail-dim" v-for="d in aiScore.dimensions" :key="d.id">
           <div class="detail-title">{{ d.name }}</div>
 
@@ -296,6 +304,31 @@ function formatImpact(v: number) {
   margin-top: 12px;
   border-top: 1px dashed rgba(0, 0, 0, 0.08);
   padding-top: 12px;
+}
+
+.detail-hint {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.04);
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.detail-hint .hint-title {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.detail-hint ul {
+  padding-left: 16px;
+  margin: 0;
+}
+
+.detail-hint li {
+  margin: 2px 0;
 }
 
 .detail-dim + .detail-dim {
