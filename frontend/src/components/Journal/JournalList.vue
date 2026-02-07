@@ -65,7 +65,20 @@
       </div>
     </div>
 
-    <!-- Records List -->
+    <!-- Records Table (compact layout) -->
+    <div v-else-if="records.length > 0 && useTableLayout" class="records-table">
+      <n-data-table
+        :columns="columns"
+        :data="records"
+        :bordered="false"
+        size="small"
+        :row-key="rowKey"
+        :checked-row-keys="checkedRowKeys"
+        @update:checked-row-keys="handleCheckedRowKeys"
+      />
+    </div>
+
+    <!-- Records List (legacy card layout, kept for fallback) -->
     <div v-else-if="records.length > 0" class="records-list">
       <div 
         v-for="record in records" 
@@ -182,10 +195,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, h } from 'vue'
 import { apiService } from '@/services/api'
 import { 
-  NButton, NSpace, NSelect, NTag, NAlert, NSkeleton, NCheckbox, useDialog, useMessage 
+  NButton,
+  NSpace,
+  NSelect,
+  NTag,
+  NAlert,
+  NSkeleton,
+  NCheckbox,
+  NDataTable,
+  useDialog,
+  useMessage 
 } from 'naive-ui'
 import JournalReviewDialog from './JournalReviewDialog.vue'
 import JournalDetailDialog from './JournalDetailDialog.vue'
@@ -211,6 +233,8 @@ const allSelected = computed(() => {
   if (records.value.length === 0) return false
   return records.value.every(record => selectedIds.value.has(record.id))
 })
+const useTableLayout = true
+const checkedRowKeys = ref<string[]>([])
 
 // Options
 const statusOptions = [
@@ -229,6 +253,7 @@ const loadRecords = async () => {
     })
     records.value = data.records || []
     selectedIds.value = new Set()
+    checkedRowKeys.value = []
   } catch (error) {
     console.error('Load records error:', error)
     message.error('加载失败')
@@ -272,6 +297,12 @@ const handleReviewed = () => {
   loadDueCount()
 }
 
+const rowKey = (row: JournalRecord) => row.id
+
+const handleCheckedRowKeys = (keys: Array<string | number>) => {
+  checkedRowKeys.value = keys.map(key => String(key))
+}
+
 const toggleSelected = (id: string, checked: boolean) => {
   const next = new Set(selectedIds.value)
   if (checked) {
@@ -304,14 +335,15 @@ const confirmDelete = (record: JournalRecord) => {
 }
 
 const confirmBatchDelete = () => {
-  if (selectedIds.value.size === 0) return
+  const ids = useTableLayout ? checkedRowKeys.value : Array.from(selectedIds.value)
+  if (ids.length === 0) return
   dialog.warning({
     title: '确认批量删除',
-    content: `确定要删除选中的 ${selectedIds.value.size} 条记录吗？此操作不可恢复。`,
+    content: `确定要删除选中的 ${ids.length} 条记录吗？此操作不可恢复。`,
     positiveText: '删除',
     negativeText: '取消',
     onPositiveClick: async () => {
-      await handleDeleteRecords(Array.from(selectedIds.value))
+      await handleDeleteRecords(ids)
     }
   })
 }
@@ -324,6 +356,7 @@ const handleDeleteRecords = async (ids: string[]) => {
     message.success('删除成功')
     showDetail.value = false
     selectedRecord.value = null
+    checkedRowKeys.value = []
     loadRecords()
     loadDueCount()
   } catch (error) {
@@ -331,6 +364,84 @@ const handleDeleteRecords = async (ids: string[]) => {
     message.error('删除失败')
   }
 }
+
+const columns = computed(() => [
+  {
+    type: 'selection',
+    width: 48
+  },
+  {
+    title: '股票',
+    key: 'ts_code',
+    width: 120,
+    render: (row: JournalRecord) => h('span', { class: 'ts-code' }, row.ts_code)
+  },
+  {
+    title: '判断',
+    key: 'candidate',
+    width: 120,
+    render: (row: JournalRecord) =>
+      h(
+        NTag,
+        { type: candidateTagType(row.candidate), size: 'small' },
+        { default: () => `候选 ${row.candidate}` }
+      )
+  },
+  {
+    title: '验证期',
+    key: 'validation_date',
+    minWidth: 160,
+    render: (row: JournalRecord) => {
+      if (!row.validation_date) return '—'
+      const text = `至 ${formatDate(row.validation_date)}`
+      const left = row.days_left !== null && row.status === 'active'
+        ? `（剩余 ${row.days_left} 天）`
+        : ''
+      return `${text}${left}`
+    }
+  },
+  {
+    title: '状态',
+    key: 'status',
+    width: 120,
+    render: (row: JournalRecord) =>
+      h(
+        NTag,
+        { type: statusTagType(row.status), size: 'small' },
+        { default: () => statusLabel(row.status) }
+      )
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 200,
+    render: (row: JournalRecord) =>
+      h(
+        NSpace,
+        { size: 6 },
+        {
+          default: () => [
+            row.status === 'due'
+              ? h(
+                  NButton,
+                  { size: 'small', type: 'primary', onClick: () => showReviewDialog(row) },
+                  { default: () => '复盘' }
+                )
+              : h(
+                  NButton,
+                  { size: 'small', text: true, onClick: () => handleRecordClick(row) },
+                  { default: () => '详情' }
+                ),
+            h(
+              NButton,
+              { size: 'small', text: true, type: 'error', onClick: () => confirmDelete(row) },
+              { default: () => '删除' }
+            )
+          ]
+        }
+      )
+  }
+])
 
 // After bind success
 const handleBindSuccess = (data: any) => {
@@ -441,6 +552,13 @@ onMounted(() => {
 .records-list {
   display: grid;
   gap: 16px;
+}
+
+.records-table {
+  background: #fff;
+  border: 1px solid var(--n-border-color);
+  border-radius: 10px;
+  padding: 6px 8px;
 }
 
 .record-card {
