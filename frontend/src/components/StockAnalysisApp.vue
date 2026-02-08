@@ -14,6 +14,9 @@
         <!-- 市场时间显示 -->
         <MarketTimeDisplay :is-mobile="isMobile" />
         
+        <!-- 核心价值闭环 -->
+        <ValueLoop />
+        
         <!-- 主要内容 -->
         <n-card class="analysis-container mobile-card mobile-card-spacing mobile-shadow">
           
@@ -188,6 +191,7 @@ import {
 } from '@vicons/ionicons5';
 
 import MarketTimeDisplay from './MarketTimeDisplay.vue';
+import ValueLoop from './ValueLoop.vue';
 import StockCard from './StockCard.vue';
 import AiScorePanel from './AiScorePanel.vue';
 import AnnouncementBanner from './AnnouncementBanner.vue';
