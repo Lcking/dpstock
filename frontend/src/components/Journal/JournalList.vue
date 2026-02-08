@@ -209,6 +209,7 @@ import {
   useDialog,
   useMessage 
 } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import JournalReviewDialog from './JournalReviewDialog.vue'
 import JournalDetailDialog from './JournalDetailDialog.vue'
 import AnchorStatus from '../AnchorStatus.vue'
@@ -365,9 +366,9 @@ const handleDeleteRecords = async (ids: string[]) => {
   }
 }
 
-const columns = computed(() => [
+const columns = computed<DataTableColumns<JournalRecord>>(() => [
   {
-    type: 'selection',
+    type: 'selection' as const,
     width: 48
   },
   {
