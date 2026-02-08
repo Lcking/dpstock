@@ -305,6 +305,27 @@ const handleCheckedRowKeys = (keys: Array<string | number>) => {
   checkedRowKeys.value = keys.map(key => String(key))
 }
 
+const getCandidateLabel = (candidate: string) => {
+  const map: Record<string, string> = {
+    A: '看涨',
+    B: '看跌',
+    C: '观望'
+  }
+  return map[candidate] || `候选 ${candidate}`
+}
+
+const getJudgmentSummary = (record: JournalRecord) => {
+  const premise = record.selected_premises?.[0]
+  if (premise) return premise
+  const evidence = record.snapshot?.watchlist_summary?.trend?.evidence?.[0]
+  if (evidence) return evidence
+  const flow = record.snapshot?.watchlist_summary?.capital_flow?.label
+  if (flow) return `资金信号：${flow}`
+  const rs = record.snapshot?.watchlist_summary?.relative_strength?.label_20d
+  if (rs) return `相对强弱：${rs}`
+  return '—'
+}
+
 const getProgressInfo = (record: JournalRecord) => {
   if (!record.created_at || !record.validation_date) {
     return null
@@ -409,13 +430,16 @@ const columns = computed<DataTableColumns<JournalRecord>>(() => [
   {
     title: '判断',
     key: 'candidate',
-    width: 120,
+    minWidth: 220,
     render: (row: JournalRecord) =>
-      h(
-        NTag,
-        { type: candidateTagType(row.candidate), size: 'small' },
-        { default: () => `候选 ${row.candidate}` }
-      )
+      h('div', { class: 'judgment-cell' }, [
+        h(
+          NTag,
+          { type: candidateTagType(row.candidate), size: 'small' },
+          { default: () => getCandidateLabel(row.candidate) }
+        ),
+        h('div', { class: 'judgment-summary' }, getJudgmentSummary(row))
+      ])
   },
   {
     title: '验证期',
@@ -619,6 +643,22 @@ onMounted(() => {
 .progress-text {
   font-size: 12px;
   color: var(--n-text-color-3);
+}
+
+.judgment-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.judgment-summary {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .record-card {
