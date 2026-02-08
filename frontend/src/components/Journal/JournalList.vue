@@ -206,6 +206,7 @@ import {
   NSkeleton,
   NCheckbox,
   NDataTable,
+  NProgress,
   useDialog,
   useMessage 
 } from 'naive-ui'
@@ -304,6 +305,34 @@ const handleCheckedRowKeys = (keys: Array<string | number>) => {
   checkedRowKeys.value = keys.map(key => String(key))
 }
 
+const getProgressInfo = (record: JournalRecord) => {
+  if (!record.created_at || !record.validation_date) {
+    return null
+  }
+  const created = new Date(record.created_at).getTime()
+  const due = new Date(record.validation_date).getTime()
+  if (!Number.isFinite(created) || !Number.isFinite(due)) {
+    return null
+  }
+  const totalMs = due - created
+  if (totalMs <= 0) {
+    return { percent: 100, label: '100% 完成' }
+  }
+  const now = Date.now()
+  const elapsedMs = Math.max(0, now - created)
+  let percent = Math.round((elapsedMs / totalMs) * 100)
+  if (record.status === 'due' || record.status === 'reviewed') {
+    percent = 100
+  }
+  percent = Math.min(100, Math.max(0, percent))
+  const totalDays = Math.max(1, Math.ceil(totalMs / 86400000))
+  const elapsedDays = Math.min(totalDays, Math.max(0, Math.ceil(elapsedMs / 86400000)))
+  const label = record.status === 'reviewed'
+    ? '100% 完成'
+    : `${percent}%（${elapsedDays}/${totalDays}天）`
+  return { percent, label }
+}
+
 const toggleSelected = (id: string, checked: boolean) => {
   const next = new Set(selectedIds.value)
   if (checked) {
@@ -399,6 +428,24 @@ const columns = computed<DataTableColumns<JournalRecord>>(() => [
         ? `（剩余 ${row.days_left} 天）`
         : ''
       return `${text}${left}`
+    }
+  },
+  {
+    title: '验证进度',
+    key: 'progress',
+    minWidth: 200,
+    render: (row: JournalRecord) => {
+      const info = getProgressInfo(row)
+      if (!info) return '—'
+      return h('div', { class: 'progress-cell' }, [
+        h(NProgress, {
+          type: 'line',
+          percentage: info.percent,
+          height: 8,
+          showIndicator: false
+        }),
+        h('div', { class: 'progress-text' }, info.label)
+      ])
     }
   },
   {
@@ -560,6 +607,18 @@ onMounted(() => {
   border: 1px solid var(--n-border-color);
   border-radius: 10px;
   padding: 6px 8px;
+}
+
+.progress-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: var(--n-text-color-3);
 }
 
 .record-card {
