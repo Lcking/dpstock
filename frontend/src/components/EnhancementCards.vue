@@ -123,7 +123,7 @@
   <!-- 加载状态 -->
   <div v-else-if="loading" class="loading-state">
     <n-spin size="small" />
-    <n-text depth="3">加载增强数据...</n-text>
+    <n-text depth="3">加载增强数据\u2026</n-text>
   </div>
 
   <!-- 错误状态 -->

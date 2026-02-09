@@ -59,7 +59,7 @@ const status = ref<any>(null);
 const loading = ref(false);
 
 const quotaText = computed(() => {
-  if (!status.value) return '加载中...';
+  if (!status.value) return '加载中\u2026';
   const remaining = status.value.remaining_quota || 0;
   const total = status.value.total_quota || 5;
   return `${remaining}/${total}`;

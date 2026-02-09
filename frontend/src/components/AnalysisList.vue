@@ -63,7 +63,7 @@
     <!-- 加载更多状态 -->
     <div v-if="loadingMore" class="loading-more">
       <n-spin size="small" />
-      <span>加载更多...</span>
+      <span>加载更多\u2026</span>
     </div>
     <div v-else-if="!hasMore && articles.length > 0" class="no-more">
       已加载全部内容

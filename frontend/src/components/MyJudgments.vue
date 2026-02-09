@@ -263,7 +263,7 @@ async function handleDelete(judgmentId: string) {
 // Handle bind success
 function handleBindSuccess(data: any) {
   console.log('[MyJudgments] Bind success:', data);
-  message.success('绑定成功!正在重新加载判断列表...');
+  message.success('绑定成功! 正在重新加载判断列表\u2026');
   
   // Reload judgments after binding
   setTimeout(() => {

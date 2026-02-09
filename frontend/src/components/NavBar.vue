@@ -9,14 +9,12 @@
       <div class="nav-links">
         <router-link to="/analysis" class="nav-btn">
           <span class="btn-text">分析专栏</span>
-          <span class="btn-glow"></span>
         </router-link>
         
         <router-link to="/journal" class="nav-btn">
           <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[0, 4]">
             <span class="btn-text">判断日记</span>
           </n-badge>
-          <span class="btn-glow"></span>
         </router-link>
         
         <a
@@ -28,7 +26,6 @@
           class="nav-btn"
         >
           <span class="btn-text">{{ link.text }}</span>
-          <span class="btn-glow"></span>
         </a>
         
         <!-- Quota Status -->
@@ -180,27 +177,12 @@ onMounted(() => {
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
   border: 1px solid rgba(102, 126, 234, 0.3);
   overflow: visible;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-text {
   position: relative;
   z-index: 1;
-}
-
-.btn-glow {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(102, 126, 234, 0.2),
-    transparent
-  );
-  transition: left 0.5s;
 }
 
 .nav-btn:hover {
@@ -209,8 +191,9 @@ onMounted(() => {
   border-color: transparent;
 }
 
-.btn-glow {
-  display: none;
+.nav-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
 }
 
 /* Mobile Responsive */

@@ -64,7 +64,7 @@
             @click="handleLogin"
             class="login-button"
           >
-            {{ loading ? '登录中...' : '登 录' }}
+            {{ loading ? '登录中\u2026' : '登 录' }}
           </n-button>
         </div>
       </n-form>

@@ -38,7 +38,7 @@
                         multiple
                         filterable
                         remote
-                        placeholder="输入名称、拼音或代码"
+                        placeholder="输入名称、拼音或代码\u2026"
                         :options="searchOptions"
                         :loading="isSearching"
                         :clearable="true"
@@ -57,7 +57,7 @@
                     :disabled="selectedStockValues.length === 0"
                     @click="analyzeStocks"
                   >
-                    {{ isAnalyzing ? '分析中...' : '开始分析' }}
+                    {{ isAnalyzing ? '分析中\u2026' : '开始分析' }}
                   </n-button>
                   
                   <n-button
@@ -1011,7 +1011,7 @@ function handleOpenInviteFromQuota() {
   margin-bottom: 1.5rem;
   border-radius: 24px !important;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   background: rgba(255, 255, 255, 0.75) !important;
   box-shadow: 0 4px 24px rgba(102, 126, 234, 0.08);
 }

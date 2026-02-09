@@ -147,7 +147,7 @@
         <div ref="chartRef" class="kline-chart" :style="{ height: isMobile ? '250px' : '350px' }"></div>
         <div v-if="chartLoading" class="chart-loading">
           <n-spin size="small" />
-          <span>加载行情数据...</span>
+          <span>加载行情数据\u2026</span>
         </div>
       </div>
 
@@ -583,7 +583,7 @@ async function generateShareImage() {
     
     // 提取分析摘要(前200字符)
     const analysisSummary = props.stock.analysis 
-      ? props.stock.analysis.replace(/[#*]/g, '').substring(0, 200) + '...'
+      ? props.stock.analysis.replace(/[#*]/g, '').substring(0, 200) + '\u2026'
       : '完整分析请访问平台';
     
     const categoryName = getCategoryName(props.stock.marketType);

@@ -33,7 +33,7 @@
           :disabled="!formData.email || sending"
           @click="sendCode"
         >
-          {{ sending ? '发送中...' : '获取验证码' }}
+          {{ sending ? '发送中\u2026' : '获取验证码' }}
         </n-button>
         
         <n-button block @click="handleClose">
@@ -68,7 +68,7 @@
           :disabled="formData.code.length !== 6 || binding"
           @click="verifyAndBind"
         >
-          {{ binding ? '验证中...' : '确认绑定' }}
+          {{ binding ? '验证中\u2026' : '确认绑定' }}
         </n-button>
         
         <n-button block @click="step = 1" :disabled="binding">

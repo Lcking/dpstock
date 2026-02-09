@@ -51,7 +51,7 @@
         <div ref="chartRef" class="kline-chart"></div>
         <div v-if="chartLoading" class="chart-loading">
           <n-spin size="small" />
-          <span>加载行情数据...</span>
+          <span>加载行情数据\u2026</span>
         </div>
       </section>
 

@@ -51,6 +51,7 @@
 
   color-scheme: light;
   color: var(--text-primary);
+  accent-color: var(--primary-color);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -123,7 +124,7 @@ button {
   background: var(--primary-gradient);
   color: white;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
@@ -136,9 +137,13 @@ button:active {
   transform: translateY(0);
 }
 
-button:focus,
+button:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
 button:focus-visible {
-  outline: none !important;
+  outline: none;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
 }
 
@@ -151,7 +156,7 @@ button:focus-visible {
   border: 1px solid var(--glass-border) !important;
   border-radius: var(--radius-lg) !important;
   box-shadow: var(--glass-shadow) !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .n-card:hover {
@@ -168,14 +173,20 @@ button:focus-visible {
   box-sizing: border-box;
 }
 
-/* Focus Styles - Modern */
-*:focus {
-  outline: none !important;
+/* Focus Styles - Modern (focus-visible for keyboard, no ring on click) */
+*:focus:not(:focus-visible) {
+  outline: none;
 }
 
-input:focus,
-textarea:focus,
-select:focus,
+*:focus-visible {
+  outline: 2px solid rgba(102, 126, 234, 0.5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+input:focus-within,
+textarea:focus-within,
+select:focus-within,
 .n-input:focus-within,
 .n-input-number:focus-within,
 .n-select:focus-within {
@@ -229,9 +240,14 @@ input::-moz-focus-inner {
   fill: white !important;
 }
 
-.n-button:focus,
+.n-button:focus:not(:focus-visible),
+.n-tag:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 .n-button:focus-visible,
-.n-tag:focus {
+.n-tag:focus-visible {
   outline: none !important;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
 }
@@ -460,4 +476,16 @@ input::-moz-focus-inner {
 
 .stock-down {
   color: var(--success-color) !important;
+}
+
+/* Respect reduced motion preference globally */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

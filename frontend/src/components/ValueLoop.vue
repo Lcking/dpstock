@@ -6,7 +6,7 @@
     </div>
     <div class="loop-steps">
       <div class="step" v-for="step in steps" :key="step.label">
-        <div class="step-icon">{{ step.icon }}</div>
+        <div class="step-icon" aria-hidden="true">{{ step.icon }}</div>
         <div class="step-label">{{ step.label }}</div>
         <div class="step-desc">{{ step.desc }}</div>
       </div>
