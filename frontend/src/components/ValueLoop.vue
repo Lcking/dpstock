@@ -5,22 +5,34 @@
       <div class="slogan-text">把每一次交易，变成一次可复用的判断。</div>
     </div>
     <div class="loop-steps">
-      <div class="step" v-for="step in steps" :key="step.label">
-        <div class="step-icon" aria-hidden="true">{{ step.icon }}</div>
-        <div class="step-label">{{ step.label }}</div>
-        <div class="step-desc">{{ step.desc }}</div>
-      </div>
-      <div class="step-arrow" v-for="i in 3" :key="'arrow-' + i">→</div>
+      <template v-for="(step, idx) in steps" :key="step.label">
+        <div class="step">
+          <div class="step-icon" aria-hidden="true">{{ step.icon }}</div>
+          <div class="step-label">{{ step.label }}</div>
+          <div class="step-desc">{{ step.desc }}</div>
+        </div>
+        <div v-if="idx < steps.length - 1" class="step-arrow" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </template>
     </div>
     <div class="loop-return">
-      <svg class="return-arc" viewBox="0 0 600 32" preserveAspectRatio="none">
-        <path d="M540 2 C560 2, 580 16, 580 28 L20 28 C20 16, 0 2, 60 2" fill="none" stroke="url(#loopGrad)" stroke-width="2" stroke-dasharray="6 4" />
+      <svg class="return-arc" viewBox="0 0 600 36" preserveAspectRatio="none">
         <defs>
           <linearGradient id="loopGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#667eea" stop-opacity="0.6" />
-            <stop offset="100%" stop-color="#764ba2" stop-opacity="0.6" />
+            <stop offset="0%" stop-color="#667eea" stop-opacity="0.5" />
+            <stop offset="50%" stop-color="#764ba2" stop-opacity="0.5" />
+            <stop offset="100%" stop-color="#667eea" stop-opacity="0.5" />
           </linearGradient>
+          <marker id="arrowLeft" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+            <path d="M6 0 L0 3 L6 6" fill="none" stroke="#667eea" stroke-width="1.5" opacity="0.6"/>
+          </marker>
         </defs>
+        <path d="M540 4 Q580 4, 580 20 L580 28 Q580 34, 540 34 L60 34 Q20 34, 20 28 L20 20 Q20 4, 60 4"
+              fill="none" stroke="url(#loopGrad)" stroke-width="1.5" stroke-dasharray="6 4"
+              marker-start="url(#arrowLeft)" />
       </svg>
       <div class="return-label">循环闭环</div>
     </div>
@@ -47,7 +59,7 @@ const steps = [
 }
 
 .loop-slogan {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .slogan-badge {
@@ -70,12 +82,13 @@ const steps = [
   letter-spacing: 0.02em;
 }
 
+/* Steps row: step → arrow → step → arrow → step → arrow → step */
 .loop-steps {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   gap: 0;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .step {
@@ -84,6 +97,7 @@ const steps = [
   align-items: center;
   gap: 6px;
   min-width: 90px;
+  flex-shrink: 0;
 }
 
 .step-icon {
@@ -112,42 +126,51 @@ const steps = [
 }
 
 .step-arrow {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #667eea;
-  font-weight: 700;
-  margin: 0 12px;
-  padding-bottom: 36px;
+  margin: 0 8px;
+  padding-top: 14px; /* align arrow vertically with icon centers */
+  flex-shrink: 0;
 }
 
+.step-arrow svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Return arc */
 .loop-return {
   position: relative;
-  height: 32px;
+  height: 36px;
   max-width: 520px;
   margin: 0 auto;
 }
 
 .return-arc {
   width: 100%;
-  height: 32px;
+  height: 36px;
 }
 
 .return-label {
   position: absolute;
-  bottom: 4px;
+  bottom: 6px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 11px;
   color: #667eea;
   font-weight: 600;
-  background: rgba(102, 126, 234, 0.08);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(118, 75, 162, 0.06) 100%);
   padding: 2px 12px;
   border-radius: 999px;
+  white-space: nowrap;
 }
 
-/* Mobile */
+/* ===== Mobile ===== */
 @media (max-width: 640px) {
   .value-loop {
-    padding: 16px 12px 12px;
+    padding: 16px 8px 12px;
     margin: 12px 0;
   }
 
@@ -156,11 +179,11 @@ const steps = [
   }
 
   .step {
-    min-width: 64px;
+    min-width: 60px;
   }
 
   .step-icon {
-    font-size: 22px;
+    font-size: 20px;
     width: 40px;
     height: 40px;
   }
@@ -174,9 +197,44 @@ const steps = [
   }
 
   .step-arrow {
-    font-size: 16px;
-    margin: 0 6px;
-    padding-bottom: 28px;
+    margin: 0 4px;
+    padding-top: 10px;
+  }
+
+  .step-arrow svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 380px) {
+  .step {
+    min-width: 50px;
+  }
+
+  .step-icon {
+    font-size: 18px;
+    width: 34px;
+    height: 34px;
+  }
+
+  .step-label {
+    font-size: 11px;
+  }
+
+  .step-desc {
+    display: none;
+  }
+
+  .step-arrow {
+    margin: 0 2px;
+    padding-top: 6px;
+  }
+
+  .step-arrow svg {
+    width: 14px;
+    height: 14px;
   }
 }
 </style>
