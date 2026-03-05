@@ -38,7 +38,7 @@
                         multiple
                         filterable
                         remote
-                        placeholder="输入名称、拼音或代码\u2026"
+                        placeholder="输入名称、拼音或代码…"
                         :options="searchOptions"
                         :loading="isSearching"
                         :clearable="true"
@@ -57,7 +57,7 @@
                     :disabled="selectedStockValues.length === 0"
                     @click="analyzeStocks"
                   >
-                    {{ isAnalyzing ? '分析中\u2026' : '开始分析' }}
+                    {{ isAnalyzing ? '分析中…' : '开始分析' }}
                   </n-button>
                   
                   <n-button
