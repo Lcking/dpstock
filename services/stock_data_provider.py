@@ -22,46 +22,62 @@ class StockDataProvider:
     def get_a_share_list(self) -> List[Dict[str, str]]:
         """
         获取A股列表（包含代码、名称和拼音）
-        带缓存机制
+        带缓存机制，akshare → tushare 降级，10s 超时保护
         """
         if self._a_share_list_cache:
             return self._a_share_list_cache
-            
-        try:
-            import akshare as ak
-            from pypinyin import pinyin, Style
-            
-            logger.info("正在获取A股股票列表...")
-            # 获取A股代码和名称列表
-            df = ak.stock_info_a_code_name()
-            
+
+        from pypinyin import pinyin, Style
+        import concurrent.futures
+
+        def _build_list(df) -> List[Dict[str, str]]:
             stock_list = []
             for _, row in df.iterrows():
-                code = str(row['code'])
-                name = str(row['name'])
-                
-                # 生成拼音首字母
+                code = str(row['code'] if 'code' in row.index else row.get('ts_code', '')[:6])
+                name = str(row['name'] if 'name' in row.index else row.get('name', ''))
                 try:
                     py_list = pinyin(name, style=Style.FIRST_LETTER)
                     py_str = ''.join([item[0] for item in py_list]).lower()
-                    # 处理多音字等异常字符，确保只保留字母数字
                     py_str = ''.join(c for c in py_str if c.isalnum())
                 except Exception:
                     py_str = ""
-                
-                stock_list.append({
-                    'code': code,
-                    'name': name,
-                    'pinyin': py_str
-                })
-                
-            self._a_share_list_cache = stock_list
-            logger.info(f"成功加载 {len(stock_list)} 只A股股票信息")
+                stock_list.append({'code': code, 'name': name, 'pinyin': py_str})
             return stock_list
-            
+
+        # --- 尝试 akshare（带 10s 超时）---
+        try:
+            import akshare as ak
+            logger.info("正在获取A股列表 (akshare)…")
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(ak.stock_info_a_code_name)
+                df = future.result(timeout=10)
+            stock_list = _build_list(df)
+            self._a_share_list_cache = stock_list
+            logger.info(f"akshare 成功加载 {len(stock_list)} 只A股")
+            return stock_list
         except Exception as e:
-            logger.error(f"获取A股列表失败: {str(e)}")
-            return []
+            logger.warning(f"akshare 获取A股列表失败: {str(e)[:100]}，尝试 tushare…")
+
+        # --- 降级：tushare ---
+        try:
+            from services.tushare.client import tushare_client
+            if tushare_client.is_available:
+                logger.info("正在获取A股列表 (tushare)…")
+                ts_df = tushare_client.pro.stock_basic(
+                    exchange='', list_status='L',
+                    fields='ts_code,name'
+                )
+                if ts_df is not None and not ts_df.empty:
+                    ts_df['code'] = ts_df['ts_code'].str[:6]
+                    stock_list = _build_list(ts_df)
+                    self._a_share_list_cache = stock_list
+                    logger.info(f"tushare 成功加载 {len(stock_list)} 只A股")
+                    return stock_list
+        except Exception as e2:
+            logger.warning(f"tushare 获取A股列表也失败: {str(e2)[:100]}")
+
+        logger.error("所有数据源均无法获取A股列表，返回空列表")
+        return []
 
     def get_hk_share_list(self) -> List[Dict[str, str]]:
         """
@@ -122,18 +138,22 @@ class StockDataProvider:
         """
         解析股票输入，支持股票代码、中文名称、拼音缩写。
         智能搜索：如果主市场未找到，会尝试在全球市场中搜索。
-        
-        Args:
-            input_str: 输入字符串
-            market_type: 优先搜索的市场类型 ('A', 'HK', 'US', 'ETF', 'LOF')
-            
-        Returns:
-            (block_code, name) 股票代码和名称的元组
+        纯数字代码走快速路径，不依赖股票列表接口。
         """
         input_str = input_str.strip()
         if not input_str:
             return "", ""
-            
+
+        # 快速路径：纯数字代码（A股/ETF/LOF）直接返回，无需查列表
+        if input_str.isdigit() and market_type in ('A', 'ETF', 'LOF'):
+            logger.debug(f"快速路径: 纯数字代码 {input_str}，跳过列表查询")
+            return input_str, ""
+
+        # 快速路径：港股纯数字代码
+        if input_str.isdigit() and market_type == 'HK':
+            logger.debug(f"快速路径: 港股数字代码 {input_str}，跳过列表查询")
+            return input_str, ""
+
         input_lower = input_str.lower()
         
         # 市场映射和搜索顺序
