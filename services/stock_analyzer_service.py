@@ -54,6 +54,12 @@ class StockAnalyzerService:
 
             # 获取股票数据
             df = await self.data_provider.get_stock_data(stock_code, market_type)
+
+            # 如果名称为空（快速路径跳过了列表查询），尝试补全
+            if not stock_name and market_type == 'A':
+                stock_name = self.data_provider.lookup_stock_name(stock_code)
+                if stock_name:
+                    logger.info(f"补全股票名称: {stock_code} -> {stock_name}")
             
             # 检查是否有错误
             if hasattr(df, 'error'):

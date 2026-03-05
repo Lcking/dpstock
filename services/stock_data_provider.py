@@ -134,6 +134,34 @@ class StockDataProvider:
         logger.info(f"已加载 {len(stock_list)} 只常用港股信息")
         return stock_list
     
+    def lookup_stock_name(self, stock_code: str) -> str:
+        """
+        尽最大努力查找股票名称：先查缓存，再查 tushare，不做网络阻塞调用。
+        """
+        # 1. 从已有缓存查
+        if self._a_share_list_cache:
+            for s in self._a_share_list_cache:
+                if s['code'] == stock_code:
+                    return s['name']
+
+        # 2. 单次 tushare 查询（轻量，不依赖 akshare）
+        try:
+            from services.tushare.client import tushare_client
+            if tushare_client.is_available:
+                if stock_code.startswith('6'):
+                    ts_code = f"{stock_code}.SH"
+                elif stock_code.startswith(('0', '3')):
+                    ts_code = f"{stock_code}.SZ"
+                else:
+                    ts_code = f"{stock_code}.SZ"
+                df = tushare_client.pro.namechange(ts_code=ts_code, fields='ts_code,name')
+                if df is not None and not df.empty:
+                    return str(df.iloc[0]['name'])
+        except Exception as e:
+            logger.debug(f"tushare 查询股票名称失败: {e}")
+
+        return ""
+
     def resolve_stock_code(self, input_str: str, market_type: str = 'A') -> Tuple[str, str]:
         """
         解析股票输入，支持股票代码、中文名称、拼音缩写。
