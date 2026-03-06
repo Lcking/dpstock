@@ -224,19 +224,20 @@ onBeforeUnmount(() => {
   margin-bottom: 1.5rem;
   padding: 1.25rem;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(91, 103, 241, 0.10);
   box-shadow: 
-    0 8px 32px rgba(102, 126, 234, 0.1),
-    0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: transform 0.3s ease;
+    0 14px 36px rgba(79, 93, 160, 0.10),
+    0 2px 10px rgba(15, 23, 42, 0.04);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
 }
 
 .market-time-card:hover {
   transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 42px rgba(79, 93, 160, 0.12);
 }
 
 /* Grid Layout */
@@ -258,7 +259,7 @@ onBeforeUnmount(() => {
   text-align: center;
   padding: 1rem;
   border-radius: 16px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   height: 100%;
   box-sizing: border-box;
   width: 100%;
@@ -270,14 +271,14 @@ onBeforeUnmount(() => {
 
 /* Current Time Block */
 .current-time-block {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
-  border: 1px solid rgba(102, 126, 234, 0.15);
+  background: linear-gradient(135deg, rgba(91, 103, 241, 0.06) 0%, rgba(124, 84, 217, 0.06) 100%);
+  border: 1px solid rgba(91, 103, 241, 0.14);
 }
 
 .current-time-block:hover {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-  border-color: rgba(102, 126, 234, 0.3);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  background: linear-gradient(135deg, rgba(91, 103, 241, 0.10) 0%, rgba(124, 84, 217, 0.10) 100%);
+  border-color: rgba(91, 103, 241, 0.24);
+  box-shadow: 0 10px 22px rgba(91, 103, 241, 0.12);
 }
 
 /* Market Block */
@@ -287,7 +288,7 @@ onBeforeUnmount(() => {
 
 /* Open Market */
 .market-open-block {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.02) 100%);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.07) 0%, rgba(5, 150, 105, 0.03) 100%);
   border-color: rgba(16, 185, 129, 0.2);
 }
 
@@ -309,7 +310,7 @@ onBeforeUnmount(() => {
 
 /* Closed Market */
 .market-closed-block {
-  background: rgba(156, 163, 175, 0.05);
+  background: rgba(148, 163, 184, 0.07);
   border-color: rgba(156, 163, 175, 0.15);
   opacity: 0.9;
 }
@@ -333,7 +334,7 @@ onBeforeUnmount(() => {
 /* Typography */
 .time-label {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: #667085;
   margin-bottom: 0.5rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -354,7 +355,7 @@ onBeforeUnmount(() => {
 
 .time-counter {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: #667085;
   margin-top: 0.75rem;
   width: 100%;
   text-align: center;
@@ -389,9 +390,9 @@ onBeforeUnmount(() => {
 /* Progress Bar */
 .market-progress-container {
   width: 80%;
-  height: 4px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 2px;
+  height: 6px;
+  background: rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
   margin-top: 0.75rem;
   position: relative;
   overflow: visible;
@@ -399,7 +400,7 @@ onBeforeUnmount(() => {
 
 .market-progress-bar {
   height: 100%;
-  border-radius: 2px;
+  border-radius: 999px;
   transition: width 0.5s ease;
   position: relative;
 }

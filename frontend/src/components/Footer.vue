@@ -32,8 +32,9 @@ const currentYear = new Date().getFullYear();
 .site-footer {
   margin-top: auto;
   padding: 32px 20px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
-  border-top: 1px solid rgba(102, 126, 234, 0.1);
+  background: linear-gradient(135deg, rgba(91, 103, 241, 0.06) 0%, rgba(124, 84, 217, 0.06) 100%);
+  border-top: 1px solid rgba(91, 103, 241, 0.10);
+  backdrop-filter: blur(10px);
 }
 
 .footer-container {
@@ -52,15 +53,16 @@ const currentYear = new Date().getFullYear();
 }
 
 .footer-link {
-  color: #667eea;
+  color: #5560d6;
   text-decoration: none;
   font-size: 14px;
-  transition: color 0.2s;
+  font-weight: 600;
+  transition: color 0.2s ease, opacity 0.2s ease;
 }
 
 .footer-link:hover {
-  color: #764ba2;
-  text-decoration: underline;
+  color: #7c54d9;
+  opacity: 0.92;
 }
 
 .divider {
@@ -69,7 +71,7 @@ const currentYear = new Date().getFullYear();
 
 .footer-copyright {
   font-size: 14px;
-  color: #64748b;
+  color: #667085;
   margin-bottom: 8px;
 }
 
@@ -85,7 +87,7 @@ const currentYear = new Date().getFullYear();
 
 .footer-disclaimer {
   font-size: 12px;
-  color: #94a3b8;
+  color: #98a2b3;
 }
 
 @media (max-width: 480px) {

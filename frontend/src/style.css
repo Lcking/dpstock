@@ -3,20 +3,20 @@
    ======================================== */
 
 /* Import Inter font */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 /* CSS Variables - Modern Tech Theme */
 :root {
   /* Primary Colors - Purple-Blue Gradient */
-  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --primary-color: #667eea;
-  --primary-light: #8b9cf4;
-  --primary-dark: #5a67d8;
+  --primary-gradient: linear-gradient(135deg, #5b67f1 0%, #7c54d9 100%);
+  --primary-color: #5b67f1;
+  --primary-light: #8791ff;
+  --primary-dark: #4c57d7;
 
   /* Accent Colors */
-  --accent-cyan: #06b6d4;
+  --accent-cyan: #22c7d6;
   --accent-purple: #8b5cf6;
-  --accent-pink: #ec4899;
+  --accent-pink: #e879c6;
 
   /* Status Colors */
   --success-color: #10b981;
@@ -27,16 +27,19 @@
   --warning-bg: rgba(245, 158, 11, 0.1);
 
   /* Neutral Colors */
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --text-tertiary: #9ca3af;
-  --border-color: rgba(0, 0, 0, 0.08);
+  --text-primary: #1f2540;
+  --text-secondary: #667085;
+  --text-tertiary: #94a3b8;
+  --border-color: rgba(91, 103, 241, 0.12);
 
   /* Glassmorphism */
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.3);
-  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
-  --glass-blur: blur(10px);
+  --glass-bg: rgba(255, 255, 255, 0.84);
+  --glass-border: rgba(255, 255, 255, 0.62);
+  --glass-shadow: 0 16px 40px rgba(58, 76, 146, 0.12);
+  --glass-shadow-hover: 0 20px 56px rgba(58, 76, 146, 0.16);
+  --glass-blur: blur(14px);
+  --surface-soft: rgba(255, 255, 255, 0.7);
+  --surface-strong: rgba(255, 255, 255, 0.92);
 
   /* Spacing */
   --radius-sm: 8px;
@@ -64,7 +67,10 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #e8ecf4 35%, #f0e6fa 70%, #f5f7fa 100%);
+  background:
+    radial-gradient(circle at top left, rgba(91, 103, 241, 0.12), transparent 32%),
+    radial-gradient(circle at top right, rgba(232, 121, 198, 0.10), transparent 24%),
+    linear-gradient(145deg, #f7f9ff 0%, #eef2fb 46%, #f8f3ff 100%);
   background-attachment: fixed;
   position: relative;
 }
@@ -78,8 +84,8 @@ body::before {
   width: 100%;
   height: 100%;
   background-image:
-    radial-gradient(circle at 25% 25%, rgba(102, 126, 234, 0.03) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(118, 75, 162, 0.03) 0%, transparent 50%);
+    radial-gradient(circle at 25% 25%, rgba(91, 103, 241, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(124, 84, 217, 0.04) 0%, transparent 50%);
   pointer-events: none;
   z-index: -1;
 }
@@ -125,12 +131,12 @@ button {
   color: white;
   cursor: pointer;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 10px 24px rgba(91, 103, 241, 0.18);
 }
 
 button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 14px 30px rgba(91, 103, 241, 0.24);
 }
 
 button:active {
@@ -161,7 +167,7 @@ button:focus-visible {
 
 .n-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(31, 38, 135, 0.2) !important;
+  box-shadow: var(--glass-shadow-hover) !important;
 }
 
 /* App Container */
@@ -206,38 +212,201 @@ input::-moz-focus-inner {
 }
 
 /* Naive UI Component Overrides */
-.n-button--primary-type {
+.n-button--primary-type,
+.n-button--info-type,
+.n-button--success-type,
+.n-button--warning-type,
+.n-button--error-type {
+  border: none !important;
+}
+
+/* 实心按钮：深色/渐变底时统一白字白图标 */
+.n-button--primary-type:not(.n-button--secondary-type):not(.n-button--tertiary-type):not(.n-button--quaternary-type):not(.n-button--text-type) {
   background: var(--primary-gradient) !important;
   color: white !important;
-  border: none !important;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3) !important;
+  box-shadow: 0 10px 22px rgba(91, 103, 241, 0.2) !important;
 }
 
-.n-button--primary-type:hover {
+.n-button--info-type:not(.n-button--secondary-type):not(.n-button--tertiary-type):not(.n-button--quaternary-type):not(.n-button--text-type) {
+  background: linear-gradient(135deg, #22c7d6 0%, #0ea5b7 100%) !important;
+  color: white !important;
+  box-shadow: 0 10px 22px rgba(34, 199, 214, 0.2) !important;
+}
+
+.n-button--success-type:not(.n-button--secondary-type):not(.n-button--tertiary-type):not(.n-button--quaternary-type):not(.n-button--text-type) {
+  background: linear-gradient(135deg, #18b77d 0%, #0f9a68 100%) !important;
+  color: white !important;
+  box-shadow: 0 10px 22px rgba(16, 185, 129, 0.2) !important;
+}
+
+.n-button--warning-type:not(.n-button--secondary-type):not(.n-button--tertiary-type):not(.n-button--quaternary-type):not(.n-button--text-type) {
+  background: linear-gradient(135deg, #f5b23b 0%, #e38b1f 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(245, 158, 11, 0.22) !important;
+}
+
+.n-button--error-type:not(.n-button--secondary-type):not(.n-button--tertiary-type):not(.n-button--quaternary-type):not(.n-button--text-type) {
+  background: linear-gradient(135deg, #ef5350 0%, #dc2626 100%) !important;
+  color: white !important;
+  box-shadow: 0 10px 22px rgba(239, 68, 68, 0.2) !important;
+}
+
+.n-button--primary-type:not(.n-button--secondary-type):hover,
+.n-button--info-type:not(.n-button--secondary-type):hover,
+.n-button--success-type:not(.n-button--secondary-type):hover,
+.n-button--warning-type:not(.n-button--secondary-type):hover,
+.n-button--error-type:not(.n-button--secondary-type):hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4) !important;
 }
 
-/* 确保所有 primary 按钮的文字和图标都是白色 */
+.n-button--primary-type:not(.n-button--secondary-type):hover {
+  box-shadow: 0 12px 26px rgba(91, 103, 241, 0.24) !important;
+}
+
+.n-button--info-type:not(.n-button--secondary-type):hover {
+  box-shadow: 0 12px 26px rgba(34, 199, 214, 0.24) !important;
+}
+
+.n-button--success-type:not(.n-button--secondary-type):hover {
+  box-shadow: 0 12px 26px rgba(16, 185, 129, 0.24) !important;
+}
+
+.n-button--warning-type:not(.n-button--secondary-type):hover {
+  box-shadow: 0 12px 26px rgba(245, 158, 11, 0.26) !important;
+}
+
+.n-button--error-type:not(.n-button--secondary-type):hover {
+  box-shadow: 0 12px 26px rgba(239, 68, 68, 0.24) !important;
+}
+
 .n-button--primary-type .n-button__content,
 .n-button--primary-type .n-icon,
 .n-button--primary-type span,
-.n-button--primary-type svg {
-  color: white !important;
-  fill: white !important;
-}
-
-/* 确保 info 类型按钮也使用白色文字 */
-.n-button--info-type {
-  color: white !important;
-}
-
+.n-button--primary-type svg,
 .n-button--info-type .n-button__content,
 .n-button--info-type .n-icon,
 .n-button--info-type span,
-.n-button--info-type svg {
-  color: white !important;
-  fill: white !important;
+.n-button--info-type svg,
+.n-button--success-type .n-button__content,
+.n-button--success-type .n-icon,
+.n-button--success-type span,
+.n-button--success-type svg,
+.n-button--warning-type .n-button__content,
+.n-button--warning-type .n-icon,
+.n-button--warning-type span,
+.n-button--warning-type svg,
+.n-button--error-type .n-button__content,
+.n-button--error-type .n-icon,
+.n-button--error-type span,
+.n-button--error-type svg {
+  fill: currentColor !important;
+}
+
+/* 浅色按钮：用浅底 + 同色文字，避免深底黑字 */
+.n-button--secondary-type.n-button--primary-type,
+.n-button--tertiary-type.n-button--primary-type,
+.n-button--quaternary-type.n-button--primary-type {
+  background: rgba(91, 103, 241, 0.10) !important;
+  color: #5560d6 !important;
+  border: 1px solid rgba(91, 103, 241, 0.16) !important;
+}
+
+.n-button--secondary-type.n-button--info-type,
+.n-button--tertiary-type.n-button--info-type,
+.n-button--quaternary-type.n-button--info-type {
+  background: rgba(34, 199, 214, 0.10) !important;
+  color: #0f93a3 !important;
+  border: 1px solid rgba(34, 199, 214, 0.16) !important;
+}
+
+.n-button--secondary-type.n-button--success-type,
+.n-button--tertiary-type.n-button--success-type,
+.n-button--quaternary-type.n-button--success-type {
+  background: rgba(16, 185, 129, 0.10) !important;
+  color: #0f9a68 !important;
+  border: 1px solid rgba(16, 185, 129, 0.16) !important;
+}
+
+.n-button--secondary-type.n-button--warning-type,
+.n-button--tertiary-type.n-button--warning-type,
+.n-button--quaternary-type.n-button--warning-type {
+  background: rgba(245, 158, 11, 0.12) !important;
+  color: #b46912 !important;
+  border: 1px solid rgba(245, 158, 11, 0.18) !important;
+}
+
+.n-button--secondary-type.n-button--error-type,
+.n-button--tertiary-type.n-button--error-type,
+.n-button--quaternary-type.n-button--error-type {
+  background: rgba(239, 68, 68, 0.10) !important;
+  color: #dc2626 !important;
+  border: 1px solid rgba(239, 68, 68, 0.16) !important;
+}
+
+.n-button--secondary-type.n-button--primary-type .n-button__content,
+.n-button--secondary-type.n-button--primary-type .n-icon,
+.n-button--secondary-type.n-button--primary-type span,
+.n-button--secondary-type.n-button--primary-type svg,
+.n-button--secondary-type.n-button--info-type .n-button__content,
+.n-button--secondary-type.n-button--info-type .n-icon,
+.n-button--secondary-type.n-button--info-type span,
+.n-button--secondary-type.n-button--info-type svg,
+.n-button--secondary-type.n-button--success-type .n-button__content,
+.n-button--secondary-type.n-button--success-type .n-icon,
+.n-button--secondary-type.n-button--success-type span,
+.n-button--secondary-type.n-button--success-type svg,
+.n-button--secondary-type.n-button--warning-type .n-button__content,
+.n-button--secondary-type.n-button--warning-type .n-icon,
+.n-button--secondary-type.n-button--warning-type span,
+.n-button--secondary-type.n-button--warning-type svg,
+.n-button--secondary-type.n-button--error-type .n-button__content,
+.n-button--secondary-type.n-button--error-type .n-icon,
+.n-button--secondary-type.n-button--error-type span,
+.n-button--secondary-type.n-button--error-type svg,
+.n-button--tertiary-type .n-button__content,
+.n-button--tertiary-type .n-icon,
+.n-button--tertiary-type span,
+.n-button--tertiary-type svg,
+.n-button--quaternary-type .n-button__content,
+.n-button--quaternary-type .n-icon,
+.n-button--quaternary-type span,
+.n-button--quaternary-type svg {
+  color: currentColor !important;
+  fill: currentColor !important;
+}
+
+.n-button--default-type,
+.n-button--quaternary-type,
+.n-button--tertiary-type {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border: 1px solid rgba(91, 103, 241, 0.14) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 6px 18px rgba(148, 163, 184, 0.12) !important;
+}
+
+.n-button--default-type:hover,
+.n-button--quaternary-type:hover,
+.n-button--tertiary-type:hover {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(91, 103, 241, 0.22) !important;
+}
+
+.n-input,
+.n-select,
+.n-input-number {
+  --n-border-hover: rgba(91, 103, 241, 0.26) !important;
+  --n-border-focus: rgba(91, 103, 241, 0.34) !important;
+  --n-box-shadow-focus: 0 0 0 3px rgba(91, 103, 241, 0.12) !important;
+}
+
+.n-input .n-input__input-el,
+.n-input textarea,
+.n-base-selection {
+  color: var(--text-primary) !important;
+}
+
+.n-base-selection {
+  background: rgba(255, 255, 255, 0.78) !important;
 }
 
 .n-button:focus:not(:focus-visible),

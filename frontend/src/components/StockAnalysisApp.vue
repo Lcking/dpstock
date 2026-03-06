@@ -1043,7 +1043,7 @@ function handleOpenInviteFromQuota() {
 .main-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 2rem;
+  padding: 2.25rem 1.5rem 2rem;
   width: 100%;
   box-sizing: border-box;
   background: transparent !important;
@@ -1055,26 +1055,50 @@ function handleOpenInviteFromQuota() {
   border-radius: 24px !important;
   overflow: hidden;
   transition: box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  background: rgba(255, 255, 255, 0.75) !important;
-  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.08);
+  background: rgba(255, 255, 255, 0.84) !important;
+  border: 1px solid rgba(91, 103, 241, 0.12) !important;
+  box-shadow: 0 18px 40px rgba(79, 93, 160, 0.10);
 }
 
 .analysis-container:hover {
-  box-shadow: 0 8px 40px rgba(102, 126, 234, 0.12);
+  box-shadow: 0 22px 56px rgba(79, 93, 160, 0.14);
 }
 
 /* Config Section */
 .config-section {
-  padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
+  padding: 0.85rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(247, 249, 255, 0.64) 100%);
+  border: 1px solid rgba(91, 103, 241, 0.08);
+  border-radius: 18px;
   height: 100%;
+}
+
+.search-config-container {
+  padding: 0.35rem 0.15rem 0;
+}
+
+.search-config-container :deep(.n-form-item-label) {
+  color: #475467;
+  font-weight: 700;
+}
+
+.search-config-container :deep(.n-input-group) {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(91, 103, 241, 0.10);
+  border-radius: 18px;
+  padding: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.search-config-container :deep(.n-base-selection),
+.search-config-container :deep(.n-input) {
+  border-radius: 14px !important;
 }
 
 .action-buttons {
   display: flex;
   gap: 1rem;
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
 }
 
 .action-buttons .n-button {
@@ -1083,7 +1107,7 @@ function handleOpenInviteFromQuota() {
 
 /* Results Section */
 .results-section {
-  padding: 0.5rem;
+  padding: 0.7rem;
   min-height: 400px;
   display: flex;
   flex-direction: column;
@@ -1091,8 +1115,13 @@ function handleOpenInviteFromQuota() {
 
 .results-header {
   margin-bottom: 1.25rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 0.1rem 0 0.9rem;
+  border-bottom: 1px solid rgba(91, 103, 241, 0.08);
+}
+
+.results-header :deep(.n-text) {
+  font-weight: 700;
+  color: #1f2540;
 }
 
 /* Analysis HTML Content */
@@ -1115,11 +1144,13 @@ function handleOpenInviteFromQuota() {
 
 /* Table Styles Override */
 .table-container {
+  position: relative;
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.4);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.54);
+  border: 1px solid rgba(91, 103, 241, 0.08);
 }
 
 :deep(.n-data-table) {
@@ -1127,9 +1158,9 @@ function handleOpenInviteFromQuota() {
 }
 
 :deep(.n-data-table-th) {
-  background: rgba(255, 255, 255, 0.5) !important;
+  background: rgba(247, 249, 255, 0.88) !important;
   font-weight: 600 !important;
-  color: #4b5563 !important;
+  color: #475467 !important;
 }
 
 :deep(.n-data-table-td) {
@@ -1166,6 +1197,11 @@ function handleOpenInviteFromQuota() {
   
   .analysis-container :deep(.n-card__content) {
     padding: 1rem !important;
+  }
+
+  .config-section,
+  .results-section {
+    padding: 0.65rem;
   }
   
   .action-buttons {
