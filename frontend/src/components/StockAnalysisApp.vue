@@ -246,6 +246,38 @@ const showAnnouncement = (content: string) => {
   showAnnouncementBanner.value = true;
 };
 
+function clearInviteQueryParam() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has('invite')) return;
+  url.searchParams.delete('invite');
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, '', nextUrl || '/');
+}
+
+async function handleInviteAcceptance() {
+  const inviteCode = new URLSearchParams(window.location.search).get('invite');
+  if (!inviteCode) return;
+
+  try {
+    const result = await apiService.acceptInvite(inviteCode);
+    if (result?.success) {
+      message.success(result.message || '邀请已接受');
+    } else {
+      message.warning(result?.message || '邀请码无效或已过期');
+    }
+  } catch (error: any) {
+    const detail = error?.response?.data?.detail;
+    const errorMessage =
+      detail?.message ||
+      detail ||
+      error?.message ||
+      '接受邀请失败，请稍后重试';
+    message.error(errorMessage);
+  } finally {
+    clearInviteQueryParam();
+  }
+}
+
 // 市场选项
 const marketOptions = [
   { label: 'A股', value: 'A', showSearch: true },
@@ -942,6 +974,8 @@ onMounted(async () => {
   try {
     // 添加窗口大小变化监听
     window.addEventListener('resize', handleResize);
+
+    await handleInviteAcceptance();
     
     // 从 API 获取公告信息
     const config = await apiService.getConfig();
