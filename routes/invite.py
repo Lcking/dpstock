@@ -41,6 +41,7 @@ class InviteAcceptResponse(BaseModel):
 @router.post("/invite/generate", response_model=InviteGenerateResponse)
 async def generate_invite_code(
     request: Request,
+    response: Response,
     aguai_uid: Optional[str] = Cookie(None)
 ):
     """
@@ -52,13 +53,18 @@ async def generate_invite_code(
         - message: User-friendly message
     """
     if not aguai_uid:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "error": "unauthorized",
-                "message": "请先访问首页以获取用户身份"
-            }
+        aguai_uid = request.headers.get("X-Anonymous-Id")
+
+    if not aguai_uid:
+        aguai_uid = str(uuid.uuid4())
+        response.set_cookie(
+            key=COOKIE_NAME,
+            value=aguai_uid,
+            max_age=COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="lax"
         )
+        logger.info(f"Created user identity during invite generation: {aguai_uid}")
     
     try:
         result = invite_service.generate_invite_code(aguai_uid)

@@ -378,8 +378,21 @@ async def search_a_shares(keyword: str = "", username: str = Depends(verify_toke
     try:
         if not keyword:
             raise HTTPException(status_code=400, detail="请输入搜索关键词")
-        
+
+        keyword = keyword.strip()
         analyzer = StockAnalyzerService()
+
+        # 纯 6 位数字代码走快速路径，避免每次都加载整份股票列表
+        if keyword.isdigit() and len(keyword) == 6:
+            stock_name = await asyncio.to_thread(analyzer.data_provider.lookup_stock_name, keyword)
+            return {
+                "results": [{
+                    "symbol": keyword,
+                    "name": stock_name or keyword,
+                    "market": "A"
+                }]
+            }
+
         stock_list = await asyncio.to_thread(analyzer.data_provider.get_a_share_list)
         
         # 模糊匹配搜索
@@ -440,7 +453,8 @@ async def search_global(keyword: str = "", market_type: str = "ALL", username: s
     try:
         if not keyword:
             return {"results": []}
-        
+
+        keyword = keyword.strip()
         keyword_lower = keyword.lower()
         tasks = []
         
@@ -448,6 +462,16 @@ async def search_global(keyword: str = "", market_type: str = "ALL", username: s
         if market_type in ["ALL", "A"]:
             async def search_a():
                 analyzer = StockAnalyzerService()
+
+                if keyword.isdigit() and len(keyword) == 6:
+                    stock_name = await asyncio.to_thread(analyzer.data_provider.lookup_stock_name, keyword)
+                    return [{
+                        "label": f"{stock_name or keyword} ({keyword})",
+                        "value": keyword,
+                        "market": "A",
+                        "name": stock_name or keyword
+                    }]
+
                 stock_list = await asyncio.to_thread(analyzer.data_provider.get_a_share_list)
                 res = []
                 for s in stock_list:

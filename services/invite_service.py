@@ -52,7 +52,7 @@ class InviteService:
                 if existing:
                     logger.info(f"Retrieved existing invite code for user: {inviter_id}")
                     return {
-                        "invite_code": existing[0],
+                        "invite_code": existing.get('invite_code'),
                         "is_new": False
                     }
                 

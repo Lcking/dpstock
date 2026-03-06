@@ -445,7 +445,16 @@ const exportOptions = [
 let searchTimer: any = null;
 
 async function handleSearch(keyword: string) {
-  if (!keyword.trim()) {
+  const trimmed = keyword.trim();
+  const isNumeric = /^\d+$/.test(trimmed);
+
+  if (!trimmed) {
+    searchOptions.value = [];
+    return;
+  }
+
+  // 降低搜索噪音：代码至少输入 3 位，名称/拼音至少输入 2 位再请求后端
+  if ((isNumeric && trimmed.length < 3) || (!isNumeric && trimmed.length < 2)) {
     searchOptions.value = [];
     return;
   }
@@ -456,7 +465,7 @@ async function handleSearch(keyword: string) {
   searchTimer = setTimeout(async () => {
     try {
       // 调用全局搜索 API，同时带上当前选中的市场作为“首选市场”
-      const results = await apiService.searchGlobal(keyword, marketType.value);
+      const results = await apiService.searchGlobal(trimmed, marketType.value);
       searchOptions.value = results;
     } catch (error) {
       console.error('搜索出错:', error);

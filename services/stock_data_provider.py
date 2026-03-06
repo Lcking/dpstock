@@ -12,6 +12,8 @@ class StockDataProvider:
     异步股票数据提供服务
     负责获取股票、基金等金融产品的历史数据
     """
+    _shared_a_share_list_cache: Optional[List[Dict[str, str]]] = None
+    _shared_hk_share_list_cache: Optional[List[Dict[str, str]]] = None
     
     def __init__(self):
         """初始化数据提供者服务"""
@@ -25,6 +27,9 @@ class StockDataProvider:
         带缓存机制，akshare → tushare 降级，10s 超时保护
         """
         if self._a_share_list_cache:
+            return self._a_share_list_cache
+        if StockDataProvider._shared_a_share_list_cache:
+            self._a_share_list_cache = StockDataProvider._shared_a_share_list_cache
             return self._a_share_list_cache
 
         from pypinyin import pinyin, Style
@@ -53,6 +58,7 @@ class StockDataProvider:
                 df = future.result(timeout=10)
             stock_list = _build_list(df)
             self._a_share_list_cache = stock_list
+            StockDataProvider._shared_a_share_list_cache = stock_list
             logger.info(f"akshare 成功加载 {len(stock_list)} 只A股")
             return stock_list
         except Exception as e:
@@ -71,6 +77,7 @@ class StockDataProvider:
                     ts_df['code'] = ts_df['ts_code'].str[:6]
                     stock_list = _build_list(ts_df)
                     self._a_share_list_cache = stock_list
+                    StockDataProvider._shared_a_share_list_cache = stock_list
                     logger.info(f"tushare 成功加载 {len(stock_list)} 只A股")
                     return stock_list
         except Exception as e2:
@@ -85,6 +92,9 @@ class StockDataProvider:
         避免海外服务器连接中国数据源的问题
         """
         if self._hk_share_list_cache:
+            return self._hk_share_list_cache
+        if StockDataProvider._shared_hk_share_list_cache:
+            self._hk_share_list_cache = StockDataProvider._shared_hk_share_list_cache
             return self._hk_share_list_cache
         
         from pypinyin import pinyin, Style
@@ -131,6 +141,7 @@ class StockDataProvider:
             })
         
         self._hk_share_list_cache = stock_list
+        StockDataProvider._shared_hk_share_list_cache = stock_list
         logger.info(f"已加载 {len(stock_list)} 只常用港股信息")
         return stock_list
     
