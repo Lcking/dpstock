@@ -21,36 +21,12 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return
 
-          const normalizedId = id.replace(/\\/g, '/')
-
           if (id.includes('echarts')) {
             return 'vendor-echarts'
           }
 
           if (id.includes('html2canvas')) {
             return 'vendor-html2canvas'
-          }
-
-          if (
-            normalizedId.includes('/vueuc/') ||
-            normalizedId.includes('/seemly/') ||
-            normalizedId.includes('/vooks/') ||
-            normalizedId.includes('/evtd/') ||
-            normalizedId.includes('/treemate/') ||
-            normalizedId.includes('/@css-render/')
-          ) {
-            return 'vendor-naive-shared'
-          }
-
-          if (
-            normalizedId.includes('/naive-ui/') &&
-            /\/(data-table|select|dialog|modal|drawer|tabs|pagination|upload|tree|cascader|auto-complete|dynamic-tags|popover|dropdown|menu|form)\//.test(normalizedId)
-          ) {
-            return 'vendor-naive-heavy'
-          }
-
-          if (normalizedId.includes('/naive-ui/')) {
-            return 'vendor-naive-base'
           }
 
           if (id.includes('@vue') || id.includes('/vue/') || id.includes('vue-router') || id.includes('pinia')) {
@@ -60,8 +36,6 @@ export default defineConfig({
           if (id.includes('markdown-it') || id.includes('marked')) {
             return 'vendor-markdown'
           }
-
-          return 'vendor-misc'
         }
       }
     }
