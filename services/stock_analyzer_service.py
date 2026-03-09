@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from datetime import datetime
 from typing import List, AsyncGenerator, Dict, Any, Optional
 from utils.logger import get_logger
@@ -10,6 +11,101 @@ from services.archive_service import ArchiveService
 
 # 获取日志器
 logger = get_logger()
+
+
+def _normalize_turnover_rate(value: Any) -> Optional[float]:
+    """将原始换手率标准化为可展示的百分比值。"""
+    if value is None:
+        return None
+    try:
+        if hasattr(value, "item"):
+            value = value.item()
+        turnover = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    if turnover <= 0:
+        return None
+    return round(turnover, 2)
+
+
+def _build_turnover_profile(turnover_rate: Optional[float]) -> Optional[Dict[str, str]]:
+    """基于换手率生成简短热度解读。"""
+    if turnover_rate is None:
+        return None
+
+    if turnover_rate < 1:
+        return {
+            "tag": "低活跃",
+            "signal": "weakening",
+            "interpretation": f"换手率 {turnover_rate:.2f}%，筹码交换偏慢，短线关注度有限。",
+        }
+    if turnover_rate < 3:
+        return {
+            "tag": "正常活跃",
+            "signal": "neutral",
+            "interpretation": f"换手率 {turnover_rate:.2f}%，交易热度处于常见区间，关注度较为正常。",
+        }
+    if turnover_rate < 8:
+        return {
+            "tag": "高活跃",
+            "signal": "strengthening",
+            "interpretation": f"换手率 {turnover_rate:.2f}%，筹码交换较快，市场关注度明显提升。",
+        }
+    return {
+        "tag": "极高活跃",
+        "signal": "extreme",
+        "interpretation": f"换手率 {turnover_rate:.2f}%，交易非常活跃，短线博弈特征更强。",
+    }
+
+
+def _augment_analysis_v1_with_turnover(
+    analysis_v1: Optional[Dict[str, Any]],
+    turnover_rate: Optional[float],
+) -> Optional[Dict[str, Any]]:
+    """向 Analysis V1 的指标翻译区补充换手率指标。"""
+    if not isinstance(analysis_v1, dict):
+        return analysis_v1
+
+    profile = _build_turnover_profile(turnover_rate)
+    if profile is None:
+        return analysis_v1
+
+    data = deepcopy(analysis_v1)
+    indicator_translate = data.setdefault("indicator_translate", {})
+    indicators = indicator_translate.setdefault("indicators", [])
+
+    turnover_item = {
+        "name": "换手率",
+        "value": f"{turnover_rate:.2f}%",
+        "signal": profile["signal"],
+        "interpretation": (
+            f"{profile['interpretation']} 它更偏向反映个股热度，不等同于资金净流入或主力净买入。"
+        ),
+    }
+
+    replaced = False
+    for idx, indicator in enumerate(indicators):
+        if indicator.get("name") == "换手率":
+            indicators[idx] = turnover_item
+            replaced = True
+            break
+
+    if not replaced:
+        indicators.append(turnover_item)
+
+    existing_note = indicator_translate.get("global_note") or ""
+    turnover_note = (
+        f"- 换手率 {turnover_rate:.2f}%：{profile['tag']}，主要反映交易热度，不直接代表资金流入方向"
+    )
+    if turnover_note not in existing_note:
+        indicator_translate["global_note"] = (
+            f"{existing_note.rstrip()}\n{turnover_note}".strip()
+            if existing_note
+            else turnover_note
+        )
+
+    return data
 
 class StockAnalyzerService:
     """
@@ -139,6 +235,9 @@ class StockAnalyzerService:
                 volume_status = "LOW"
             else:
                 volume_status = "NORMAL"
+
+            turnover_rate = _normalize_turnover_rate(latest_data.get('Turnover'))
+            turnover_profile = _build_turnover_profile(turnover_rate)
                 
             # 当前分析日期
             analysis_date = datetime.now().strftime('%Y-%m-%d')
@@ -157,6 +256,8 @@ class StockAnalyzerService:
                 "rsi": latest_data.get('RSI', 0),
                 "macd_signal": macd_signal,
                 "volume_status": volume_status,
+                "turnover_rate": turnover_rate,
+                "turnover_profile": turnover_profile,
                 "recommendation": recommendation,
                 "ai_analysis": ""
             }
@@ -170,6 +271,7 @@ class StockAnalyzerService:
             ai_score = None
             analysis_v1 = None
             async for analysis_chunk in self.ai_analyzer.get_ai_analysis(df_with_indicators, stock_code, stock_name, market_type, stream):
+                outgoing_chunk = analysis_chunk
                 if stream:
                     # 尝试从片段中提取纯文本 (如果 ai_analyzer 返回的是 JSON 字符串片段)
                     try:
@@ -181,7 +283,16 @@ class StockAnalyzerService:
                         if "ai_score" in chunk_data:
                             ai_score = chunk_data.get("ai_score")
                         if "analysis_v1" in chunk_data:
-                            analysis_v1 = chunk_data.get("analysis_v1")
+                            analysis_v1 = _augment_analysis_v1_with_turnover(
+                                chunk_data.get("analysis_v1"),
+                                turnover_rate,
+                            )
+                            chunk_data["analysis_v1"] = analysis_v1
+                            outgoing_chunk = json.dumps(chunk_data, ensure_ascii=False)
+                        if chunk_data.get("status") == "completed":
+                            chunk_data["turnover_rate"] = turnover_rate
+                            chunk_data["turnover_profile"] = turnover_profile
+                            outgoing_chunk = json.dumps(chunk_data, ensure_ascii=False)
                     except:
                         pass
                 else:
@@ -190,11 +301,19 @@ class StockAnalyzerService:
                         chunk_data = json.loads(analysis_chunk)
                         full_analysis = chunk_data.get("analysis", "")
                         ai_score = chunk_data.get("ai_score")
-                        analysis_v1 = chunk_data.get("analysis_v1")
+                        analysis_v1 = _augment_analysis_v1_with_turnover(
+                            chunk_data.get("analysis_v1"),
+                            turnover_rate,
+                        )
+                        if analysis_v1 is not None:
+                            chunk_data["analysis_v1"] = analysis_v1
+                        chunk_data["turnover_rate"] = turnover_rate
+                        chunk_data["turnover_profile"] = turnover_profile
+                        outgoing_chunk = json.dumps(chunk_data, ensure_ascii=False)
                     except:
                         pass
                 
-                yield analysis_chunk
+                yield outgoing_chunk
             
             # 分析完成后，自动归档为文章
             if full_analysis:

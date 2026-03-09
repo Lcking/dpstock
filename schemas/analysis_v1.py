@@ -100,7 +100,7 @@ class IndicatorItem(BaseModel):
 
 class IndicatorTranslate(BaseModel):
     """Section 3: Indicator Translate - 指标翻译"""
-    indicators: List[IndicatorItem] = Field(..., description="指标列表", max_length=5)
+    indicators: List[IndicatorItem] = Field(..., description="指标列表", max_length=6)
     global_note: str = Field(..., description="指标整体说明", max_length=200)
 
 

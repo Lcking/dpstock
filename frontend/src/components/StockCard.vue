@@ -137,6 +137,16 @@
           </div>
           <div class="indicator-label">成交量</div>
         </div>
+
+        <div class="indicator-item turnover-indicator" v-if="stock.turnoverRate !== undefined">
+          <div class="indicator-value" :class="getTurnoverClass(stock.turnoverRate)">
+            {{ formatTurnoverRate(stock.turnoverRate) }}
+          </div>
+          <div class="indicator-label">换手率</div>
+          <div class="indicator-subtext">
+            {{ stock.turnoverProfile?.tag || getTurnoverTag(stock.turnoverRate) }}
+          </div>
+        </div>
       </div>
     </div>
     
@@ -226,12 +236,42 @@ import {
   ShareSocialOutline,
   BookmarkOutline
 } from '@vicons/ionicons5';
-import * as echarts from 'echarts';
+import {
+  BarChart,
+  CandlestickChart,
+  LineChart,
+  type BarSeriesOption,
+  type CandlestickSeriesOption,
+  type LineSeriesOption
+} from 'echarts/charts';
+import {
+  GridComponent,
+  TooltipComponent,
+  type GridComponentOption,
+  type TooltipComponentOption
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+import {
+  init as initECharts,
+  use,
+  type ComposeOption,
+  type EChartsType
+} from 'echarts/core';
 import { apiService } from '@/services/api';
 import { getCategoryName, parseMarkdown } from '@/utils';
 import type { StockInfo } from '@/types';
 import AnalysisV1Display from './AnalysisV1Display.vue';
 import AiScorePanel from './AiScorePanel.vue';
+
+use([CandlestickChart, LineChart, BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
+
+type StockChartOption = ComposeOption<
+  | GridComponentOption
+  | TooltipComponentOption
+  | BarSeriesOption
+  | CandlestickSeriesOption
+  | LineSeriesOption
+>;
 
 const props = defineProps<{
   stock: StockInfo;
@@ -306,7 +346,8 @@ const hasAnyTechnicalIndicator = computed(() => {
          props.stock.priceChange !== undefined || 
          props.stock.maTrend !== undefined || 
          props.stock.macdSignal !== undefined || 
-         props.stock.volumeStatus !== undefined;
+         props.stock.volumeStatus !== undefined ||
+         props.stock.turnoverRate !== undefined;
 });
 
 function formatChangePercent(percent: number | undefined): string {
@@ -320,6 +361,11 @@ function formatPriceChange(change: number | undefined | null): string {
   if (change === undefined || change === null) return '--';
   const sign = change > 0 ? '+' : '';
   return `${sign}${change.toFixed(2)}`;
+}
+
+function formatTurnoverRate(turnoverRate: number | undefined | null): string {
+  if (turnoverRate === undefined || turnoverRate === null) return '--';
+  return `${turnoverRate.toFixed(2)}%`;
 }
 
 function formatDate(dateStr: string | undefined | null): string {
@@ -390,6 +436,22 @@ function getChineseVolumeStatus(status: string): string {
   return statusMap[status] || status;
 }
 
+function getTurnoverTag(turnoverRate: number | undefined): string {
+  if (turnoverRate === undefined) return '';
+  if (turnoverRate < 1) return '低活跃';
+  if (turnoverRate < 3) return '正常活跃';
+  if (turnoverRate < 8) return '高活跃';
+  return '极高活跃';
+}
+
+function getTurnoverClass(turnoverRate: number | undefined): string {
+  if (turnoverRate === undefined) return 'turnover-normal';
+  if (turnoverRate < 1) return 'turnover-low';
+  if (turnoverRate < 3) return 'turnover-normal';
+  if (turnoverRate < 8) return 'turnover-high';
+  return 'turnover-extreme';
+}
+
 const message = useMessage();
 
 // 添加复制功能
@@ -436,6 +498,10 @@ async function copyStockAnalysis() {
     
     if (props.stock.volumeStatus) {
       result += `成交量: ${getChineseVolumeStatus(props.stock.volumeStatus)}\n`;
+    }
+
+    if (props.stock.turnoverRate !== undefined) {
+      result += `换手率: ${formatTurnoverRate(props.stock.turnoverRate)} (${props.stock.turnoverProfile?.tag || getTurnoverTag(props.stock.turnoverRate)})\n`;
     }
     
     // 添加分析结果
@@ -517,7 +583,7 @@ function handleScroll() {
 
 // 图表加载逻辑
 const chartRef = ref<HTMLElement | null>(null);
-const chartInstance = ref<echarts.ECharts | null>(null);
+const chartInstance = ref<EChartsType | null>(null);
 const chartLoading = ref(false);
 
 async function initChart() {
@@ -529,10 +595,10 @@ async function initChart() {
     if (data.error) throw new Error(data.error);
 
     if (!chartInstance.value) {
-      chartInstance.value = echarts.init(chartRef.value);
+      chartInstance.value = initECharts(chartRef.value);
     }
 
-    const option = {
+    const option: StockChartOption = {
       animation: false,
       silent: true, // 禁用交互以提升性能
       grid: [
@@ -1051,6 +1117,13 @@ window.addEventListener('resize', () => {
   font-weight: 500;
 }
 
+.indicator-subtext {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: #6b7280;
+  font-weight: 600;
+}
+
 /* Score Colors */
 .score-high { color: #10b981; }
 .score-medium-high { color: #34d399; }
@@ -1070,6 +1143,10 @@ window.addEventListener('resize', () => {
 .volume-high { color: #ef4444; }
 .volume-low { color: #10b981; }
 .volume-normal { color: #f59e0b; }
+.turnover-low { color: #10b981; }
+.turnover-normal { color: #f59e0b; }
+.turnover-high { color: #ef4444; }
+.turnover-extreme { color: #8b5cf6; }
 .recommendation { color: #667eea; }
 
 /* Main Content Area */

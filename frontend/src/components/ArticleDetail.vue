@@ -86,13 +86,43 @@ import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { NButton, NIcon, NTag, NSpin, NEmpty, NDivider } from 'naive-ui';
 import { ArrowBackOutline as ArrowBack } from '@vicons/ionicons5';
-import * as echarts from 'echarts';
+import {
+  BarChart,
+  CandlestickChart,
+  LineChart,
+  type BarSeriesOption,
+  type CandlestickSeriesOption,
+  type LineSeriesOption
+} from 'echarts/charts';
+import {
+  GridComponent,
+  TooltipComponent,
+  type GridComponentOption,
+  type TooltipComponentOption
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+import {
+  init as initECharts,
+  use,
+  type ComposeOption,
+  type EChartsType
+} from 'echarts/core';
 import { apiService } from '@/services/api';
 import { parseMarkdown, getCategoryName } from '@/utils';
 import ShareButtons from './ShareButtons.vue';
 import AnalysisV1Display from './AnalysisV1Display.vue';
 import AiScorePanel from './AiScorePanel.vue';
 import type { AiScore } from '@/types';
+
+use([CandlestickChart, LineChart, BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
+
+type ArticleChartOption = ComposeOption<
+  | GridComponentOption
+  | TooltipComponentOption
+  | BarSeriesOption
+  | CandlestickSeriesOption
+  | LineSeriesOption
+>;
 
 const route = useRoute();
 const article = ref<any>(null);
@@ -207,7 +237,7 @@ const schemaData = computed(() => {
 
 // 图表加载逻辑
 const chartRef = ref<HTMLElement | null>(null);
-const chartInstance = ref<echarts.ECharts | null>(null);
+const chartInstance = ref<EChartsType | null>(null);
 const chartLoading = ref(false);
 
 // 文章完整 URL（用于分享）
@@ -262,12 +292,12 @@ async function initChart() {
       chartInstance.value.dispose();
     }
 
-    chartInstance.value = echarts.init(chartRef.value);
+    chartInstance.value = initECharts(chartRef.value);
 
     // 处理 MACD 数据格式适配
     const macdData = data.macd && data.macd.macd ? data.macd.macd : (data.macd || []);
 
-    const option = {
+    const option: ArticleChartOption = {
       backgroundColor: 'transparent',
       animation: true,
       tooltip: {

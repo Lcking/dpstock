@@ -53,8 +53,23 @@
     <!-- Section 3: 指标翻译 -->
     <div class="analysis-section indicator-translate">
       <h3 class="section-title">📈 指标翻译</h3>
+      <div v-if="turnoverIndicator" class="turnover-highlight">
+        <div class="turnover-highlight-header">
+          <strong>换手率</strong>
+          <n-tag :type="getSignalColor(turnoverIndicator.signal)" size="small">
+            {{ turnoverActivityLabel }}
+          </n-tag>
+        </div>
+        <div class="turnover-highlight-value">{{ turnoverIndicator.value }}</div>
+        <div class="turnover-highlight-note">
+          {{ extractPlainText(turnoverIndicator.interpretation) }}
+        </div>
+        <div class="turnover-highlight-tip">
+          它回答的是“这只股票当前热不热”，不等同于资金净流入或主力净买入。
+        </div>
+      </div>
       <div class="indicators-list">
-        <div v-for="indicator in data.indicator_translate.indicators" :key="indicator.name" class="indicator-item">
+        <div v-for="indicator in displayIndicators" :key="indicator.name" class="indicator-item">
           <div class="indicator-header">
             <strong>{{ indicator.name }}</strong>
             <n-tag :type="getSignalColor(indicator.signal)" size="small">
@@ -200,7 +215,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import JudgmentConfirmDialog from '@/components/WyckoffGuide/JudgmentConfirmDialog.vue';
 import JudgmentPreReminder from '@/components/WyckoffGuide/JudgmentPreReminder.vue';
 import AnchorBindDialog from '@/components/AnchorBindDialog.vue';
@@ -240,6 +255,10 @@ function renderMarkdown(text: string): string {
   return md.render(text);
 }
 
+function extractPlainText(text: string): string {
+  return text.replace(/\*\*/g, '').replace(/\n+/g, ' ').trim();
+}
+
 interface Props {
   data: any; // Analysis V1 data
   stockCode: string;
@@ -260,6 +279,27 @@ const showBindDialog = ref(false);
 
 // Judgment count for bind trigger
 const JUDGMENT_COUNT_KEY = 'aguai_judgment_count';
+
+const turnoverIndicator = computed(() => {
+  const indicators = props.data?.indicator_translate?.indicators;
+  if (!Array.isArray(indicators)) return null;
+  return indicators.find((item: any) => item?.name === '换手率') || null;
+});
+
+const displayIndicators = computed(() => {
+  const indicators = props.data?.indicator_translate?.indicators;
+  if (!Array.isArray(indicators)) return [];
+  return indicators.filter((item: any) => item?.name !== '换手率');
+});
+
+const turnoverActivityLabel = computed(() => {
+  const signal = turnoverIndicator.value?.signal;
+  if (signal === 'weakening') return '低活跃';
+  if (signal === 'neutral') return '正常活跃';
+  if (signal === 'strengthening') return '高活跃';
+  if (signal === 'extreme') return '极高活跃';
+  return '热度参考';
+});
 
 // 辅助函数：结构类型
 function getStructureTypeName(type: string): string {
@@ -501,6 +541,42 @@ function handleBindSuccess(data: any) {
   flex-direction: column;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.turnover-highlight {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12), rgba(118, 75, 162, 0.12));
+  border: 1px solid rgba(102, 126, 234, 0.18);
+}
+
+.turnover-highlight-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.turnover-highlight-value {
+  margin-top: 10px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--n-text-color);
+}
+
+.turnover-highlight-note {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--n-text-color-2);
+}
+
+.turnover-highlight-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--n-text-color-3);
 }
 
 .indicator-item {

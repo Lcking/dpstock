@@ -5,8 +5,10 @@ import './assets/css/global.css'
 import './assets/styles/mobile.css'
 import App from './App.vue'
 import router from './router'
+import { installRuntimeRecovery } from './utils/runtimeRecovery'
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
+installRuntimeRecovery(app, router)
 app.mount('#app')

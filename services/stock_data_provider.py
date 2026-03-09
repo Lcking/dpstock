@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import asyncio
 from typing import Dict, List, Optional, Tuple, Any
 from utils.logger import get_logger
+from services.tushare.client import tushare_client
 
 # 获取日志器
 logger = get_logger()
@@ -172,6 +173,70 @@ class StockDataProvider:
             logger.debug(f"tushare 查询股票名称失败: {e}")
 
         return ""
+
+    def _to_tushare_code(self, stock_code: str) -> str:
+        """将 6 位 A 股代码转换为 tushare ts_code。"""
+        if stock_code.startswith('6'):
+            return f"{stock_code}.SH"
+        return f"{stock_code}.SZ"
+
+    def _enrich_a_share_turnover(
+        self,
+        df: pd.DataFrame,
+        stock_code: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        placeholder_zero: bool = False,
+    ) -> pd.DataFrame:
+        """
+        为 A 股数据补齐换手率。
+
+        优先保留已有真实值；若主链路缺失，则尝试用 tushare daily_basic 补齐。
+        对明确来自占位的数据源（如 Yahoo 的 0.0）进行清理，避免误导性展示。
+        """
+        if df is None or df.empty:
+            return df
+
+        if '换手率' not in df.columns:
+            df['换手率'] = pd.NA
+
+        turnover = pd.to_numeric(df['换手率'], errors='coerce')
+        has_real_turnover = turnover.notna().any() and (turnover > 0).any()
+
+        if not has_real_turnover and tushare_client.is_available:
+            ts_code = self._to_tushare_code(stock_code)
+            basic_df = None
+
+            try:
+                if hasattr(tushare_client, 'query'):
+                    basic_df = tushare_client.query(
+                        'daily_basic',
+                        ts_code=ts_code,
+                        start_date=start_date,
+                        end_date=end_date,
+                        fields='ts_code,trade_date,turnover_rate',
+                    )
+                elif hasattr(tushare_client, 'get_daily_basic'):
+                    basic_df = tushare_client.get_daily_basic(ts_code, trade_date=end_date)
+            except Exception as e:
+                logger.debug(f"[Turnover] tushare daily_basic 查询失败 {stock_code}: {e}")
+                basic_df = None
+
+            if basic_df is not None and not basic_df.empty and 'trade_date' in basic_df.columns:
+                turnover_col = 'turnover_rate' if 'turnover_rate' in basic_df.columns else None
+                if turnover_col:
+                    mapped = basic_df[['trade_date', turnover_col]].copy()
+                    mapped['trade_date'] = mapped['trade_date'].astype(str)
+                    mapped[turnover_col] = pd.to_numeric(mapped[turnover_col], errors='coerce')
+                    turnover_map = mapped.dropna(subset=[turnover_col]).drop_duplicates('trade_date').set_index('trade_date')[turnover_col]
+                    aligned = df['日期'].astype(str).map(turnover_map)
+                    turnover = turnover.where(turnover.notna(), aligned)
+
+        if placeholder_zero:
+            turnover = turnover.where(turnover != 0, pd.NA)
+
+        df['换手率'] = turnover
+        return df
 
     def resolve_stock_code(self, input_str: str, market_type: str = 'A') -> Tuple[str, str]:
         """
@@ -387,6 +452,13 @@ class StockDataProvider:
                         end_date=end_date,
                         adjust="qfq"
                     )
+                    if df is not None and not df.empty:
+                        df = self._enrich_a_share_turnover(
+                            df,
+                            stock_code=stock_code,
+                            start_date=start_date,
+                            end_date=end_date,
+                        )
                 except Exception as ak_error:
                     logger.warning(f"[A] akshare获取 {stock_code} 失败: {str(ak_error)[:80]}, 尝试tushare备用...")
                     akshare_failed = True
@@ -396,10 +468,7 @@ class StockDataProvider:
                     from services.tushare.client import tushare_client
                     if tushare_client.is_available:
                         # 转换股票代码格式: 600519 -> 600519.SH, 000001 -> 000001.SZ
-                        if stock_code.startswith('6'):
-                            ts_code = f"{stock_code}.SH"
-                        else:
-                            ts_code = f"{stock_code}.SZ"
+                        ts_code = self._to_tushare_code(stock_code)
                         
                         logger.info(f"[A] 使用tushare获取 {ts_code}")
                         ts_df = tushare_client.get_daily(ts_code, start_date=start_date, end_date=end_date)
@@ -423,7 +492,7 @@ class StockDataProvider:
                             if '振幅' not in df.columns:
                                 df['振幅'] = 0.0
                             if '换手率' not in df.columns:
-                                df['换手率'] = 0.0
+                                df['换手率'] = pd.NA
                             # 调整单位: vol 从手转为股
                             df['成交量'] = df['成交量'] * 100
                             # 调整单位: amount 从千元转为元
@@ -444,6 +513,12 @@ class StockDataProvider:
                             
                             # 按日期排序（tushare默认是降序）
                             df = df.sort_values('日期').reset_index(drop=True)
+                            df = self._enrich_a_share_turnover(
+                                df,
+                                stock_code=stock_code,
+                                start_date=start_date,
+                                end_date=end_date,
+                            )
                             logger.info(f"[A] tushare成功获取 {stock_code} 数据, {len(df)} 行")
                         else:
                             logger.warning(f"[A] tushare未获取到数据 {stock_code}")
@@ -507,12 +582,19 @@ class StockDataProvider:
                             # 振幅 = (High - Low) / Pre_Close * 100
                             df['振幅'] = ((df['最高'] - df['最低']) / df['Pre_Close']) * 100
                             
-                            # 换手率 - Yahoo没有流通股本数据，暂时填0
+                            # 换手率 - Yahoo 不提供真实流通股本，先记占位值，后续统一清理/补齐
                             df['换手率'] = 0.0
                             
                             # 选择并排序12列
                             df = df[['日期', '股票代码', '开盘', '收盘', '最高', '最低', '成交量', '成交额', '振幅', '涨跌幅', '涨跌额', '换手率']]
                             
+                            df = self._enrich_a_share_turnover(
+                                df,
+                                stock_code=stock_code,
+                                start_date=start_date,
+                                end_date=end_date,
+                                placeholder_zero=True,
+                            )
                             logger.info(f"[A] Yahoo Finance成功获取 {stock_code} 数据, {len(df)} 行")
                         else:
                             raise ValueError(f"Yahoo Finance返回空数据 {yf_code}")
@@ -598,6 +680,8 @@ class StockDataProvider:
                 # 根据实际数据结构调整列名映射
                 # 实际数据列：['日期', '股票代码', '开盘', '收盘', '最高', '最低', '成交量', '成交额', '振幅', '涨跌幅', '涨跌额', '换手率']
                 df.columns = ['Date', 'Code', 'Open', 'Close', 'High', 'Low', 'Volume', 'Amount', 'Amplitude', 'Change_pct', 'Change', 'Turnover']
+                if 'Turnover' in df.columns:
+                    df['Turnover'] = pd.to_numeric(df['Turnover'], errors='coerce')
             elif market_type in ['HK', 'US']:
                 # yfinance 数据列：Open, High, Low, Close, Volume, Dividends, Stock Splits
                 # 列名已经是首字母大写，需要添加 Amount 列

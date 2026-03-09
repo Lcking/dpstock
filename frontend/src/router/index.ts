@@ -1,36 +1,31 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 import { apiService } from '@/services/api';
-import StockAnalysisApp from '@/components/StockAnalysisApp.vue';
-import LoginPage from '@/components/LoginPage.vue';
-import AnalysisList from '@/components/AnalysisList.vue';
-import ArticleDetail from '@/components/ArticleDetail.vue';
-import WatchlistList from '@/components/Watchlist/WatchlistList.vue';
 
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
     name: 'Home',
-    component: StockAnalysisApp,
+    component: () => import('@/components/StockAnalysisApp.vue'),
     // 首页应始终可访问；否则点击 Logo 会因守卫跳转到 /login
     meta: { requiresAuth: false }
   },
   {
     path: '/login',
     name: 'Login',
-    component: LoginPage,
+    component: () => import('@/components/LoginPage.vue'),
     meta: { requiresAuth: false }
   },
   {
     path: '/analysis',
     name: 'AnalysisList',
-    component: AnalysisList,
+    component: () => import('@/components/AnalysisList.vue'),
     meta: { requiresAuth: false }
   },
   {
     path: '/analysis/:id',
     name: 'ArticleDetail',
-    component: ArticleDetail,
+    component: () => import('@/components/ArticleDetail.vue'),
     meta: { requiresAuth: false }
   },
   {
@@ -40,7 +35,7 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/watchlist',
     name: 'Watchlist',
-    component: WatchlistList,
+    component: () => import('@/components/Watchlist/WatchlistList.vue'),
     meta: { requiresAuth: false }
   },
   {

@@ -559,6 +559,8 @@ function handleStreamUpdate(data: StreamAnalysisUpdate) {
     stock.marketValue = data.market_value ?? stock.marketValue ?? undefined;
     stock.score = data.score ?? stock.score ?? undefined;
     stock.rsi = data.rsi ?? stock.rsi ?? undefined;
+    stock.turnoverRate = data.turnover_rate ?? stock.turnoverRate ?? undefined;
+    stock.turnoverProfile = data.turnover_profile ?? stock.turnoverProfile ?? undefined;
 
     // ✅ 更新分析状态
     if (data.status) {

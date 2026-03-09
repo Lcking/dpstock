@@ -19,6 +19,12 @@ export interface LoginResponse {
   message?: string;
 }
 
+export interface TurnoverProfile {
+  tag: string;
+  signal: 'strengthening' | 'weakening' | 'extreme' | 'neutral';
+  interpretation: string;
+}
+
 export interface StockInfo {
   code: string;
   name: string;
@@ -38,6 +44,8 @@ export interface StockInfo {
   maTrend?: string;
   macdSignal?: string;
   volumeStatus?: string;
+  turnoverRate?: number;
+  turnoverProfile?: TurnoverProfile | null;
   analysisDate?: string;
 }
 
@@ -108,6 +116,8 @@ export interface StreamAnalysisUpdate {
   ma_trend?: string;
   macd_signal?: string;
   volume_status?: string;
+  turnover_rate?: number | null;
+  turnover_profile?: TurnoverProfile | null;
   analysis_date?: string;
   ai_analysis_chunk?: string;
   ai_score?: import('./aiScore').AiScore | null;
