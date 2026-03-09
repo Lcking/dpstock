@@ -221,3 +221,138 @@ async def test_analyze_stock_emits_turnover_payload_and_report_indicator():
     ]
     assert len(turnover_items) == 1
     assert chunks[-1]["turnover_profile"]["tag"] == "高活跃"
+
+
+@pytest.mark.asyncio
+async def test_analyze_stock_archives_augmented_analysis_v1_content():
+    service = StockAnalyzerService()
+
+    class _DummyProvider:
+        def resolve_stock_code(self, stock_code: str):
+            return stock_code, "平安银行"
+
+        async def get_stock_data(self, stock_code: str, market_type: str):
+            return pd.DataFrame(
+                {
+                    "Close": [10.0, 10.3],
+                    "Open": [9.9, 10.1],
+                    "High": [10.2, 10.4],
+                    "Low": [9.8, 10.0],
+                    "Volume": [100000, 120000],
+                    "Amount": [1000000, 1240000],
+                    "Change_pct": [0.5, 3.0],
+                    "Turnover": [3.8, 4.2],
+                }
+            )
+
+        def lookup_stock_name(self, stock_code: str):
+            return "平安银行"
+
+    class _DummyIndicator:
+        def calculate_indicators(self, df: pd.DataFrame):
+            out = df.copy()
+            out["RSI"] = [48.0, 52.0]
+            out["MA5"] = [10.0, 10.1]
+            out["MA20"] = [9.9, 10.0]
+            out["MA60"] = [9.8, 9.9]
+            out["MACD"] = [0.1, 0.2]
+            out["Signal"] = [0.05, 0.1]
+            out["Volume_MA"] = [100000, 100000]
+            return out
+
+    class _DummyScorer:
+        def calculate_score(self, df: pd.DataFrame):
+            return 88
+
+        def get_recommendation(self, score: int):
+            return "观察"
+
+    class _DummyAIAnalyzer:
+        async def get_ai_analysis(self, df, stock_code, stock_name, market_type, stream):
+            yield json.dumps(
+                {
+                    "stock_code": stock_code,
+                    "analysis_v1": {
+                        "stock_code": stock_code,
+                        "stock_name": stock_name,
+                        "market_type": market_type,
+                        "analysis_date": "2026-03-09T00:00:00",
+                        "structure_snapshot": {
+                            "structure_type": "consolidation",
+                            "ma200_position": "above",
+                            "phase": "middle",
+                            "key_levels": [],
+                            "trend_description": "测试结构",
+                        },
+                        "pattern_fitting": {
+                            "pattern_type": "none",
+                            "pattern_description": "测试形态",
+                            "completion_rate": 50,
+                        },
+                        "indicator_translate": {
+                            "indicators": [
+                                {
+                                    "name": "RSI(14)",
+                                    "value": "52.0",
+                                    "signal": "neutral",
+                                    "interpretation": "RSI 中性",
+                                }
+                            ],
+                            "global_note": "原始说明",
+                        },
+                        "risk_of_misreading": {
+                            "risk_level": "low",
+                            "risk_factors": [],
+                            "risk_flags": [],
+                            "caution_note": "测试注意事项",
+                        },
+                        "judgment_zone": {
+                            "candidates": [
+                                {
+                                    "option_id": "A",
+                                    "option_type": "structure_premise",
+                                    "description": "测试候选",
+                                },
+                                {
+                                    "option_id": "B",
+                                    "option_type": "structure_premise",
+                                    "description": "测试候选2",
+                                },
+                            ],
+                            "risk_checks": [],
+                            "note": "测试备注",
+                        },
+                    },
+                    "analysis": "```json\n{\"old\": \"content\"}\n```",
+                    "status": "completed",
+                    "score": 88,
+                    "recommendation": "观察",
+                    "ai_score": None,
+                }
+            )
+
+    saved_articles = []
+
+    class _DummyArchiveService:
+        async def save_article(self, article_data):
+            saved_articles.append(article_data)
+            return 1
+
+    service.data_provider = _DummyProvider()
+    service.indicator = _DummyIndicator()
+    service.scorer = _DummyScorer()
+    service.ai_analyzer = _DummyAIAnalyzer()
+    service.archive_service = _DummyArchiveService()
+
+    async for _ in service.analyze_stock("000001", market_type="A", stream=False):
+        pass
+
+    assert len(saved_articles) == 1
+    archived_content = json.loads(saved_articles[0]["content"])
+    turnover_items = [
+        item
+        for item in archived_content["indicator_translate"]["indicators"]
+        if item["name"] == "换手率"
+    ]
+    assert len(turnover_items) == 1
+    assert turnover_items[0]["value"] == "4.20%"

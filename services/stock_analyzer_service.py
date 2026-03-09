@@ -107,6 +107,19 @@ def _augment_analysis_v1_with_turnover(
 
     return data
 
+
+def _build_archive_content(
+    analysis_v1: Optional[Dict[str, Any]],
+    fallback_content: str,
+) -> str:
+    """归档文章优先保存增强后的 Analysis V1，旧链路则回退到原始文本。"""
+    if isinstance(analysis_v1, dict):
+        try:
+            return json.dumps(analysis_v1, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"[Archive] Failed to serialize analysis_v1 content: {e}")
+    return fallback_content
+
 class StockAnalyzerService:
     """
     股票分析服务
@@ -336,7 +349,7 @@ class StockAnalyzerService:
                     "stock_code": stock_code,
                     "stock_name": stock_name,
                     "market_type": market_type,
-                    "content": full_analysis,
+                    "content": _build_archive_content(analysis_v1, full_analysis),
                     "score": overall_score,
                     "legacy_score": score,
                     "score_version": score_version,
