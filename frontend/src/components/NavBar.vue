@@ -50,6 +50,7 @@
       </div>
     </div>
   </n-layout-header>
+  <div class="nav-spacer" :style="{ height: `${navSpacerHeight}px` }" aria-hidden="true"></div>
   
   <!-- Invite Dialog -->
   <InviteDialog 
@@ -65,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import QuotaStatus from './QuotaStatus.vue';
 import InviteDialog from './InviteDialog.vue';
@@ -101,6 +102,13 @@ const showBindDialog = ref(false);
 const quotaStatusRef = ref<any>(null);
 const quotaStatus = ref<any>(null);
 const anchorMode = ref<'anonymous' | 'anchor'>('anonymous');
+const navSpacerHeight = ref(84);
+const headerEl = ref<HTMLElement | null>(null);
+let resizeObserver: ResizeObserver | null = null;
+
+const updateNavSpacerHeight = () => {
+  navSpacerHeight.value = headerEl.value?.offsetHeight ?? 84;
+};
 
 const handleMyMenuSelect = (key: string) => {
   if (key === 'quota-invite') {
@@ -147,13 +155,30 @@ const handleBindSuccess = async () => {
 onMounted(() => {
   loadQuotaStatus();
   loadAnchorStatus();
+
+  nextTick(() => {
+    headerEl.value = document.querySelector('.nav-header');
+    updateNavSpacerHeight();
+
+    if (typeof ResizeObserver !== 'undefined' && headerEl.value) {
+      resizeObserver = new ResizeObserver(() => updateNavSpacerHeight());
+      resizeObserver.observe(headerEl.value);
+    }
+
+    window.addEventListener('resize', updateNavSpacerHeight);
+  });
+});
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  window.removeEventListener('resize', updateNavSpacerHeight);
 });
 </script>
 
 <style scoped>
 /* Glassmorphism Navigation */
 .nav-header {
-  position: sticky;
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
@@ -165,6 +190,11 @@ onMounted(() => {
     0 10px 36px rgba(79, 93, 160, 0.10),
     0 1px 0 rgba(255, 255, 255, 0.68) inset;
   border-bottom: 1px solid rgba(91, 103, 241, 0.10);
+}
+
+.nav-spacer {
+  width: 100%;
+  flex-shrink: 0;
 }
 
 .nav-inner {

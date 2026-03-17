@@ -48,6 +48,7 @@ def test_nav_bar_uses_sticky_layout_instead_of_fixed_body_padding():
     repo_root = Path(__file__).resolve().parents[1]
     nav_text = (repo_root / "frontend/src/components/NavBar.vue").read_text(encoding="utf-8")
 
-    assert "position: sticky;" in nav_text
+    assert "position: fixed;" in nav_text
+    assert "nav-spacer" in nav_text
     assert "padding-top: 95px;" not in nav_text
     assert "padding-top: 71px;" not in nav_text

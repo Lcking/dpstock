@@ -356,3 +356,80 @@ async def test_analyze_stock_archives_augmented_analysis_v1_content():
     ]
     assert len(turnover_items) == 1
     assert turnover_items[0]["value"] == "4.20%"
+
+
+@pytest.mark.asyncio
+async def test_analyze_stock_archive_title_keeps_stock_name():
+    service = StockAnalyzerService()
+
+    class _DummyProvider:
+        def resolve_stock_code(self, stock_code: str):
+            return stock_code, ""
+
+        async def get_stock_data(self, stock_code: str, market_type: str):
+            return pd.DataFrame(
+                {
+                    "Close": [10.0, 10.3],
+                    "Open": [9.9, 10.1],
+                    "High": [10.2, 10.4],
+                    "Low": [9.8, 10.0],
+                    "Volume": [100000, 120000],
+                    "Amount": [1000000, 1240000],
+                    "Change_pct": [0.5, 3.0],
+                    "Turnover": [3.8, 4.2],
+                }
+            )
+
+        def lookup_stock_name(self, stock_code: str, allow_network: bool = False):
+            return "贵州茅台"
+
+    class _DummyIndicator:
+        def calculate_indicators(self, df: pd.DataFrame):
+            out = df.copy()
+            out["RSI"] = [48.0, 52.0]
+            out["MA5"] = [10.0, 10.1]
+            out["MA20"] = [9.9, 10.0]
+            out["MA60"] = [9.8, 9.9]
+            out["MACD"] = [0.1, 0.2]
+            out["Signal"] = [0.05, 0.1]
+            out["Volume_MA"] = [100000, 100000]
+            return out
+
+    class _DummyScorer:
+        def calculate_score(self, df: pd.DataFrame):
+            return 88
+
+        def get_recommendation(self, score: int):
+            return "观察"
+
+    class _DummyAIAnalyzer:
+        async def get_ai_analysis(self, df, stock_code, stock_name, market_type, stream):
+            yield json.dumps(
+                {
+                    "stock_code": stock_code,
+                    "analysis": "测试报告",
+                    "status": "completed",
+                    "score": 88,
+                    "recommendation": "观察",
+                    "ai_score": None,
+                }
+            )
+
+    saved_articles = []
+
+    class _DummyArchiveService:
+        async def save_article(self, article_data):
+            saved_articles.append(article_data)
+            return 1
+
+    service.data_provider = _DummyProvider()
+    service.indicator = _DummyIndicator()
+    service.scorer = _DummyScorer()
+    service.ai_analyzer = _DummyAIAnalyzer()
+    service.archive_service = _DummyArchiveService()
+
+    async for _ in service.analyze_stock("600519", market_type="A", stream=False):
+        pass
+
+    assert len(saved_articles) == 1
+    assert "贵州茅台 600519 股票行情走势异动分析" in saved_articles[0]["title"]
