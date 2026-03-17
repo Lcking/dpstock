@@ -159,19 +159,15 @@ import {
   NGridItem,
   NCard
 } from 'naive-ui';
+import { applyPageSeo } from '@/utils/seo'
 
-// SEO: Set page title and meta description
 onMounted(() => {
-  document.title = '关于我们 - Aguai';
-  
-  // Set meta description if not already set
-  let metaDescription = document.querySelector('meta[name="description"]');
-  if (!metaDescription) {
-    metaDescription = document.createElement('meta');
-    metaDescription.setAttribute('name', 'description');
-    document.head.appendChild(metaDescription);
-  }
-  metaDescription.setAttribute('content', 'Aguai 是一个结构前提判断与验证工具,不提供买卖建议,强调专注、纪律与可证伪的判断。');
+  applyPageSeo({
+    title: '关于我们 | Agu AI',
+    description: '了解 Agu AI 的定位、方法论与产品原则。',
+    canonicalPath: '/about',
+    keywords: '关于Agu AI,产品介绍,结构化判断,股票分析方法论',
+  })
 });
 </script>
 

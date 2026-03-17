@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="journal-header">
       <div class="header-title-row">
-        <h2>判断日记</h2>
+        <h1>判断日记</h1>
         <AnchorStatus @show-bind="showBindDialog = true" />
       </div>
       <div class="header-filters">
@@ -74,6 +74,17 @@
           <n-skeleton text style="width: 80px" />
         </div>
       </div>
+    </div>
+
+    <div v-else-if="errorMessage" class="error-state-container">
+      <n-alert type="error" :show-icon="true">
+        <n-space justify="space-between" align="center">
+          <span>{{ errorMessage }}</span>
+          <n-button size="small" tertiary type="primary" @click="loadRecords">
+            重新加载
+          </n-button>
+        </n-space>
+      </n-alert>
     </div>
 
     <!-- Records Table (compact layout) -->
@@ -228,6 +239,7 @@ import AnchorStatus from '../AnchorStatus.vue'
 import AnchorBindDialog from '../AnchorBindDialog.vue'
 import EmptyState from '../common/EmptyState.vue'
 import type { JournalRecord } from '@/types/journal'
+import { applyPageSeo } from '@/utils/seo'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -236,6 +248,7 @@ const dialog = useDialog()
 const loading = ref(false)
 const records = ref<JournalRecord[]>([])
 const dueCount = ref(0)
+const errorMessage = ref('')
 const statusFilter = ref<string>('')
 const showReview = ref(false)
 const showDetail = ref(false)
@@ -264,6 +277,7 @@ const statusOptions = [
 // Load records
 const loadRecords = async () => {
   loading.value = true
+  errorMessage.value = ''
   try {
     const data = await apiService.getJournalRecords({
       status: statusFilter.value || undefined
@@ -277,6 +291,8 @@ const loadRecords = async () => {
     checkedRowKeys.value = []
   } catch (error) {
     console.error('Load records error:', error)
+    records.value = []
+    errorMessage.value = '加载判断日记失败，请稍后重试。'
     message.error('加载失败')
   } finally {
     loading.value = false
@@ -596,6 +612,12 @@ const formatDate = (dateStr: string) => {
 }
 
 onMounted(() => {
+  applyPageSeo({
+    title: '判断日记 | Agu AI',
+    description: '查看你的结构化判断记录与复盘状态。',
+    canonicalPath: '/journal',
+    robots: 'noindex, nofollow',
+  })
   loadRecords()
   loadDueCount()
 })
@@ -625,10 +647,14 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.journal-header h2 {
+.journal-header h1 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
+}
+
+.error-state-container {
+  margin-bottom: 16px;
 }
 
 .temporary-notification {

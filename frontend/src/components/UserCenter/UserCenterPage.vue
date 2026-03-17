@@ -2,7 +2,7 @@
   <div class="user-center-page">
     <div class="page-header">
       <div>
-        <h2>我的</h2>
+        <h1>我的</h1>
         <p>在这里统一查看绑定状态、额度、观察与判断资产。</p>
       </div>
     </div>
@@ -19,6 +19,13 @@
     <div v-if="loading" class="loading-area">
       <n-spin size="large" />
     </div>
+
+    <n-alert v-else-if="errorMessage" type="error" :bordered="false" class="top-alert">
+      <div class="error-alert-content">
+        <span>{{ errorMessage }}</span>
+        <n-button size="small" tertiary type="primary" @click="loadOverview">重新加载</n-button>
+      </div>
+    </n-alert>
 
     <template v-else-if="overview">
       <UserOverviewCards
@@ -99,6 +106,7 @@ import {
   useMessage,
 } from 'naive-ui'
 import { apiService } from '@/services/api'
+import { applyPageSeo } from '@/utils/seo'
 import AnchorBindDialog from '@/components/AnchorBindDialog.vue'
 import InviteDialog from '@/components/InviteDialog.vue'
 import UserOverviewCards from './UserOverviewCards.vue'
@@ -108,15 +116,19 @@ const message = useMessage()
 
 const loading = ref(false)
 const overview = ref<any>(null)
+const errorMessage = ref('')
 const showBindDialog = ref(false)
 const showInviteDialog = ref(false)
 
 const loadOverview = async () => {
   loading.value = true
+  errorMessage.value = ''
   try {
     overview.value = await apiService.getUserCenterOverview()
   } catch (error) {
     console.error('Load user center overview error:', error)
+    overview.value = null
+    errorMessage.value = '加载用户中心失败，请稍后重试。'
     message.error('加载用户中心失败')
   } finally {
     loading.value = false
@@ -144,6 +156,12 @@ const formatDate = (value: string) => {
 }
 
 onMounted(() => {
+  applyPageSeo({
+    title: '用户中心 | Agu AI',
+    description: '查看绑定状态、额度、观察与判断资产。',
+    canonicalPath: '/me',
+    robots: 'noindex, nofollow',
+  })
   loadOverview()
 })
 </script>
@@ -159,7 +177,7 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.page-header h2 {
+.page-header h1 {
   margin: 0 0 8px;
   font-size: 28px;
 }
@@ -171,6 +189,13 @@ onMounted(() => {
 
 .top-alert {
   margin-bottom: 20px;
+}
+
+.error-alert-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .loading-area {

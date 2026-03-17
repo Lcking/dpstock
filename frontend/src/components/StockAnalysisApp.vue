@@ -1,5 +1,6 @@
 <template>
   <div class="app-container mobile-bottom-extend">
+    <h1 class="sr-only">免费AI在线股票分析平台系统 - 智能诊股助手_软件</h1>
     <!-- 公告横幅 -->
     <AnnouncementBanner 
       v-if="announcement && showAnnouncementBanner" 
@@ -10,13 +11,6 @@
     
     <n-layout class="main-layout">
       <n-layout-content class="main-content mobile-content-container">
-        
-        <!-- 市场时间显示 -->
-        <MarketTimeDisplay :is-mobile="isMobile" />
-        
-        <!-- 核心价值闭环 -->
-        <ValueLoop />
-        
         <!-- 主要内容 -->
         <n-card class="analysis-container mobile-card mobile-card-spacing mobile-shadow">
           
@@ -114,7 +108,7 @@
                 
                 <template v-if="analyzedStocks.length === 0 && !isAnalyzing">
                   <AiScorePanel :loading="true" :compact="false" style="margin-bottom: 12px;" />
-                  <n-empty description="尚未分析" size="large">
+                  <n-empty description="输入股票名称、拼音或代码后开始分析…" size="large">
                     <template #icon>
                       <n-icon :component="DocumentTextIcon" />
                     </template>
@@ -147,6 +141,12 @@
             </n-grid-item>
           </n-grid>
         </n-card>
+
+        <!-- 市场时间显示 -->
+        <MarketTimeDisplay :is-mobile="isMobile" />
+        
+        <!-- 核心价值闭环 -->
+        <ValueLoop />
 
       </n-layout-content>
     </n-layout>
@@ -204,6 +204,7 @@ import QuotaExceededModal from './QuotaExceededModal.vue';
 import AnchorBindDialog from './AnchorBindDialog.vue';
 
 import { apiService } from '@/services/api';
+import { applyPageSeo } from '@/utils/seo';
 import type { StockInfo, StreamInitMessage, StreamAnalysisUpdate } from '@/types';
 import { validateMultipleStockCodes, MarketType } from '@/utils/stockValidator';
 
@@ -990,6 +991,13 @@ function getChineseVolumeStatus(status: string): string {
 // 页面加载时获取公告
 onMounted(async () => {
   try {
+    applyPageSeo({
+      title: '免费AI在线股票分析平台系统 - 智能诊股助手_软件',
+      description: '支持 A 股、港股、美股与 ETF 的智能分析，帮助你快速查看结构、趋势、强弱与风险线索。',
+      canonicalPath: '/',
+      keywords: 'Agu AI,智能股票分析,股票分析平台,A股分析,港股分析,美股分析,ETF分析',
+    });
+
     // 添加窗口大小变化监听
     window.addEventListener('resize', handleResize);
 
@@ -1045,6 +1053,18 @@ function handleOpenBindFromQuota() {
   overflow-x: hidden;
   padding-bottom: 40px;
   box-sizing: border-box;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .main-layout {

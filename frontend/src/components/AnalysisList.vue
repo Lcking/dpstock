@@ -8,7 +8,8 @@
     <div class="search-bar">
       <n-input
         v-model:value="searchQuery"
-        placeholder="搜索代码、名称或文章标题..."
+        aria-label="搜索分析文章"
+        placeholder="搜索代码、名称或文章标题…"
         clearable
         @update:value="handleSearch"
       >
@@ -32,32 +33,34 @@
     </div>
 
     <div v-else class="articles-grid">
-      <n-card 
-        v-for="article in articles" 
-        :key="article.id" 
-        class="article-card"
-        @click="$router.push(`/analysis/${article.id}`)"
+      <router-link
+        v-for="article in articles"
+        :key="article.id"
+        :to="`/analysis/${article.id}`"
+        class="article-card-link"
       >
-        <div class="article-meta">
-          <n-tag :type="getMarketType(article.market_type)" size="small" round :bordered="false">
-            {{ article.market_type }}
-          </n-tag>
-          <span class="publish-date">{{ article.publish_date }}</span>
-        </div>
-        <h2 class="article-title">{{ article.title }}</h2>
-        <div class="article-preview">
-          {{ article.content.substring(0, 100) }}...
-        </div>
-        <div class="article-footer">
-          <div class="stock-info">
-            <span class="stock-name">{{ article.stock_name }}</span>
-            <span class="stock-code">{{ article.stock_code }}</span>
+        <n-card class="article-card">
+          <div class="article-meta">
+            <n-tag :type="getMarketType(article.market_type)" size="small" round :bordered="false">
+              {{ article.market_type }}
+            </n-tag>
+            <span class="publish-date">{{ article.publish_date }}</span>
           </div>
-          <div class="score-tag" :class="getScoreClass(article.score)">
-            评分: {{ article.score }}
+          <h2 class="article-title">{{ article.title }}</h2>
+          <div class="article-preview">
+            {{ getArticlePreview(article.content) }}
           </div>
-        </div>
-      </n-card>
+          <div class="article-footer">
+            <div class="stock-info">
+              <span class="stock-name">{{ article.stock_name }}</span>
+              <span class="stock-code">{{ article.stock_code }}</span>
+            </div>
+            <div class="score-tag" :class="getScoreClass(article.score)">
+              评分: {{ article.score }}
+            </div>
+          </div>
+        </n-card>
+      </router-link>
     </div>
     
     <!-- 加载更多状态 -->
@@ -76,6 +79,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { NCard, NTag, NEmpty, NButton, NSpin, NInput, NIcon } from 'naive-ui';
 import { SearchOutline } from '@vicons/ionicons5';
 import { apiService } from '@/services/api';
+import { applyPageSeo, getArticlePreview } from '@/utils/seo';
 import { useDebounceFn } from '@vueuse/core';
 
 const articles = ref<any[]>([]);
@@ -144,7 +148,12 @@ function getScoreClass(score: number) {
 
 onMounted(() => {
   fetchArticles(false);
-  document.title = '分析专栏 - Agu AI';
+  applyPageSeo({
+    title: '分析专栏 | Agu AI',
+    description: '查看每日 AI 股票分析专栏，快速浏览重点标的、市场异动与结构化研判。',
+    canonicalPath: '/analysis',
+    keywords: '分析专栏,股票分析文章,Agu AI,市场异动,结构化研判',
+  });
   window.addEventListener('scroll', handleScroll);
 });
 
@@ -196,9 +205,15 @@ onBeforeUnmount(() => {
   gap: 24px;
 }
 
+.article-card-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
 .article-card {
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1), background 0.3s cubic-bezier(0.23, 1, 0.32, 1);
   border-radius: 16px !important;
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(10px);
@@ -240,6 +255,11 @@ onBeforeUnmount(() => {
   color: #64748b;
   line-height: 1.6;
   margin-bottom: 20px;
+  min-height: 4.5em;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .article-footer {

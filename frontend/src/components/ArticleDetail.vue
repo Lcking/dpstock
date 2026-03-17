@@ -24,7 +24,7 @@
         <h1 class="article-title">{{ article.title }}</h1>
         <div class="stock-info-bar">
           <div class="stock-basic">
-            <h2 class="stock-name">{{ article.stock_name }}</h2>
+            <p class="stock-name">{{ article.stock_name }}</p>
             <span class="stock-code">{{ article.stock_code }}</span>
           </div>
           <AiScorePanel
@@ -109,6 +109,7 @@ import {
 } from 'echarts/core';
 import { apiService } from '@/services/api';
 import { parseMarkdown, getCategoryName } from '@/utils';
+import { applyPageSeo, getArticlePreview, setCanonicalUrl } from '@/utils/seo';
 import ShareButtons from './ShareButtons.vue';
 import AnalysisV1Display from './AnalysisV1Display.vue';
 import AiScorePanel from './AiScorePanel.vue';
@@ -174,6 +175,7 @@ function updateMetaTags() {
   
   const categoryName = getCategoryName(article.value.market_type);
   const title = article.value.title;
+  const canonicalPath = `/analysis/${article.value.id}`;
   
   // 生成 description：优先从 Analysis V1 提取，否则使用原文本
   let description = '';
@@ -181,17 +183,22 @@ function updateMetaTags() {
     // 从 Analysis V1 提取有意义的描述
     const structureDesc = analysisV1Data.value.structure_snapshot?.trend_description || '';
     const s = aiScoreForArticle.value?.overall?.score ?? article.value.score;
-    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${s}。${structureDesc.substring(0, 150)}...`;
+    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${s}。${getArticlePreview(structureDesc, 120)}`;
   } else {
     const s = aiScoreForArticle.value?.overall?.score ?? article.value.score;
-    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${s}。${article.value.content.substring(0, 150)}...`;
+    description = `${article.value.stock_name}(${article.value.stock_code})当日行情深度分析，综合评分 ${s}。${getArticlePreview(article.value.content, 120)}`;
   }
   
   const keywords = `${article.value.stock_name}, ${article.value.stock_code}, ${categoryName}分析, 智能辅助, 投资辅助, ${article.value.market_type}`;
+  applyPageSeo({
+    title,
+    description,
+    canonicalPath,
+    keywords,
+    ogType: 'article',
+  });
+  setCanonicalUrl(canonicalPath);
 
-  document.title = title;
-  
-  // 更新或创建 meta 标签
   const updateMeta = (name: string, content: string, attr: 'name' | 'property' = 'name') => {
     let el = document.querySelector(`meta[${attr}="${name}"]`);
     if (!el) {
@@ -201,12 +208,11 @@ function updateMetaTags() {
     }
     el.setAttribute('content', content);
   };
-
-  updateMeta('description', description);
-  updateMeta('keywords', keywords);
-  updateMeta('og:title', title, 'property');
-  updateMeta('og:description', description, 'property');
-  updateMeta('og:type', 'article', 'property');
+  updateMeta('og:url', articleUrl.value, 'property');
+  updateMeta('twitter:card', 'summary_large_image');
+  updateMeta('twitter:title', title);
+  updateMeta('twitter:description', description);
+  updateMeta('twitter:image', 'https://aguai.net/favicon.ico');
 }
 
 // SEO: 结构化数据 (JSON-LD)
@@ -214,23 +220,45 @@ const schemaData = computed(() => {
   if (!article.value) return '';
   const data = {
     "@context": "https://schema.org",
-    "@type": "Article",
-    "headline": article.value.title,
-    "description": article.value.content.substring(0, 200),
-    "author": {
-      "@type": "Organization",
-      "name": "Stock Scanner AI"
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "Stock Scanner AI"
-    },
-    "datePublished": article.value.publish_date,
-    "about": {
-      "@type": "Thing",
-      "name": article.value.stock_name,
-      "alternateName": article.value.stock_code
-    }
+    "@graph": [
+      {
+        "@type": "Article",
+        "headline": article.value.title,
+        "description": getArticlePreview(article.value.content, 180),
+        "author": {
+          "@type": "Organization",
+          "name": "Agu AI"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Agu AI"
+        },
+        "datePublished": article.value.publish_date,
+        "mainEntityOfPage": articleUrl.value,
+        "about": {
+          "@type": "Thing",
+          "name": article.value.stock_name,
+          "alternateName": article.value.stock_code
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "分析专栏",
+            "item": "https://aguai.net/analysis"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": article.value.title,
+            "item": articleUrl.value
+          }
+        ]
+      }
+    ]
   };
   return JSON.stringify(data);
 });

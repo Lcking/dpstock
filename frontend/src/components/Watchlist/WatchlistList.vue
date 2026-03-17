@@ -2,7 +2,7 @@
   <div class="watchlist-page">
     <!-- 顶部操作栏 -->
     <div class="watchlist-header">
-      <h2>自选股</h2>
+      <h1>自选股</h1>
       <div class="header-actions">
         <n-button type="primary" @click="showAddDialog = true">
           <template #icon>
@@ -160,6 +160,7 @@ import AnchorBindDialog from '../AnchorBindDialog.vue'
 import { apiService } from '@/services/api'
 import type { WatchlistSummary, Watchlist } from '@/types/watchlist'
 import { hasAnchorToken } from '@/utils/anchorToken'
+import { applyPageSeo } from '@/utils/seo'
 
 const router = useRouter()
 const message = useMessage()
@@ -329,6 +330,12 @@ const handleBindSuccess = async () => {
 }
 
 onMounted(() => {
+  applyPageSeo({
+    title: '我的观察 | Agu AI',
+    description: '查看你的自选股观察列表与跟踪状态。',
+    canonicalPath: '/watchlist',
+    robots: 'noindex, nofollow',
+  })
   initWatchlist()
 })
 </script>
@@ -347,7 +354,7 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.watchlist-header h2 {
+.watchlist-header h1 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
