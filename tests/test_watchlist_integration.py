@@ -5,6 +5,8 @@ Integration Tests for Watchlist / Compare / Journal Features
 import pytest
 import os
 import sys
+import sqlite3
+from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -12,6 +14,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 import json
+from database.db_factory import DatabaseFactory
+from services.user_service import UserService
+from services.watchlist import watchlist_service
+from schemas.watchlist import WatchlistCreate
 
 
 # ============================================================================
@@ -27,6 +33,77 @@ TEST_STOCKS = [
 ]
 
 TEST_USER_ID = "test-user-12345"
+DEFAULT_INTEGRATION_DB = "data/stocks.db"
+
+
+def _apply_migration(db_path: Path, migration_name: str) -> None:
+    migration_path = Path(__file__).resolve().parents[1] / "migrations" / migration_name
+    sql = migration_path.read_text(encoding="utf-8")
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _setup_watchlist_db(db_path: Path) -> None:
+    for migration_name in [
+        "004_create_watchlist_tables.sql",
+        "008_create_user_tables.sql",
+    ]:
+        _apply_migration(db_path, migration_name)
+
+
+@pytest.fixture
+def integration_db():
+    """Reset DatabaseFactory to the default integration database for shared-service tests."""
+    DatabaseFactory.initialize(DEFAULT_INTEGRATION_DB)
+    return DEFAULT_INTEGRATION_DB
+
+
+def test_guest_watchlist_items_are_marked_temporary_until_bound(tmp_path):
+    db_path = tmp_path / "watchlist_guest.db"
+    _setup_watchlist_db(db_path)
+    DatabaseFactory.initialize(str(db_path))
+
+    user_service = UserService(db_path=str(db_path))
+    guest_user_id = user_service.get_or_create_user_by_identity(
+        identity_type="anonymous",
+        identity_value="guest_watch_1",
+    )
+
+    result = watchlist_service.create_watchlist(
+        user_id=guest_user_id,
+        data=WatchlistCreate(name="临时观察"),
+    )
+
+    assert result.user_id == guest_user_id
+    assert result.is_temporary is True
+    assert "绑定后长期保存" in (result.trial_message or "")
+
+
+def test_bound_watchlist_is_not_marked_temporary(tmp_path):
+    db_path = tmp_path / "watchlist_bound.db"
+    _setup_watchlist_db(db_path)
+    DatabaseFactory.initialize(str(db_path))
+
+    user_service = UserService(db_path=str(db_path))
+    bound_user_id = user_service.bind_email_identity(
+        anonymous_id="guest_watch_2",
+        cookie_uid="cookie_watch_2",
+        anchor_id="anchor_watch_2",
+        email="bound@example.com",
+    )
+
+    result = watchlist_service.create_watchlist(
+        user_id=bound_user_id,
+        data=WatchlistCreate(name="正式观察"),
+    )
+
+    assert result.user_id == bound_user_id
+    assert result.is_temporary is False
+    assert result.trial_message is None
 
 
 # ============================================================================
@@ -100,33 +177,40 @@ class TestTrendIntegration:
 DB_SKIP_REASON = "Requires initialized watchlist/journal database tables"
 
 
-def check_watchlist_table_exists():
-    """Check if watchlist table exists in the database"""
+def check_tables_exist(*table_names: str):
+    """Check if required tables exist in the default integration database."""
     import sqlite3
     try:
         conn = sqlite3.connect('data/stocks.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='watchlists'")
-        result = cursor.fetchone()
+        for table_name in table_names:
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+                (table_name,),
+            )
+            result = cursor.fetchone()
+            if result is None:
+                conn.close()
+                return False
         conn.close()
-        return result is not None
-    except:
+        return True
+    except Exception:
         return False
 
 
 @pytest.mark.skipif(
-    not check_watchlist_table_exists(),
+    not check_tables_exist("watchlists"),
     reason=DB_SKIP_REASON
 )
 class TestWatchlistService:
     """Watchlist service integration tests"""
     
-    def test_watchlist_service_import(self):
+    def test_watchlist_service_import(self, integration_db):
         """Test watchlist service can be imported"""
         from services.watchlist import watchlist_service
         assert watchlist_service is not None
     
-    def test_create_watchlist(self):
+    def test_create_watchlist(self, integration_db):
         """Test creating a new watchlist"""
         from services.watchlist import watchlist_service
         from schemas.watchlist import WatchlistCreate
@@ -141,7 +225,7 @@ class TestWatchlistService:
         # Cleanup
         # Note: Ideally use a test database or cleanup method
     
-    def test_add_and_list_symbols(self):
+    def test_add_and_list_symbols(self, integration_db):
         """Test adding stocks to a watchlist"""
         from services.watchlist import watchlist_service
         from schemas.watchlist import WatchlistCreate
@@ -183,18 +267,18 @@ class TestCompareService:
 
 
 @pytest.mark.skipif(
-    not check_watchlist_table_exists(),
+    not check_tables_exist("watchlists", "judgments"),
     reason=DB_SKIP_REASON
 )
 class TestJournalService:
     """Journal service integration tests"""
     
-    def test_journal_service_import(self):
+    def test_journal_service_import(self, integration_db):
         """Test journal service can be imported"""
         from services.journal import journal_service
         assert journal_service is not None
     
-    def test_create_journal_record(self):
+    def test_create_journal_record(self, integration_db):
         """Test creating a journal record"""
         from services.journal import journal_service
         
@@ -211,14 +295,14 @@ class TestJournalService:
         assert result is not None
         assert result.get("ts_code") == "600519.SH" or "id" in result
     
-    def test_list_journal_records(self):
+    def test_list_journal_records(self, integration_db):
         """Test listing journal records"""
         from services.journal import journal_service
         
         records = journal_service.get_records(user_id="test-journal-user")
         assert isinstance(records, list)
     
-    def test_due_count(self):
+    def test_due_count(self, integration_db):
         """Test getting due count"""
         from services.journal import journal_service
         
@@ -228,7 +312,7 @@ class TestJournalService:
 
 
 @pytest.mark.skipif(
-    not check_watchlist_table_exists(),
+    not check_tables_exist("watchlists", "judgments"),
     reason=DB_SKIP_REASON  
 )
 class TestAPIEndpoints:
@@ -237,6 +321,7 @@ class TestAPIEndpoints:
     @pytest.fixture
     def client(self):
         """Create test client"""
+        DatabaseFactory.initialize(DEFAULT_INTEGRATION_DB)
         from web_server import app
         return TestClient(app)
     
@@ -289,7 +374,7 @@ class TestAPIEndpoints:
 
 
 @pytest.mark.skipif(
-    not check_watchlist_table_exists(),
+    not check_tables_exist("watchlists", "judgments"),
     reason=DB_SKIP_REASON
 )
 class TestEndToEndFlow:

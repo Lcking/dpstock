@@ -239,6 +239,7 @@ import {
 } from 'naive-ui';
 import { BookmarkOutline } from '@vicons/ionicons5';
 import { apiService } from '@/services/api';
+import { hasAnchorToken } from '@/utils/anchorToken';
 import MarkdownIt from 'markdown-it';
 
 // 初始化 Markdown 渲染器
@@ -446,7 +447,12 @@ async function confirmSaveJudgment() {
     const response = await apiService.saveJudgment(recordRequest);
     
     if (response && (response.id || response.judgment_id)) {
-      message.success('判断已保存！可在"判断日记"中查看');
+      if (response.is_temporary) {
+        message.success('判断已保存到临时日记，绑定后可长期追踪与复盘');
+        message.info('绑定后可持续追踪复盘，绑定后资产不会因换设备或清缓存而丢失。');
+      } else {
+        message.success('判断已保存！可在"判断日记"中查看');
+      }
       emit('saved', response.id || response.judgment_id);
       
       // Trigger bind dialog on 2nd judgment
@@ -475,13 +481,16 @@ async function confirmSaveJudgment() {
 // Check if should trigger bind dialog
 function checkAndTriggerBind() {
   // Don't show if already bound
-  const hasToken = localStorage.getItem('aguai_anchor_token');
-  if (hasToken) return;
+  if (hasAnchorToken()) return;
   
   // Increment judgment count
   let count = parseInt(localStorage.getItem(JUDGMENT_COUNT_KEY) || '0');
   count++;
   localStorage.setItem(JUDGMENT_COUNT_KEY, count.toString());
+
+  if (count === 1) {
+    message.info('绑定后可持续追踪复盘，绑定后资产不会因换设备或清缓存而丢失。');
+  }
   
   // Show bind dialog on 2nd judgment
   if (count === 2) {

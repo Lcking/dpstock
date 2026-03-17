@@ -1,4 +1,5 @@
 import json
+import asyncio
 from copy import deepcopy
 from datetime import datetime
 from typing import List, AsyncGenerator, Dict, Any, Optional
@@ -166,7 +167,11 @@ class StockAnalyzerService:
 
             # 如果名称为空（快速路径跳过了列表查询），尝试补全
             if not stock_name and market_type == 'A':
-                stock_name = self.data_provider.lookup_stock_name(stock_code)
+                stock_name = await asyncio.to_thread(
+                    self.data_provider.lookup_stock_name,
+                    stock_code,
+                    True,
+                )
                 if stock_name:
                     logger.info(f"补全股票名称: {stock_code} -> {stock_name}")
             

@@ -5,9 +5,10 @@ Handles invite code generation and acceptance
 from fastapi import APIRouter, Request, Response, HTTPException, Cookie
 from typing import Optional
 from pydantic import BaseModel
-import uuid
 
 from services.invite_service import InviteService
+from services.user_service import UserService
+from routes.judgments import get_actor
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/api/v1", tags=["invite"])
 
 # Initialize service
 invite_service = InviteService()
+user_service = UserService()
 
 # Cookie settings
 COOKIE_NAME = "aguai_uid"
@@ -52,22 +54,34 @@ async def generate_invite_code(
         - invite_url: Full invite URL
         - message: User-friendly message
     """
-    if not aguai_uid:
-        aguai_uid = request.headers.get("X-Anonymous-Id")
-
-    if not aguai_uid:
-        aguai_uid = str(uuid.uuid4())
-        response.set_cookie(
-            key=COOKIE_NAME,
-            value=aguai_uid,
-            max_age=COOKIE_MAX_AGE,
-            httponly=True,
-            samesite="lax"
-        )
-        logger.info(f"Created user identity during invite generation: {aguai_uid}")
-    
     try:
-        result = invite_service.generate_invite_code(aguai_uid)
+        actor = get_actor(request)
+        anchor_id = actor["id"] if actor and actor.get("type") == "anchor" else None
+        anonymous_id = actor["id"] if actor and actor.get("type") == "anonymous" else None
+        resolved = user_service.resolve_request_user(
+            anchor_id=anchor_id,
+            anonymous_id=anonymous_id,
+            cookie_uid=aguai_uid,
+            create_missing_cookie=not actor and not aguai_uid,
+        )
+        created_cookie_uid = resolved.get("created_cookie_uid")
+        if created_cookie_uid:
+            response.set_cookie(
+                key=COOKIE_NAME,
+                value=created_cookie_uid,
+                max_age=COOKIE_MAX_AGE,
+                httponly=True,
+                samesite="lax"
+            )
+            logger.info(f"Created user identity during invite generation: {created_cookie_uid}")
+        user_service.migrate_identities_to_user(
+            user_id=resolved["user_id"],
+            anonymous_id=anonymous_id,
+            cookie_uid=aguai_uid or created_cookie_uid,
+            anchor_id=anchor_id,
+        )
+
+        result = invite_service.generate_invite_code(resolved["user_id"])
         
         # Build invite URL
         base_url = str(request.base_url).rstrip('/')
@@ -97,6 +111,7 @@ async def generate_invite_code(
 @router.get("/invite/accept", response_model=InviteAcceptResponse)
 async def accept_invite(
     code: str,
+    request: Request,
     response: Response,
     aguai_uid: Optional[str] = Cookie(None)
 ):
@@ -122,18 +137,32 @@ async def accept_invite(
                 message="邀请码无效或已过期"
             )
         
-        # Check if user already has aguai_uid
-        if not aguai_uid:
-            # Create new user ID
-            aguai_uid = str(uuid.uuid4())
+        actor = get_actor(request)
+        anchor_id = actor["id"] if actor and actor.get("type") == "anchor" else None
+        anonymous_id = actor["id"] if actor and actor.get("type") == "anonymous" else None
+        resolved = user_service.resolve_request_user(
+            anchor_id=anchor_id,
+            anonymous_id=anonymous_id,
+            cookie_uid=aguai_uid,
+            create_missing_cookie=not actor and not aguai_uid,
+        )
+        created_cookie_uid = resolved.get("created_cookie_uid")
+        if created_cookie_uid:
             response.set_cookie(
                 key=COOKIE_NAME,
-                value=aguai_uid,
+                value=created_cookie_uid,
                 max_age=COOKIE_MAX_AGE,
                 httponly=True,
                 samesite="lax"
             )
-            logger.info(f"Created new user via invite: {aguai_uid}")
+            logger.info(f"Created new user via invite: {created_cookie_uid}")
+
+        user_service.migrate_identities_to_user(
+            user_id=resolved["user_id"],
+            anonymous_id=anonymous_id,
+            cookie_uid=aguai_uid or created_cookie_uid,
+            anchor_id=anchor_id,
+        )
         
         # Set referrer cookie (will be used to trigger reward after first analysis)
         response.set_cookie(
@@ -144,7 +173,7 @@ async def accept_invite(
             samesite="lax"
         )
         
-        logger.info(f"Accepted invite: invitee={aguai_uid}, inviter={inviter_id}, code={code}")
+        logger.info(f"Accepted invite: invitee={resolved['user_id']}, inviter={inviter_id}, code={code}")
         
         return InviteAcceptResponse(
             success=True,

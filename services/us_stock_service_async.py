@@ -6,6 +6,59 @@ from utils.logger import get_logger
 # 获取日志器
 logger = get_logger()
 
+POPULAR_US_STOCKS = [
+    {"symbol": "AAPL", "name": "Apple"},
+    {"symbol": "MSFT", "name": "Microsoft"},
+    {"symbol": "GOOGL", "name": "Alphabet"},
+    {"symbol": "AMZN", "name": "Amazon"},
+    {"symbol": "NVDA", "name": "NVIDIA"},
+    {"symbol": "META", "name": "Meta Platforms"},
+    {"symbol": "TSLA", "name": "Tesla"},
+    {"symbol": "BRK-B", "name": "Berkshire Hathaway"},
+    {"symbol": "JPM", "name": "JPMorgan Chase"},
+    {"symbol": "V", "name": "Visa"},
+    {"symbol": "JNJ", "name": "Johnson & Johnson"},
+    {"symbol": "WMT", "name": "Walmart"},
+    {"symbol": "PG", "name": "Procter & Gamble"},
+    {"symbol": "MA", "name": "Mastercard"},
+    {"symbol": "HD", "name": "Home Depot"},
+    {"symbol": "CVX", "name": "Chevron"},
+    {"symbol": "MRK", "name": "Merck"},
+    {"symbol": "ABBV", "name": "AbbVie"},
+    {"symbol": "KO", "name": "Coca-Cola"},
+    {"symbol": "PEP", "name": "PepsiCo"},
+    {"symbol": "COST", "name": "Costco"},
+    {"symbol": "AVGO", "name": "Broadcom"},
+    {"symbol": "MCD", "name": "McDonald's"},
+    {"symbol": "CSCO", "name": "Cisco"},
+    {"symbol": "ACN", "name": "Accenture"},
+    {"symbol": "TMO", "name": "Thermo Fisher"},
+    {"symbol": "DHR", "name": "Danaher"},
+    {"symbol": "VZ", "name": "Verizon"},
+    {"symbol": "ADBE", "name": "Adobe"},
+    {"symbol": "NFLX", "name": "Netflix"},
+    {"symbol": "CRM", "name": "Salesforce"},
+    {"symbol": "NKE", "name": "Nike"},
+    {"symbol": "DIS", "name": "Disney"},
+    {"symbol": "ABT", "name": "Abbott"},
+    {"symbol": "TXN", "name": "Texas Instruments"},
+    {"symbol": "PM", "name": "Philip Morris"},
+    {"symbol": "UNH", "name": "UnitedHealth"},
+    {"symbol": "BAC", "name": "Bank of America"},
+    {"symbol": "ORCL", "name": "Oracle"},
+    {"symbol": "INTC", "name": "Intel"},
+    {"symbol": "AMD", "name": "AMD"},
+    {"symbol": "QCOM", "name": "Qualcomm"},
+    {"symbol": "CMCSA", "name": "Comcast"},
+    {"symbol": "UPS", "name": "UPS"},
+    {"symbol": "IBM", "name": "IBM"},
+    {"symbol": "AMGN", "name": "Amgen"},
+    {"symbol": "BA", "name": "Boeing"},
+    {"symbol": "GE", "name": "GE Aerospace"},
+    {"symbol": "CAT", "name": "Caterpillar"},
+    {"symbol": "GS", "name": "Goldman Sachs"},
+]
+
 class USStockServiceAsync:
     """
     美股服务 - 使用 yfinance 数据源
@@ -58,46 +111,23 @@ class USStockServiceAsync:
     
     async def _get_popular_us_stocks(self) -> List[Dict[str, Any]]:
         """
-        获取常用美股列表
+        获取常用美股列表。
+        搜索链路只返回本地静态目录，避免在用户输入时实时访问 yfinance。
         """
         if self._popular_stocks_cache:
             return self._popular_stocks_cache
-        
-        # 常用美股代码（可扩展）
-        popular_symbols = [
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
-            'JPM', 'V', 'JNJ', 'WMT', 'PG', 'MA', 'HD', 'CVX', 'MRK', 'ABBV',
-            'KO', 'PEP', 'COST', 'AVGO', 'MCD', 'CSCO', 'ACN', 'TMO', 'DHR',
-            'VZ', 'ADBE', 'NFLX', 'CRM', 'NKE', 'DIS', 'ABT', 'TXN', 'PM',
-            'UNH', 'BAC', 'ORCL', 'INTC', 'AMD', 'QCOM', 'CMCSA', 'UPS',
-            'IBM', 'AMGN', 'BA', 'GE', 'CAT', 'GS'
+
+        self._popular_stocks_cache = [
+            {
+                "symbol": stock["symbol"],
+                "name": stock["name"],
+                "price": 0.0,
+                "market_value": 0.0,
+            }
+            for stock in POPULAR_US_STOCKS
         ]
-        
-        # 获取详细信息
-        stocks = []
-        for symbol in popular_symbols:
-            try:
-                info = await asyncio.to_thread(self._get_stock_info, symbol)
-                if info:
-                    stocks.append({
-                        'symbol': symbol,
-                        'name': info.get('longName', info.get('shortName', symbol)),
-                        'price': info.get('currentPrice', info.get('regularMarketPrice', 0.0)),
-                        'market_value': info.get('marketCap', 0.0)
-                    })
-            except Exception as e:
-                logger.warning(f"获取 {symbol} 信息失败: {e}")
-                # 添加基本信息
-                stocks.append({
-                    'symbol': symbol,
-                    'name': symbol,
-                    'price': 0.0,
-                    'market_value': 0.0
-                })
-        
-        self._popular_stocks_cache = stocks
-        logger.info(f"已加载 {len(stocks)} 只常用美股信息")
-        return stocks
+        logger.info(f"已加载 {len(self._popular_stocks_cache)} 只常用美股静态搜索目录")
+        return self._popular_stocks_cache
     
     def _get_stock_info(self, symbol: str) -> Optional[Dict[str, Any]]:
         """

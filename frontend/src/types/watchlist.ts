@@ -61,6 +61,8 @@ export interface WatchlistSummary {
     items: WatchlistItemSummary[]
     total_count: number
     filtered_count: number
+    is_temporary: boolean
+    trial_message: string | null
 }
 
 export interface Watchlist {
@@ -70,4 +72,6 @@ export interface Watchlist {
     created_at: string
     updated_at: string
     items_count: number
+    is_temporary: boolean
+    trial_message: string | null
 }

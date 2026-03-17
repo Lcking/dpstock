@@ -5,12 +5,13 @@ Journal API Routes
 from fastapi import APIRouter, HTTPException, Query, Depends, Request, Response, Cookie
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-import uuid
 from services.journal import journal_service
-from routes.judgments import get_actor, get_or_create_user_id
+from routes.judgments import get_actor
+from services.user_service import UserService
 from utils.logger import get_logger
 
 logger = get_logger()
+user_service = UserService()
 
 router = APIRouter(prefix="/api/journal", tags=["journal"])
 
@@ -21,48 +22,62 @@ def get_journal_user(
     aguai_uid: Optional[str] = Cookie(None)
 ) -> str:
     """获取当前用户ID (支持 AnchorToken, Anonymous Header 和 Cookie)"""
-    # 1. Check for actor (Anchor or Header-based Anonymous)
     actor = get_actor(request)
+    anchor_id = actor["id"] if actor and actor.get("type") == "anchor" else None
+    anonymous_id = actor["id"] if actor and actor.get("type") == "anonymous" else None
+    resolved = user_service.resolve_request_user(
+        anchor_id=anchor_id,
+        anonymous_id=anonymous_id,
+        cookie_uid=aguai_uid,
+        create_missing_cookie=not actor and not aguai_uid,
+    )
+    created_cookie_uid = resolved.get("created_cookie_uid")
+    if created_cookie_uid:
+        response.set_cookie(
+            key="aguai_uid",
+            value=created_cookie_uid,
+            max_age=365 * 24 * 60 * 60,
+            httponly=True,
+            samesite="lax"
+        )
+
     if actor:
         logger.info(f"[Journal] User identified via actor: type={actor['type']}, id={actor['id'][:16]}...")
-
-        # If anchor is present, proactively merge other identities into anchor
-        if actor.get("type") == "anchor":
-            anchor_id = actor["id"]
-            header_anon = request.headers.get("X-Anonymous-Id")
-
-            migrated_total = 0
-            try:
-                if header_anon and header_anon != anchor_id:
-                    migrated_total += journal_service.migrate_user_records(header_anon, anchor_id)
-                # Cookie-based anonymous ID (legacy / quota uid) may have journal data from older versions
-                if aguai_uid and aguai_uid != anchor_id:
-                    migrated_total += journal_service.migrate_user_records(aguai_uid, anchor_id)
-            except Exception as e:
-                logger.warning(f"[Journal] Migration skipped due to error: {e}")
-
-            if migrated_total > 0:
-                logger.info(f"[Journal] Auto-merged records into anchor: migrated={migrated_total}")
+        try:
+            user_service.migrate_identities_to_user(
+                user_id=resolved["user_id"],
+                anonymous_id=anonymous_id,
+                cookie_uid=aguai_uid,
+                anchor_id=anchor_id,
+            )
+        except Exception as e:
+            logger.warning(f"[Journal] Unified migration skipped due to error: {e}")
 
         # If anonymous but only one anchor exists, fall back to anchor when anonymous has no records
         if actor.get("type") == "anonymous":
             try:
-                anchor_id = journal_service.get_single_anchor_id()
-                if anchor_id:
-                    anon_count = journal_service.get_records_count(actor["id"])
-                    anchor_count = journal_service.get_records_count(anchor_id)
+                single_anchor_id = journal_service.get_single_anchor_id()
+                if single_anchor_id:
+                    single_anchor_user_id = user_service.resolve_request_user(anchor_id=single_anchor_id)["user_id"]
+                    anon_count = journal_service.get_records_count(resolved["user_id"])
+                    anchor_count = journal_service.get_records_count(single_anchor_user_id)
                     if anon_count == 0 and anchor_count > 0:
                         logger.info("[Journal] Fallback to single anchor for anonymous session")
-                        return anchor_id
+                        return single_anchor_user_id
             except Exception as e:
                 logger.warning(f"[Journal] Anchor fallback skipped: {e}")
 
-        return actor['id']
-    
-    # 2. Fallback to Cookie-based Anonymous
-    user_id = get_or_create_user_id(request, response, aguai_uid)
-    logger.info(f"[Journal] User identified via cookie/fallback: id={user_id[:16] if user_id else 'None'}...")
-    return user_id
+        return resolved["user_id"]
+
+    logger.info(f"[Journal] User identified via cookie/fallback: id={resolved['user_id'][:16]}...")
+    try:
+        user_service.migrate_identities_to_user(
+            user_id=resolved["user_id"],
+            cookie_uid=aguai_uid or created_cookie_uid,
+        )
+    except Exception as e:
+        logger.warning(f"[Journal] Cookie migration skipped due to error: {e}")
+    return resolved["user_id"]
 
 
 class CreateRecordRequest(BaseModel):
@@ -122,7 +137,11 @@ async def list_records(
             ts_code=ts_code,
             page=page
         )
-        return {"records": records, "page": page}
+        return {
+            "records": records,
+            "page": page,
+            **journal_service.get_journal_state(user_id),
+        }
     except Exception as e:
         logger.error(f"List records error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

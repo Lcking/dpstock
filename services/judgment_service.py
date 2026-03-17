@@ -61,7 +61,10 @@ class JudgmentService:
 
                 # Check if verification_period column exists (for migration)
                 cursor.execute("PRAGMA table_info(judgments)")
-                columns = [info[1] for info in cursor.fetchall()]
+                columns = [
+                    info["name"] if isinstance(info, dict) else info[1]
+                    for info in cursor.fetchall()
+                ]
                 if "verification_period" not in columns:
                     logger.info("Migrating database: adding verification_period column")
                     cursor.execute("ALTER TABLE judgments ADD COLUMN verification_period INTEGER DEFAULT 7")

@@ -23,6 +23,7 @@ class TushareClient:
     _instance: Optional['TushareClient'] = None
     _pro: Optional[ts.pro_api] = None
     _initialized: bool = False
+    _missing_token_warned: bool = False
     
     def __new__(cls):
         if cls._instance is None:
@@ -30,26 +31,34 @@ class TushareClient:
         return cls._instance
     
     def __init__(self):
-        if not TushareClient._initialized:
-            self._setup()
-            TushareClient._initialized = True
+        pass
     
-    def _setup(self):
-        """Initialize Tushare Pro API"""
+    def _setup(self, log_missing_token: bool = False):
+        """Initialize Tushare Pro API lazily."""
         token = os.getenv('TUSHARE_TOKEN', '')
         
         if not token:
-            logger.warning("[Tushare] TUSHARE_TOKEN not set, data enhancement will be unavailable")
+            if log_missing_token and not TushareClient._missing_token_warned:
+                logger.warning("[Tushare] TUSHARE_TOKEN not set, data enhancement will be unavailable")
+                TushareClient._missing_token_warned = True
             return
         
         try:
             ts.set_token(token)
             TushareClient._pro = ts.pro_api()
+            TushareClient._initialized = True
+            TushareClient._missing_token_warned = False
             # Test connection with a simple query
             logger.info("[Tushare] Client initialized successfully (token: ***hidden***)")
         except Exception as e:
             logger.error(f"[Tushare] Failed to initialize: {str(e)}")
             TushareClient._pro = None
+            TushareClient._initialized = False
+
+    def ensure_initialized(self, log_missing_token: bool = True) -> None:
+        if TushareClient._pro is not None:
+            return
+        self._setup(log_missing_token=log_missing_token)
     
     @property
     def pro(self) -> Optional[ts.pro_api]:
@@ -73,6 +82,7 @@ class TushareClient:
         Returns:
             DataFrame or None on error
         """
+        self.ensure_initialized(log_missing_token=True)
         if not self.is_available:
             logger.warning(f"[Tushare] Query '{api_name}' skipped - client not available")
             return None

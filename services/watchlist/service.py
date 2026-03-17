@@ -11,6 +11,7 @@ from schemas.watchlist import (
     RelativeStrengthSummary, CapitalFlowSummary, RiskSummary,
     EventSummary, JudgementSummary, WatchlistSummaryResponse
 )
+from services.user_service import UserService
 from services.trend import trend_calculator, TrendInput, TrendResult
 from services.tushare.orchestrator import enhancement_orchestrator
 from utils.logger import get_logger
@@ -30,6 +31,22 @@ class WatchlistService:
     
     def __init__(self):
         self.db = DatabaseFactory()
+        self.user_service = UserService()
+
+    def _get_watchlist_trial_state(self, user_id: str) -> tuple[bool, Optional[str]]:
+        is_temporary = self.user_service.is_temporary_user(user_id)
+        trial_message = "当前观察仅临时保存在本设备，绑定后长期保存，并支持跨设备同步。" if is_temporary else None
+        return is_temporary, trial_message
+
+    def _get_watchlist_owner_id(self, watchlist_id: str) -> Optional[str]:
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT user_id FROM watchlists WHERE id = ? LIMIT 1",
+                (watchlist_id,),
+            )
+            row = cursor.fetchone()
+        return row.get("user_id") if row else None
     
     # ========== CRUD ==========
     
@@ -37,6 +54,7 @@ class WatchlistService:
         """创建自选股列表"""
         now = datetime.utcnow().isoformat() + 'Z'
         watchlist_id = f"wl_{uuid.uuid4().hex[:12]}"
+        is_temporary, trial_message = self._get_watchlist_trial_state(user_id)
         
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
@@ -52,11 +70,14 @@ class WatchlistService:
             name=data.name,
             created_at=datetime.fromisoformat(now.replace('Z', '+00:00')),
             updated_at=datetime.fromisoformat(now.replace('Z', '+00:00')),
-            items_count=0
+            items_count=0,
+            is_temporary=is_temporary,
+            trial_message=trial_message,
         )
     
     def get_user_watchlists(self, user_id: str) -> List[Watchlist]:
         """获取用户的所有自选股列表"""
+        is_temporary, trial_message = self._get_watchlist_trial_state(user_id)
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -75,7 +96,9 @@ class WatchlistService:
                 name=row.get('name'),
                 created_at=datetime.fromisoformat(row.get('created_at', '').replace('Z', '+00:00')),
                 updated_at=datetime.fromisoformat(row.get('updated_at', '').replace('Z', '+00:00')),
-                items_count=row.get('items_count', 0)
+                items_count=row.get('items_count', 0),
+                is_temporary=is_temporary,
+                trial_message=trial_message,
             )
             for row in rows
         ]
@@ -159,6 +182,8 @@ class WatchlistService:
         
         # 获取标的列表
         ts_codes = self.get_watchlist_items(watchlist_id)
+        owner_id = self._get_watchlist_owner_id(watchlist_id)
+        is_temporary, trial_message = self._get_watchlist_trial_state(owner_id) if owner_id else (False, None)
         
         if not ts_codes:
             return WatchlistSummaryResponse(
@@ -166,7 +191,9 @@ class WatchlistService:
                 asof=asof,
                 items=[],
                 total_count=0,
-                filtered_count=0
+                filtered_count=0,
+                is_temporary=is_temporary,
+                trial_message=trial_message,
             )
         
         # 批量生成摘要
@@ -183,7 +210,9 @@ class WatchlistService:
             asof=asof,
             items=sorted_items,
             total_count=len(ts_codes),
-            filtered_count=len(sorted_items)
+            filtered_count=len(sorted_items),
+            is_temporary=is_temporary,
+            trial_message=trial_message,
         )
     
     def _batch_generate_summaries(

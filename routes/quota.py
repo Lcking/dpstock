@@ -8,6 +8,8 @@ from pydantic import BaseModel
 from datetime import date
 
 from services.quota_service import QuotaService
+from services.user_service import UserService
+from routes.judgments import get_actor
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -15,6 +17,35 @@ router = APIRouter(prefix="/api/v1", tags=["quota"])
 
 # Initialize service
 quota_service = QuotaService()
+user_service = UserService()
+
+
+def resolve_quota_user(request: Request, response: Response, aguai_uid: Optional[str]) -> str:
+    actor = get_actor(request)
+    anchor_id = actor["id"] if actor and actor.get("type") == "anchor" else None
+    anonymous_id = actor["id"] if actor and actor.get("type") == "anonymous" else None
+    resolved = user_service.resolve_request_user(
+        anchor_id=anchor_id,
+        anonymous_id=anonymous_id,
+        cookie_uid=aguai_uid,
+        create_missing_cookie=not actor and not aguai_uid,
+    )
+    created_cookie_uid = resolved.get("created_cookie_uid")
+    if created_cookie_uid:
+        response.set_cookie(
+            key="aguai_uid",
+            value=created_cookie_uid,
+            max_age=365 * 24 * 60 * 60,
+            httponly=True,
+            samesite="lax"
+        )
+    user_service.migrate_identities_to_user(
+        user_id=resolved["user_id"],
+        anonymous_id=anonymous_id,
+        cookie_uid=aguai_uid or created_cookie_uid,
+        anchor_id=anchor_id,
+    )
+    return resolved["user_id"]
 
 
 # Request/Response Models
@@ -34,6 +65,8 @@ class QuotaCheckResponse(BaseModel):
 
 @router.get("/quota/status")
 async def get_quota_status(
+    request: Request,
+    response: Response,
     aguai_uid: Optional[str] = Cookie(None)
 ):
     """
@@ -49,17 +82,9 @@ async def get_quota_status(
         - remaining_quota: Quota remaining
         - analyzed_stocks_today: List of stocks analyzed today
     """
-    if not aguai_uid:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "error": "unauthorized",
-                "message": "请先访问首页以获取用户身份"
-            }
-        )
-    
     try:
-        status = quota_service.get_quota_status(aguai_uid)
+        user_id = resolve_quota_user(request, response, aguai_uid)
+        status = quota_service.get_quota_status(user_id)
         return status
         
     except Exception as e:
@@ -75,6 +100,8 @@ async def get_quota_status(
 
 @router.post("/quota/check", response_model=QuotaCheckResponse)
 async def check_quota(
+    request_http: Request,
+    response: Response,
     request: QuotaCheckRequest,
     aguai_uid: Optional[str] = Cookie(None)
 ):
@@ -91,18 +118,10 @@ async def check_quota(
         - message: User-friendly message
         - analyzed_stocks_today: List of analyzed stocks (if quota exceeded)
     """
-    if not aguai_uid:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "error": "unauthorized",
-                "message": "请先访问首页以获取用户身份"
-            }
-        )
-    
     try:
+        user_id = resolve_quota_user(request_http, response, aguai_uid)
         allowed, reason, details = quota_service.check_quota(
-            user_id=aguai_uid,
+            user_id=user_id,
             stock_code=request.stock_code
         )
         

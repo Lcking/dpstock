@@ -68,7 +68,7 @@ SELECT
     stock_code, stock_name, market_type,
     snapshot_time, structure_premise, selected_candidates,
     key_levels_snapshot, structure_type, ma200_position, phase,
-    verification_period,
+    7 as verification_period,
     created_at,
     datetime('now') as updated_at
 FROM judgments;

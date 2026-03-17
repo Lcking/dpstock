@@ -40,6 +40,16 @@
         <n-space vertical :size="12">
           <div style="display: flex; align-items: flex-start;">
             <n-icon size="20" style="margin-right: 8px; margin-top: 2px; flex-shrink: 0;">
+              <MailOutline />
+            </n-icon>
+            <div>
+              <strong>绑定邮箱</strong>
+              <div style="font-size: 12px; opacity: 0.8;">绑定后可解锁邀请奖励与更多额度，并避免资产因换设备丢失</div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: flex-start;">
+            <n-icon size="20" style="margin-right: 8px; margin-top: 2px; flex-shrink: 0;">
               <RefreshOutline />
             </n-icon>
             <div>
@@ -84,6 +94,9 @@
         <n-button @click="showModal = false">
           知道了
         </n-button>
+        <n-button secondary @click="handleBind">
+          绑定邮箱
+        </n-button>
         <n-button type="primary" @click="handleInvite">
           <template #icon>
             <n-icon><ShareSocialOutline /></n-icon>
@@ -114,6 +127,7 @@ import {
   TimeOutline,
   BulbOutline
 } from '@vicons/ionicons5';
+import { MailOutline } from '@vicons/ionicons5';
 
 interface Props {
   show: boolean;
@@ -121,7 +135,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const emit = defineEmits(['update:show', 'openInvite']);
+const emit = defineEmits(['update:show', 'openInvite', 'openBind']);
 
 const showModal = computed({
   get: () => props.show,
@@ -139,6 +153,11 @@ const analyzedStocks = computed(() => {
 const handleInvite = () => {
   showModal.value = false;
   emit('openInvite');
+};
+
+const handleBind = () => {
+  showModal.value = false;
+  emit('openBind');
 };
 </script>
 

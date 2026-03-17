@@ -18,6 +18,7 @@
             <li>分享邀请链接给朋友</li>
             <li>好友完成首次分析后,您获得 <strong>+5 次</strong> 额度</li>
             <li>每日最多获得 <strong>20 次</strong> 邀请额度</li>
+            <li>绑定邮箱后,历史邀请奖励会归集到统一账户</li>
           </ul>
         </div>
       </n-alert>

@@ -1,5 +1,7 @@
 import axios from 'axios';
 import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse } from '@/types';
+import type { JournalListResponse } from '@/types/journal';
+import type { Watchlist, WatchlistSummary } from '@/types/watchlist';
 
 // API前缀
 const API_PREFIX = '/api';
@@ -277,7 +279,7 @@ export const apiService = {
   },
 
   // 获取判断记录列表 (新版 Journal)
-  getJournalRecords: async (params: { status?: string, ts_code?: string, page?: number } = {}) => {
+  getJournalRecords: async (params: { status?: string, ts_code?: string, page?: number } = {}): Promise<JournalListResponse> => {
     try {
       const response = await axiosInstance.get('/journal', { params });
       return response.data;
@@ -312,6 +314,53 @@ export const apiService = {
   // 删除判断
   deleteJudgment: async (judgmentId: string): Promise<void> => {
     const response = await axiosInstance.delete(`/v1/judgments/${judgmentId}`);
+    return response.data;
+  },
+
+  // ========== Watchlist API ==========
+
+  getWatchlists: async (): Promise<Watchlist[]> => {
+    try {
+      const response = await axiosInstance.get('/watchlists');
+      return response.data || [];
+    } catch (error) {
+      console.error('获取观察列表时出错:', error);
+      return [];
+    }
+  },
+
+  createWatchlist: async (name: string): Promise<Watchlist> => {
+    const response = await axiosInstance.post('/watchlists', { name });
+    return response.data;
+  },
+
+  getWatchlistSummary: async (
+    watchlistId: string,
+    params: { sort?: string; filters?: string[] } = {}
+  ): Promise<WatchlistSummary> => {
+    const response = await axiosInstance.get(`/watchlists/${watchlistId}/summary`, {
+      params: {
+        sort: params.sort,
+        filters: params.filters?.join(',') || undefined
+      }
+    });
+    return response.data;
+  },
+
+  getUserCenterOverview: async () => {
+    const response = await axiosInstance.get('/user-center/overview');
+    return response.data;
+  },
+
+  addWatchlistSymbols: async (watchlistId: string, tsCodes: string[]) => {
+    const response = await axiosInstance.post(`/watchlists/${watchlistId}/symbols`, {
+      ts_codes: tsCodes
+    });
+    return response.data;
+  },
+
+  removeWatchlistSymbol: async (watchlistId: string, tsCode: string) => {
+    const response = await axiosInstance.delete(`/watchlists/${watchlistId}/symbols/${tsCode}`);
     return response.data;
   },
 

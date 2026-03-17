@@ -9,10 +9,12 @@ from schemas.watchlist import (
     Watchlist, WatchlistCreate, WatchlistUpdate,
     WatchlistAddSymbols, WatchlistSummaryResponse
 )
+from services.user_service import UserService
 from services.watchlist import watchlist_service
 from utils.logger import get_logger
 
 logger = get_logger()
+user_service = UserService()
 
 router = APIRouter(prefix="/api/watchlists", tags=["watchlists"])
 
@@ -52,28 +54,37 @@ def get_actor(request: Request) -> dict:
 
 def get_or_create_user_id(request: Request, response: Response, aguai_uid: Optional[str] = None) -> str:
     """
-    Get user ID from actor or cookie, create if needed
+    Resolve canonical user_id from actor or cookie, create if needed.
     """
-    # First try actor (token or header)
     actor = get_actor(request)
-    if actor:
-        return actor['id']
-    
-    # Fallback to cookie
-    if aguai_uid:
-        return aguai_uid
-    
-    # Generate new user ID
-    new_user_id = str(uuid.uuid4())
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=new_user_id,
-        max_age=COOKIE_MAX_AGE,
-        httponly=True,
-        samesite="lax"
+    anchor_id = actor["id"] if actor and actor.get("type") == "anchor" else None
+    anonymous_id = actor["id"] if actor and actor.get("type") == "anonymous" else None
+
+    resolved = user_service.resolve_request_user(
+        anchor_id=anchor_id,
+        anonymous_id=anonymous_id,
+        cookie_uid=aguai_uid,
+        create_missing_cookie=not actor and not aguai_uid,
     )
-    logger.info(f"Created new watchlist user: {new_user_id[:8]}...")
-    return new_user_id
+
+    created_cookie_uid = resolved.get("created_cookie_uid")
+    if created_cookie_uid:
+        response.set_cookie(
+            key=COOKIE_NAME,
+            value=created_cookie_uid,
+            max_age=COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="lax"
+        )
+        logger.info(f"Created new watchlist user cookie: {created_cookie_uid[:8]}...")
+
+    user_service.migrate_identities_to_user(
+        user_id=resolved["user_id"],
+        anonymous_id=anonymous_id,
+        cookie_uid=aguai_uid,
+        anchor_id=anchor_id,
+    )
+    return resolved["user_id"]
 
 
 @router.get("", response_model=List[Watchlist])

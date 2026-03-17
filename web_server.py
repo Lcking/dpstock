@@ -13,13 +13,15 @@ from typing import List, Optional, Dict, Any, Generator
 from services.stock_analyzer_service import StockAnalyzerService
 from services.us_stock_service_async import USStockServiceAsync
 from services.fund_service_async import FundServiceAsync
+from services.search_snapshot_service import SearchSnapshotService
 import asyncio
 import httpx
 from services.anchor_service import AnchorService
 from services.quota_service import QuotaService
 from services.invite_service import InviteService
+from services.user_service import UserService
 from services.verification_scheduler import start_verification_scheduler
-from routes import captcha, auth, judgments, quota, invite, anchor, admin, enhancements, watchlists, compare, journal
+from routes import captcha, auth, judgments, quota, invite, anchor, admin, enhancements, watchlists, compare, journal, user_center
 
 from utils.logger import get_logger
 import uvicorn
@@ -30,6 +32,7 @@ from jose import JWTError, jwt
 
 # 获取日志器
 logger = get_logger()
+user_service = UserService()
 
 # JWT相关配置
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_hex(32))
@@ -61,6 +64,7 @@ app.include_router(enhancements.router)  # Tushare data enhancements
 app.include_router(watchlists.router)    # Watchlists module
 app.include_router(compare.router)       # Compare bucketing
 app.include_router(journal.router)       # Journal records
+app.include_router(user_center.router)   # User center
 
 # 添加CORS中间件
 app.add_middleware(
@@ -98,9 +102,20 @@ async def startup_event():
         
     start_verification_scheduler()
 
+    asyncio.create_task(_refresh_search_snapshot_background())
+
+
+async def _refresh_search_snapshot_background():
+    try:
+        await asyncio.to_thread(search_snapshot_service.refresh_a_share_snapshot)
+    except Exception as e:
+        logger.warning(f"[Startup] Failed to refresh search snapshot: {e}")
+
 # 初始化异步服务
 us_stock_service = USStockServiceAsync()
 fund_service = FundServiceAsync()
+search_snapshot_service = SearchSnapshotService()
+SEARCH_TASK_TIMEOUT_SECONDS = 2.5
 
 # 定义请求和响应模型
 class AnalyzeRequest(BaseModel):
@@ -226,19 +241,27 @@ async def analyze(
         # Initialize quota service
         quota_service_instance = QuotaService()
         invite_service_instance = InviteService()
+        canonical_user_id = None
+        if aguai_uid:
+            resolved_user = user_service.resolve_request_user(cookie_uid=aguai_uid)
+            canonical_user_id = resolved_user["user_id"]
+            user_service.migrate_identities_to_user(
+                user_id=canonical_user_id,
+                cookie_uid=aguai_uid,
+            )
         
         # Quota check for single stock analysis only (batch analysis not subject to quota)
-        if len(stock_codes) == 1 and aguai_uid:
+        if len(stock_codes) == 1 and canonical_user_id:
             stock_code = stock_codes[0].strip()
             
             # Check quota before analysis
             allowed, reason, details = quota_service_instance.check_quota(
-                user_id=aguai_uid,
+                user_id=canonical_user_id,
                 stock_code=stock_code
             )
             
             if not allowed:
-                logger.warning(f"Quota exceeded for user {aguai_uid}, stock {stock_code}")
+                logger.warning(f"Quota exceeded for user {canonical_user_id}, stock {stock_code}")
                 raise HTTPException(
                     status_code=403,
                     detail={
@@ -297,17 +320,17 @@ async def analyze(
                 logger.info(f"股票 {target_code} 流式分析完成，共发送 {chunk_count} 个块")
                 
                 # Record analysis consumption (only for single stock with aguai_uid)
-                if aguai_uid:
+                if canonical_user_id:
                     quota_service_instance.record_analysis(
-                        user_id=aguai_uid,
+                        user_id=canonical_user_id,
                         stock_code=target_code
                     )
-                    logger.info(f"Recorded analysis for user {aguai_uid}, stock {target_code}")
+                    logger.info(f"Recorded analysis for user {canonical_user_id}, stock {target_code}")
                     
                     # Check and reward inviter if applicable
                     if aguai_ref:
                         reward_result = invite_service_instance.check_and_reward_inviter(
-                            invitee_id=aguai_uid,
+                            invitee_id=canonical_user_id,
                             referrer_id=aguai_ref
                         )
                         if reward_result:
@@ -364,10 +387,7 @@ async def search_us_stocks(keyword: str = "", username: str = Depends(verify_tok
         if not keyword:
             raise HTTPException(status_code=400, detail="请输入搜索关键词")
         
-        # 直接使用异步服务的异步方法
-        results = await us_stock_service.search_us_stocks(keyword)
-        # 为前端统一格式，将 symbol 映射为 symbol
-        return {"results": results}
+        return {"results": search_snapshot_service.search_us_stocks(keyword)}
         
     except Exception as e:
         logger.error(f"搜索美股代码时出错: {str(e)}")
@@ -380,38 +400,7 @@ async def search_a_shares(keyword: str = "", username: str = Depends(verify_toke
         if not keyword:
             raise HTTPException(status_code=400, detail="请输入搜索关键词")
 
-        keyword = keyword.strip()
-        analyzer = StockAnalyzerService()
-
-        # 纯 6 位数字代码走快速路径，避免每次都加载整份股票列表
-        if keyword.isdigit() and len(keyword) == 6:
-            stock_name = await asyncio.to_thread(analyzer.data_provider.lookup_stock_name, keyword)
-            return {
-                "results": [{
-                    "symbol": keyword,
-                    "name": stock_name or keyword,
-                    "market": "A"
-                }]
-            }
-
-        stock_list = await asyncio.to_thread(analyzer.data_provider.get_a_share_list)
-        
-        # 模糊匹配搜索
-        keyword_lower = keyword.lower()
-        results = []
-        for stock in stock_list:
-            if (keyword_lower in stock['code'].lower() or 
-                keyword_lower in stock['name'].lower() or 
-                keyword_lower in stock['pinyin'].lower()):
-                results.append({
-                    'symbol': stock['code'],
-                    'name': stock['name'],
-                    'market': 'A'
-                })
-                if len(results) >= 10:
-                    break
-                    
-        return {"results": results}
+        return {"results": search_snapshot_service.search_a_shares(keyword)}
         
     except Exception as e:
         logger.error(f"搜索 A 股代码时出错: {str(e)}")
@@ -424,25 +413,7 @@ async def search_hk_shares(keyword: str = "", username: str = Depends(verify_tok
         if not keyword:
             raise HTTPException(status_code=400, detail="请输入搜索关键词")
         
-        analyzer = StockAnalyzerService()
-        stock_list = await asyncio.to_thread(analyzer.data_provider.get_hk_share_list)
-        
-        # 模糊匹配搜索
-        keyword_lower = keyword.lower()
-        results = []
-        for stock in stock_list:
-            if (keyword_lower in stock['code'].lower() or 
-                keyword_lower in stock['name'].lower() or 
-                keyword_lower in stock['pinyin'].lower()):
-                results.append({
-                    'symbol': stock['code'],
-                    'name': stock['name'],
-                    'market': 'HK'
-                })
-                if len(results) >= 10:
-                    break
-                    
-        return {"results": results}
+        return {"results": search_snapshot_service.search_hk_shares(keyword)}
         
     except Exception as e:
         logger.error(f"搜索港股代码时出错: {str(e)}")
@@ -456,69 +427,35 @@ async def search_global(keyword: str = "", market_type: str = "ALL", username: s
             return {"results": []}
 
         keyword = keyword.strip()
-        keyword_lower = keyword.lower()
+        flat_results = search_snapshot_service.search_global(keyword, market_type=market_type)
         tasks = []
+
+        async def run_search_task(task_name: str, coro):
+            try:
+                return await asyncio.wait_for(coro, timeout=SEARCH_TASK_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                logger.warning(f"[Search] {task_name} timed out for keyword={keyword}")
+                return []
+            except Exception as e:
+                logger.warning(f"[Search] {task_name} failed for keyword={keyword}: {e}")
+                return []
         
-        # 1. A 股搜寻 (如果 market_type 为 ALL 或 A)
-        if market_type in ["ALL", "A"]:
-            async def search_a():
-                analyzer = StockAnalyzerService()
-
-                if keyword.isdigit() and len(keyword) == 6:
-                    stock_name = await asyncio.to_thread(analyzer.data_provider.lookup_stock_name, keyword)
-                    return [{
-                        "label": f"{stock_name or keyword} ({keyword})",
-                        "value": keyword,
-                        "market": "A",
-                        "name": stock_name or keyword
-                    }]
-
-                stock_list = await asyncio.to_thread(analyzer.data_provider.get_a_share_list)
-                res = []
-                for s in stock_list:
-                    if keyword_lower in s['code'].lower() or keyword_lower in s['name'].lower() or keyword_lower in s['pinyin'].lower():
-                        res.append({"label": f"{s['name']} ({s['code']})", "value": s['code'], "market": "A", "name": s['name']})
-                        if len(res) >= 5: break
-                return res
-            tasks.append(search_a())
-
-        # 2. 港股搜寻 (如果 market_type 为 ALL 或 HK)
-        if market_type in ["ALL", "HK"]:
-            async def search_hk():
-                analyzer = StockAnalyzerService()
-                stock_list = await asyncio.to_thread(analyzer.data_provider.get_hk_share_list)
-                res = []
-                for s in stock_list:
-                    if keyword_lower in s['code'].lower() or keyword_lower in s['name'].lower() or keyword_lower in s['pinyin'].lower():
-                        res.append({"label": f"{s['name']} ({s['code']})", "value": s['code'], "market": "HK", "name": s['name']})
-                        if len(res) >= 5: break
-                return res
-            tasks.append(search_hk())
-
-        # 3. 美股搜寻 (如果 market_type 为 ALL 或 US)
-        if market_type in ["ALL", "US"]:
-            async def search_us():
-                us_stocks = await us_stock_service.search_us_stocks(keyword)
-                return [{"label": f"{s['name']} ({s['symbol']})", "value": s['symbol'], "market": "US", "name": s['name']} for s in us_stocks[:5]]
-            tasks.append(search_us())
-
-        # 4. 基金搜寻 (如果 market_type 为 ALL, ETF 或 LOF)
-        if market_type in ["ALL", "ETF", "LOF"]:
+        # 4. 基金搜寻只在用户显式选择 ETF/LOF 时执行。
+        # 避免 ALL 模式每次打字都去远程拉取基金列表，拖慢整个下拉搜索。
+        if market_type in ["ETF", "LOF"]:
             async def search_f(m_type):
                 funds = await fund_service.search_funds(keyword, m_type)
                 return [{"label": f"{s['name']} ({s['symbol']})", "value": s['symbol'], "market": m_type, "name": s['name']} for s in funds[:5]]
             
-            if market_type == "ALL":
-                tasks.append(search_f("ETF"))
-                tasks.append(search_f("LOF"))
-            else:
-                tasks.append(search_f(market_type))
+            tasks.append(run_search_task(market_type, search_f(market_type)))
 
         # 并发执行所有搜索任务
-        search_results = await asyncio.gather(*tasks)
+        search_results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # 合并结果
-        flat_results = [item for sublist in search_results for item in sublist]
+        for sublist in search_results:
+            if isinstance(sublist, list):
+                flat_results.extend(sublist)
         
         return {"results": flat_results}
         
@@ -832,7 +769,7 @@ Agu AI 是一个基于人工智能的股票分析平台,为投资者提供A股�
             },
         )
 
-    logger.info(f"前端构建目录挂载成功: {frontend_dist}")
+    logger.debug(f"前端构建目录挂载成功: {frontend_dist}")
 else:
     logger.warning("前端构建目录不存在，仅API功能可用")
 

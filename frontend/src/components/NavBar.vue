@@ -10,13 +10,18 @@
         <router-link to="/analysis" class="nav-btn">
           <span class="btn-text">分析专栏</span>
         </router-link>
-        
-        <router-link to="/journal" class="nav-btn">
-          <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[0, 4]">
-            <span class="btn-text">判断日记</span>
-          </n-badge>
-        </router-link>
-        
+
+        <n-dropdown trigger="click" :options="myMenuOptions" @select="handleMyMenuSelect">
+          <button class="nav-btn nav-btn-button" type="button">
+            <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[0, 4]">
+              <span class="btn-text">我的</span>
+            </n-badge>
+            <n-icon size="14" class="dropdown-icon">
+              <CaretDownOutline />
+            </n-icon>
+          </button>
+        </n-dropdown>
+
         <a
           v-for="link in links"
           :key="link.text"
@@ -27,6 +32,15 @@
         >
           <span class="btn-text">{{ link.text }}</span>
         </a>
+
+        <button
+          v-if="anchorMode === 'anonymous'"
+          type="button"
+          class="nav-btn nav-btn-button bind-btn"
+          @click="showBindDialog = true"
+        >
+          <span class="btn-text">绑定邮箱</span>
+        </button>
         
         <!-- Quota Status -->
         <QuotaStatus 
@@ -43,16 +57,25 @@
     :quota-status="quotaStatus"
     @invite-generated="handleInviteGenerated"
   />
+
+  <AnchorBindDialog
+    v-model:show="showBindDialog"
+    @bind-success="handleBindSuccess"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import QuotaStatus from './QuotaStatus.vue';
 import InviteDialog from './InviteDialog.vue';
+import AnchorBindDialog from './AnchorBindDialog.vue';
 import { apiService } from '@/services/api';
-import { NBadge } from 'naive-ui';
+import { NBadge, NDropdown, NIcon } from 'naive-ui';
+import { CaretDownOutline } from '@vicons/ionicons5';
 import { useNotificationStore } from '@/stores/notification';
 
+const router = useRouter();
 const notificationStore = useNotificationStore();
 
 interface NavLink {
@@ -63,13 +86,29 @@ interface NavLink {
 }
 
 const links: NavLink[] = [
-  { text: '实盘策略平台', href: 'https://www.qifuapp.net/', target: '_blank', rel: 'noopener sponsored' },
-  { text: '配查查', href: 'https://www.peichacha.net/', target: '_blank', rel: 'noopener sponsored' }
+  { text: '实盘策略平台', href: 'https://www.qifuapp.net/', target: '_blank', rel: 'noopener sponsored' }
+];
+
+const myMenuOptions = [
+  { label: '我的观察', key: '/watchlist' },
+  { label: '判断日记', key: '/journal' },
+  { label: '用户中心', key: '/me' },
+  { label: '额度与邀请', key: 'quota-invite' }
 ];
 
 const showInviteDialog = ref(false);
+const showBindDialog = ref(false);
 const quotaStatusRef = ref<any>(null);
 const quotaStatus = ref<any>(null);
+const anchorMode = ref<'anonymous' | 'anchor'>('anonymous');
+
+const handleMyMenuSelect = (key: string) => {
+  if (key === 'quota-invite') {
+    showInviteDialog.value = true;
+    return;
+  }
+  router.push(key);
+};
 
 const handleInviteGenerated = async () => {
   // Refresh quota status after invite generation
@@ -90,8 +129,24 @@ const loadQuotaStatus = async () => {
   }
 };
 
+const loadAnchorStatus = async () => {
+  try {
+    const data = await apiService.getAnchorStatus();
+    anchorMode.value = data?.mode === 'anchor' ? 'anchor' : 'anonymous';
+  } catch (error) {
+    console.error('Failed to load anchor status:', error);
+    anchorMode.value = 'anonymous';
+  }
+};
+
+const handleBindSuccess = async () => {
+  anchorMode.value = 'anchor';
+  await loadQuotaStatus();
+};
+
 onMounted(() => {
   loadQuotaStatus();
+  loadAnchorStatus();
 });
 </script>
 
@@ -171,6 +226,7 @@ onMounted(() => {
   position: relative;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   padding: 8px 20px;
   border-radius: 24px;
   font-size: 14px;
@@ -184,7 +240,22 @@ onMounted(() => {
   transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.nav-btn-button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.bind-btn {
+  color: #6d28d9;
+  border-color: rgba(124, 58, 237, 0.22);
+}
+
 .btn-text {
+  position: relative;
+  z-index: 1;
+}
+
+.dropdown-icon {
   position: relative;
   z-index: 1;
 }

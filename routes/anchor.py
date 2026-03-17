@@ -6,13 +6,14 @@ Endpoints:
 - GET /api/anchor/status - Get current anchor status
 """
 
-from fastapi import APIRouter, Request, Header, HTTPException
+from fastapi import APIRouter, Request, Header, HTTPException, Cookie
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import os
 import re
 from services.anchor_service import AnchorService
 from services.journal import journal_service
+from services.user_service import UserService
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -22,6 +23,7 @@ router = APIRouter()
 # Initialize anchor service
 JWT_SECRET = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
 anchor_service = AnchorService(JWT_SECRET)
+user_service = UserService()
 
 # ============ Request/Response Models ============
 
@@ -124,7 +126,8 @@ async def send_verification_code(request: SendCodeRequest):
 @router.post("/api/anchor/verify_and_bind", response_model=VerifyAndBindResponse)
 async def verify_and_bind(
     request: VerifyAndBindRequest,
-    x_anonymous_id: Optional[str] = Header(None, alias="X-Anonymous-Id")
+    x_anonymous_id: Optional[str] = Header(None, alias="X-Anonymous-Id"),
+    aguai_uid: Optional[str] = Cookie(None),
 ):
     """
     Verify email code and bind to anonymous ID
@@ -154,20 +157,18 @@ async def verify_and_bind(
     
     # Get or create anchor
     anchor_id = anchor_service.get_or_create_anchor(email)
+    user_service.bind_email_identity(
+        anonymous_id=x_anonymous_id,
+        cookie_uid=aguai_uid,
+        anchor_id=anchor_id,
+        email=email,
+    )
     
     # Migrate anonymous judgments to anchor
     migrated_count = anchor_service.migrate_anonymous_to_anchor(
         anonymous_id=x_anonymous_id,
         anchor_id=anchor_id
     )
-
-    # Also migrate Journal (判断日记) records that use user_id (new system)
-    try:
-        journal_migrated = journal_service.migrate_user_records(x_anonymous_id, anchor_id)
-        if journal_migrated:
-            logger.info(f"[AnchorBind] Migrated Journal records: {journal_migrated}")
-    except Exception as e:
-        logger.warning(f"[AnchorBind] Failed to migrate Journal records: {e}")
     
     # Generate token
     token = anchor_service.generate_anchor_token(anchor_id)

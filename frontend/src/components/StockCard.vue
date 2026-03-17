@@ -67,6 +67,12 @@
             </n-button>
         </div>
       </div>
+      <div
+        v-if="stock.analysisStatus === 'completed' && showBindAssetHint"
+        class="bind-asset-hint"
+      >
+        绑定后资产不会因换设备或清缓存而丢失
+      </div>
       <div class="analysis-status" v-if="stock.analysisStatus !== 'completed'">
         <n-tag 
           :type="getStatusType" 
@@ -258,6 +264,7 @@ import {
   type EChartsType
 } from 'echarts/core';
 import { apiService } from '@/services/api';
+import { hasAnchorToken } from '@/utils/anchorToken';
 import { getCategoryName, parseMarkdown } from '@/utils';
 import type { StockInfo } from '@/types';
 import AnalysisV1Display from './AnalysisV1Display.vue';
@@ -276,6 +283,8 @@ type StockChartOption = ComposeOption<
 const props = defineProps<{
   stock: StockInfo;
 }>();
+
+const showBindAssetHint = ref(false);
 
 const isAnalyzing = computed(() => {
   return props.stock.analysisStatus === 'analyzing';
@@ -707,7 +716,12 @@ async function saveJudgment() {
     const response = await apiService.saveJudgment(recordRequest);
     
     if (response && (response.id || response.judgment_id)) {
-      message.success('判断已保存！可在"判断日记"中查看');
+      if (response.is_temporary) {
+        message.success('判断已保存到临时日记，绑定后可长期追踪与复盘');
+        message.info('绑定后可持续追踪复盘，绑定后资产不会因换设备或清缓存而丢失。');
+      } else {
+        message.success('判断已保存！可在"判断日记"中查看');
+      }
     } else {
       message.error('保存失败，请重试');
     }
@@ -737,6 +751,7 @@ function handleJudgmentSaved(judgmentId: string) {
 
 // 监听滚动事件
 onMounted(() => {
+  showBindAssetHint.value = !hasAnchorToken();
   if (analysisResultRef.value) {
     // 初始滚动到底部
     analysisResultRef.value.scrollTop = analysisResultRef.value.scrollHeight;
@@ -874,6 +889,15 @@ window.addEventListener('resize', () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.bind-asset-hint {
+  font-size: 12px;
+  color: #6b46c1;
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(124, 58, 237, 0.12);
+  border-radius: 12px;
+  padding: 8px 12px;
 }
 
 .header-left {

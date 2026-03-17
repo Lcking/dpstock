@@ -12,6 +12,7 @@ from typing import Optional, Tuple
 import sqlite3
 from utils.logger import get_logger
 from database.db_factory import DatabaseFactory
+from services.user_service import UserService
 
 logger = get_logger()
 
@@ -21,6 +22,7 @@ class AnchorService:
     def __init__(self, jwt_secret: str):
         self.db = DatabaseFactory()
         self.jwt_secret = jwt_secret
+        self.user_service = UserService()
         
     def _get_db(self) -> sqlite3.Connection:
         """Get database connection"""
@@ -182,6 +184,10 @@ class AnchorService:
             
             if existing:
                 logger.info(f"找到现有anchor: {existing['anchor_id']}")
+                self.user_service.get_or_create_user_by_identity(
+                    identity_type="email_anchor",
+                    identity_value=existing["anchor_id"],
+                )
                 return existing['anchor_id']
             
             # Create new anchor
@@ -194,6 +200,10 @@ class AnchorService:
                 VALUES (?, 'email', ?, ?, ?)
             """, (anchor_id, email_hash, email_masked, now.isoformat()))
             db.commit()
+            self.user_service.get_or_create_user_by_identity(
+                identity_type="email_anchor",
+                identity_value=anchor_id,
+            )
             
             logger.info(f"创建新anchor: {anchor_id} (masked: {email_masked})")
             return anchor_id

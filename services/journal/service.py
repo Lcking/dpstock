@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from database.db_factory import DatabaseFactory
 from schemas.watchlist import WatchlistItemSummary
 from services.watchlist import watchlist_service
+from services.user_service import UserService
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -27,6 +28,14 @@ class JournalService:
     
     def __init__(self):
         self.db = DatabaseFactory()
+        self.user_service = UserService()
+
+    def get_journal_state(self, user_id: str) -> Dict[str, Any]:
+        is_temporary = self.user_service.is_temporary_user(user_id)
+        return {
+            "is_temporary": is_temporary,
+            "trial_message": "当前判断日记仅临时保存在本设备，绑定后可长期追踪与复盘。" if is_temporary else None,
+        }
     
     def create_record(
         self,
@@ -99,7 +108,8 @@ class JournalService:
             "candidate": selected_candidate,
             "validation_period_days": validation_period_days,
             "due_at": due_at.isoformat() + 'Z',
-            "status": "active"
+            "status": "active",
+            **self.get_journal_state(user_id),
         }
     
     def _extract_enhancements_key(self, summary: WatchlistItemSummary) -> Dict:

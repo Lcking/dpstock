@@ -68,12 +68,17 @@ class StockDataProvider:
         # --- 降级：tushare ---
         try:
             from services.tushare.client import tushare_client
+            import concurrent.futures
             if tushare_client.is_available:
                 logger.info("正在获取A股列表 (tushare)…")
-                ts_df = tushare_client.pro.stock_basic(
-                    exchange='', list_status='L',
-                    fields='ts_code,name'
-                )
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(
+                        tushare_client.pro.stock_basic,
+                        exchange='',
+                        list_status='L',
+                        fields='ts_code,name',
+                    )
+                    ts_df = future.result(timeout=10)
                 if ts_df is not None and not ts_df.empty:
                     ts_df['code'] = ts_df['ts_code'].str[:6]
                     stock_list = _build_list(ts_df)
@@ -146,9 +151,9 @@ class StockDataProvider:
         logger.info(f"已加载 {len(stock_list)} 只常用港股信息")
         return stock_list
     
-    def lookup_stock_name(self, stock_code: str) -> str:
+    def lookup_stock_name(self, stock_code: str, allow_network: bool = False) -> str:
         """
-        尽最大努力查找股票名称：先查缓存，再查 tushare，不做网络阻塞调用。
+        尽最大努力查找股票名称：默认只查本地缓存，避免在搜索链路中做阻塞式网络调用。
         """
         # 1. 从已有缓存查
         if self._a_share_list_cache:
@@ -156,9 +161,13 @@ class StockDataProvider:
                 if s['code'] == stock_code:
                     return s['name']
 
-        # 2. 单次 tushare 查询（轻量，不依赖 akshare）
+        if not allow_network:
+            return ""
+
+        # 2. 仅在显式允许时做单次 tushare 查询
         try:
             from services.tushare.client import tushare_client
+            import concurrent.futures
             if tushare_client.is_available:
                 if stock_code.startswith('6'):
                     ts_code = f"{stock_code}.SH"
@@ -166,7 +175,13 @@ class StockDataProvider:
                     ts_code = f"{stock_code}.SZ"
                 else:
                     ts_code = f"{stock_code}.SZ"
-                df = tushare_client.pro.namechange(ts_code=ts_code, fields='ts_code,name')
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(
+                        tushare_client.pro.namechange,
+                        ts_code=ts_code,
+                        fields='ts_code,name',
+                    )
+                    df = future.result(timeout=3)
                 if df is not None and not df.empty:
                     return str(df.iloc[0]['name'])
         except Exception as e:

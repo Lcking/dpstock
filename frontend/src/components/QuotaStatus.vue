@@ -27,7 +27,7 @@
             已用: {{ status?.used_quota || 0 }} 次
           </div>
           <div style="margin-top: 8px; font-size: 12px; opacity: 0.8;">
-            点击查看详情或邀请好友解锁更多额度
+            当前额度与邀请奖励会按统一账户归集，绑定后不会因设备切换丢失
           </div>
         </div>
       </n-tooltip>

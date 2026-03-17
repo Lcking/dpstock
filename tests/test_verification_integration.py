@@ -7,9 +7,15 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
 import json
 import uuid
+import os
+import sqlite3
+from pathlib import Path
 
 from services.judgment_verifier import JudgmentVerifier
 from services.judgment_service import JudgmentService
+from services.user_service import UserService
+from services.journal.service import JournalService
+from scripts.run_migrations import run_migrations
 from schemas.analysis_v1 import (
     JudgmentSnapshot,
     StructureType,
@@ -18,6 +24,33 @@ from schemas.analysis_v1 import (
     Phase,
     PriceLevel
 )
+
+
+def _apply_migration(db_path: Path, migration_name: str) -> None:
+    migration_path = Path(__file__).resolve().parents[1] / "migrations" / migration_name
+    sql = migration_path.read_text(encoding="utf-8")
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _setup_journal_db(db_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    original_cwd = Path.cwd()
+    original_db_path = os.environ.get("DB_PATH")
+    os.environ["DB_PATH"] = str(db_path)
+    os.chdir(repo_root)
+    try:
+        run_migrations()
+    finally:
+        os.chdir(original_cwd)
+        if original_db_path is None:
+            os.environ.pop("DB_PATH", None)
+        else:
+            os.environ["DB_PATH"] = original_db_path
 
 
 class TestVerificationIntegration(unittest.TestCase):
@@ -215,6 +248,96 @@ class TestVerificationSchedulerTrigger(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0], ('anonymous', 'test-uuid-1'))
         self.assertEqual(result[1], ('anchor', 'test@example.com'))
+
+
+class TestJournalIdentityIntegration(unittest.TestCase):
+    def test_bound_user_sees_same_journal_records_after_identity_merge(self):
+        from database.db_factory import DatabaseFactory
+
+        temp_dir = Path("data")
+        temp_dir.mkdir(exist_ok=True)
+        db_path = temp_dir / f"test_journal_identity_{uuid.uuid4().hex}.db"
+        try:
+            _setup_journal_db(db_path)
+            DatabaseFactory.initialize(str(db_path))
+            user_service = UserService(db_path=str(db_path))
+            journal_service = JournalService()
+
+            guest_user_id = user_service.get_or_create_user_by_identity(
+                identity_type="anonymous",
+                identity_value="anon_1",
+            )
+
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO judgments (
+                        id, user_id, stock_code, candidate, selected_premises,
+                        selected_risk_checks, constraints, snapshot, validation_date,
+                        status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "jr_test_1",
+                        guest_user_id,
+                        "600519.SH",
+                        "A",
+                        "[]",
+                        "[]",
+                        "{}",
+                        "{}",
+                        datetime.utcnow().isoformat() + "Z",
+                        "active",
+                        datetime.utcnow().isoformat() + "Z",
+                        datetime.utcnow().isoformat() + "Z",
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            bound_user_id = user_service.bind_email_identity(
+                anonymous_id="anon_1",
+                cookie_uid="cookie_1",
+                anchor_id="anchor_1",
+                email="bound@example.com",
+            )
+
+            records = journal_service.get_records(bound_user_id)
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["id"], "jr_test_1")
+            self.assertEqual(records[0]["user_id"], bound_user_id)
+        finally:
+            if db_path.exists():
+                db_path.unlink()
+
+    def test_guest_journal_records_are_marked_temporary_until_bound(self):
+        from database.db_factory import DatabaseFactory
+
+        temp_dir = Path("data")
+        temp_dir.mkdir(exist_ok=True)
+        db_path = temp_dir / f"test_journal_temp_{uuid.uuid4().hex}.db"
+        try:
+            _setup_journal_db(db_path)
+            DatabaseFactory.initialize(str(db_path))
+            user_service = UserService(db_path=str(db_path))
+            journal_service = JournalService()
+
+            guest_user_id = user_service.get_or_create_user_by_identity(
+                identity_type="anonymous",
+                identity_value="anon_journal_temp",
+            )
+            records = journal_service.get_records(guest_user_id)
+
+            self.assertIsInstance(records, list)
+            self.assertTrue(hasattr(journal_service, "get_journal_state"))
+            state = journal_service.get_journal_state(guest_user_id)
+            self.assertTrue(state["is_temporary"])
+            self.assertIn("绑定后可长期追踪与复盘", state["trial_message"])
+        finally:
+            if db_path.exists():
+                db_path.unlink()
 
 
 def run_tests():

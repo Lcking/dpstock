@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request, Response, HTTPException, Cookie
 from typing import Optional, List
 import uuid
 from datetime import datetime
+from functools import lru_cache
 from pydantic import BaseModel
 
 from schemas.analysis_v1 import JudgmentSnapshot
@@ -15,8 +16,11 @@ from utils.logger import get_logger
 logger = get_logger()
 router = APIRouter(prefix="/api/v1", tags=["judgments"])
 
-# Initialize service
-judgment_service = JudgmentService()
+
+@lru_cache(maxsize=1)
+def get_judgment_service() -> JudgmentService:
+    """Lazy init to avoid DB side effects during module import."""
+    return JudgmentService()
 
 # Cookie settings
 COOKIE_NAME = "aguai_uid"
@@ -129,7 +133,7 @@ async def create_judgment(
         
         # Check for duplicates (unless force flag is set)
         if not force:
-            duplicate = judgment_service.check_duplicate(
+            duplicate = get_judgment_service().check_duplicate(
                 owner_type=owner_type,
                 owner_id=owner_id,
                 stock_code=body.snapshot.stock_code,
@@ -151,7 +155,7 @@ async def create_judgment(
                 )
         
         # Create judgment with owner info
-        judgment_id = judgment_service.create_judgment(owner_type, owner_id, body.snapshot)
+        judgment_id = get_judgment_service().create_judgment(owner_type, owner_id, body.snapshot)
         
         return CreateJudgmentResponse(
             judgment_id=judgment_id,
@@ -199,7 +203,7 @@ async def get_my_judgments(
         # Automatically verify pending judgments when user opens page
         verify_result = {"checked": 0, "updated": 0}
         try:
-            verify_result = judgment_service.verify_pending_judgments(
+            verify_result = get_judgment_service().verify_pending_judgments(
                 owner_type=owner_type,
                 owner_id=owner_id,
                 max_checks=20  # Limit to prevent timeout
@@ -210,7 +214,7 @@ async def get_my_judgments(
             # Don't fail the request if verification fails
         
         # Get judgments (now with updated verification status)
-        judgments = judgment_service.get_user_judgments(owner_type, owner_id, limit)
+        judgments = get_judgment_service().get_user_judgments(owner_type, owner_id, limit)
         
         return {
             "user_id": owner_id,  # For backward compatibility
@@ -236,7 +240,7 @@ async def get_judgment_detail(judgment_id: str):
     - Public endpoint (no auth required)
     """
     try:
-        judgment = judgment_service.get_judgment_detail(judgment_id)
+        judgment = get_judgment_service().get_judgment_detail(judgment_id)
         
         if not judgment:
             raise HTTPException(status_code=404, detail="Judgment not found")
@@ -271,7 +275,7 @@ async def delete_judgment(
             raise HTTPException(status_code=401, detail="未授权")
         
         # Get judgment to verify ownership
-        judgment = judgment_service.get_judgment_detail(judgment_id)
+        judgment = get_judgment_service().get_judgment_detail(judgment_id)
         
         if not judgment:
             raise HTTPException(status_code=404, detail="判断不存在")
@@ -281,7 +285,7 @@ async def delete_judgment(
             raise HTTPException(status_code=403, detail="无权删除此判断")
         
         # Delete
-        success = judgment_service.delete_judgment(judgment_id)
+        success = get_judgment_service().delete_judgment(judgment_id)
         
         if success:
             logger.info(f"Deleted judgment: {judgment_id} by {actor['type']}:{actor['id'][:8]}...")

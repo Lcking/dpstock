@@ -80,6 +80,8 @@ class Watchlist(BaseModel):
     created_at: datetime
     updated_at: datetime
     items_count: int = 0
+    is_temporary: bool = False
+    trial_message: Optional[str] = None
 
 
 class WatchlistCreate(BaseModel):
@@ -111,3 +113,5 @@ class WatchlistSummaryResponse(BaseModel):
     items: List[WatchlistItemSummary]
     total_count: int
     filtered_count: int
+    is_temporary: bool = False
+    trial_message: Optional[str] = None

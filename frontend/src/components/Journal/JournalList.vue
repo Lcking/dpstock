@@ -34,6 +34,17 @@
       </div>
     </div>
 
+    <div v-if="journalState.isTemporary && journalState.trialMessage" class="temporary-notification">
+      <n-alert type="warning" :show-icon="true">
+        <n-space justify="space-between" align="center">
+          <span>{{ journalState.trialMessage }}</span>
+          <n-button size="small" type="primary" secondary @click="showBindDialog = true">
+            绑定邮箱
+          </n-button>
+        </n-space>
+      </n-alert>
+    </div>
+
     <!-- Due Notification -->
     <div v-if="dueCount > 0" class="due-notification">
       <n-alert type="warning" :show-icon="true">
@@ -237,6 +248,10 @@ const allSelected = computed(() => {
 })
 const useTableLayout = true
 const checkedRowKeys = ref<string[]>([])
+const journalState = ref({
+  isTemporary: false,
+  trialMessage: null as string | null
+})
 
 // Options
 const statusOptions = [
@@ -254,6 +269,10 @@ const loadRecords = async () => {
       status: statusFilter.value || undefined
     })
     records.value = data.records || []
+    journalState.value = {
+      isTemporary: Boolean(data.is_temporary),
+      trialMessage: data.trial_message || null
+    }
     selectedIds.value = new Set()
     checkedRowKeys.value = []
   } catch (error) {
@@ -519,6 +538,7 @@ const columns = computed<DataTableColumns<JournalRecord>>(() => [
 const handleBindSuccess = (data: any) => {
   message.success(`已绑定邮箱，迁移了 ${data.migrated_count || 0} 条记录`)
   loadRecords()
+  loadDueCount()
 }
 
 // Tag types
@@ -609,6 +629,10 @@ onMounted(() => {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
+}
+
+.temporary-notification {
+  margin-bottom: 16px;
 }
 
 .due-notification {

@@ -22,6 +22,12 @@ class FundServiceAsync:
         self._lof_cache = None
         self._cache_timestamp = None
         self._cache_duration = timedelta(minutes=30)  # 缓存30分钟
+        self._fetch_timeout_seconds = 8
+    
+    def _empty_funds_frame(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            columns=["name", "symbol", "price", "volume", "market_value", "total_value", "pinyin"]
+        )
     
     async def search_funds(self, keyword: str, market_type: str = 'ETF') -> List[Dict[str, Any]]:
         """
@@ -68,8 +74,7 @@ class FundServiceAsync:
         except Exception as e:
             error_msg = f"搜索基金代码失败: {str(e)}"
             logger.error(error_msg)
-            logger.exception(e)
-            raise Exception(error_msg)
+            return []
     
     async def _get_funds_data(self, market_type: str = 'ETF') -> pd.DataFrame:
         """
@@ -95,16 +100,24 @@ class FundServiceAsync:
             logger.debug("使用LOF缓存数据")
             return self._lof_cache
         
+        stale_cache = self._etf_cache if market_type == 'ETF' else self._lof_cache
+
         # 缓存无效，重新获取数据
         try:
             logger.debug(f"从API获取{market_type}数据")
             
-            # 使用线程池执行同步的akshare调用
+            # 使用线程池执行同步的 akshare 调用，并给用户请求路径加硬超时
             if market_type == 'ETF':
-                df = await asyncio.to_thread(self._get_etf_data)
+                df = await asyncio.wait_for(
+                    asyncio.to_thread(self._get_etf_data),
+                    timeout=self._fetch_timeout_seconds,
+                )
                 self._etf_cache = df
             else:
-                df = await asyncio.to_thread(self._get_lof_data)
+                df = await asyncio.wait_for(
+                    asyncio.to_thread(self._get_lof_data),
+                    timeout=self._fetch_timeout_seconds,
+                )
                 self._lof_cache = df
                 
             self._cache_timestamp = now
@@ -113,7 +126,11 @@ class FundServiceAsync:
         except Exception as e:
             logger.error(f"获取{market_type}数据失败: {str(e)}")
             logger.exception(e)
-            raise
+            if stale_cache is not None:
+                logger.warning(f"回退到过期的 {market_type} 缓存数据")
+                return stale_cache
+            logger.warning(f"{market_type} 暂无可用缓存，返回空结果避免阻塞搜索")
+            return self._empty_funds_frame()
     
     def _get_etf_data(self) -> pd.DataFrame:
         """
@@ -158,7 +175,6 @@ class FundServiceAsync:
             
         except Exception as e:
             logger.error(f"获取ETF数据失败: {str(e)}")
-            logger.exception(e)
             raise Exception(f"获取ETF数据失败: {str(e)}")
     
     def _get_lof_data(self) -> pd.DataFrame:
@@ -204,7 +220,6 @@ class FundServiceAsync:
             
         except Exception as e:
             logger.error(f"获取LOF数据失败: {str(e)}")
-            logger.exception(e)
             raise Exception(f"获取LOF数据失败: {str(e)}")
             
     async def get_fund_detail(self, symbol: str, market_type: str = 'ETF') -> Dict[str, Any]:

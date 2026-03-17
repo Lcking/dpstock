@@ -14,8 +14,7 @@ logger = get_logger()
 def get_db_path() -> str:
     """Get the database path from environment or default"""
     path = os.getenv('DB_PATH', 'data/stocks.db')
-    # Log the path being used for debugging
-    logger.info(f"[AdminService] Using DB path: {path}, exists: {os.path.exists(path)}")
+    logger.debug(f"[AdminService] Using DB path: {path}, exists: {os.path.exists(path)}")
     return path
 
 

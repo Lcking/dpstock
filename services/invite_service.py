@@ -10,6 +10,7 @@ from datetime import date, datetime
 from typing import Optional, Dict, Tuple
 from utils.logger import get_logger
 from database.db_factory import DatabaseFactory
+from services.user_service import UserService
 
 logger = get_logger()
 
@@ -23,6 +24,21 @@ class InviteService:
         self.db_path = db_path
         self.db = DatabaseFactory
         DatabaseFactory.initialize(db_path)
+        self.user_service = UserService(db_path=db_path)
+
+    def _resolve_canonical_user_id(self, user_id: Optional[str]) -> Optional[str]:
+        if not user_id:
+            return None
+
+        if self.user_service.get_user(user_id):
+            return user_id
+
+        for identity_type in ("cookie_uid", "anonymous", "email_anchor"):
+            resolved = self.user_service.resolve_identity(identity_type, user_id)
+            if resolved:
+                return resolved
+
+        return user_id
     
     def generate_invite_code(self, inviter_id: str) -> Dict:
         """
@@ -179,8 +195,15 @@ class InviteService:
         Returns:
             Reward info dict if reward granted, None otherwise
         """
-        if not referrer_id:
+        canonical_invitee_id = self._resolve_canonical_user_id(invitee_id)
+        canonical_referrer_id = self._resolve_canonical_user_id(referrer_id)
+
+        if not canonical_referrer_id or not canonical_invitee_id:
             logger.debug(f"No referrer for invitee: {invitee_id}")
+            return None
+
+        if canonical_referrer_id == canonical_invitee_id:
+            logger.info(f"Skip self-invite reward for user: {canonical_invitee_id}")
             return None
         
         try:
@@ -191,14 +214,14 @@ class InviteService:
                 cursor.execute("""
                     SELECT COUNT(*) as cnt FROM analysis_records
                     WHERE user_id = ?
-                """, (invitee_id,))
+                """, (canonical_invitee_id,))
                 
                 count_result = cursor.fetchone()
                 analysis_count = count_result.get('cnt', 0) if count_result else 0
                 
                 # Only reward on first analysis
                 if analysis_count != 1:
-                    logger.debug(f"Invitee {invitee_id} has {analysis_count} analyses, skipping reward")
+                    logger.debug(f"Invitee {canonical_invitee_id} has {analysis_count} analyses, skipping reward")
                     return None
                 
                 # Get invite code used
@@ -206,26 +229,26 @@ class InviteService:
                     SELECT invite_code FROM invite_codes
                     WHERE inviter_id = ?
                     LIMIT 1
-                """, (referrer_id,))
+                """, (canonical_referrer_id,))
                 
                 code_result = cursor.fetchone()
                 if not code_result:
-                    logger.warning(f"No invite code found for inviter: {referrer_id}")
+                    logger.warning(f"No invite code found for inviter: {canonical_referrer_id}")
                     return None
                 
                 invite_code = code_result.get('invite_code')
                 
                 # Record reward
                 success, message = self.record_invite_reward(
-                    inviter_id=referrer_id,
-                    invitee_id=invitee_id,
+                    inviter_id=canonical_referrer_id,
+                    invitee_id=canonical_invitee_id,
                     invite_code=invite_code
                 )
                 
                 if success:
                     return {
-                        "inviter_id": referrer_id,
-                        "invitee_id": invitee_id,
+                        "inviter_id": canonical_referrer_id,
+                        "invitee_id": canonical_invitee_id,
                         "reward_quota": self.REWARD_QUOTA,
                         "message": f"邀请成功！邀请者获得 +{self.REWARD_QUOTA} 次额度"
                     }

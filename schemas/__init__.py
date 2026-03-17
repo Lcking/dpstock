@@ -31,6 +31,7 @@ from schemas.analysis_v1 import (
     StructureStatus,
     JudgmentOptionType,
 )
+from schemas.user import User, UserIdentity
 
 __all__ = [
     # Main Response
@@ -61,4 +62,6 @@ __all__ = [
     "RiskLevel",
     "StructureStatus",
     "JudgmentOptionType",
+    "User",
+    "UserIdentity",
 ]

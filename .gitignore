@@ -209,6 +209,7 @@ data/*.db-wal
 data/*.db-journal
 data/*backup*
 data_backup*/
+data/search_snapshots/
 
 # docker compose local overrides (server-specific)
 docker-compose.override.yml

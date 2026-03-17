@@ -1,9 +1,10 @@
 import pandas as pd
+import asyncio
 import os
 import json
 import httpx
 import re
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Any, Optional
 from dotenv import load_dotenv
 from utils.logger import get_logger
 from utils.api_utils import APIUtils
@@ -33,12 +34,43 @@ class AIAnalyzer:
         self.API_KEY = os.getenv('API_KEY')
         self.API_MODEL = os.getenv('API_MODEL', 'deepseek-reasoner')
         self.API_TIMEOUT = int(os.getenv('API_TIMEOUT', 60))
+        self.AI_SCORE_TIMEOUT = float(os.getenv('AI_SCORE_TIMEOUT', '2.0'))
         
         # 初始化统一评分器
         self.scorer = StockScorer()
         self.ai_score_calc = AiScoreCalculator()
         
         logger.debug(f"初始化AIAnalyzer: API_URL={self.API_URL}, API_MODEL={self.API_MODEL}, API_KEY={'已提供' if self.API_KEY else '未提供'}, API_TIMEOUT={self.API_TIMEOUT}")
+    
+    async def _calculate_ai_score_with_timeout(
+        self,
+        df: pd.DataFrame,
+        stock_code: str,
+        market_type: str,
+        analysis_v1: Optional[dict],
+    ) -> Optional[dict]:
+        try:
+            ai_score_obj = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.ai_score_calc.calculate,
+                    df=df,
+                    stock_code=stock_code,
+                    market_type=market_type,
+                    analysis_v1=analysis_v1,
+                ),
+                timeout=self.AI_SCORE_TIMEOUT,
+            )
+            if hasattr(ai_score_obj, "model_dump"):
+                return ai_score_obj.model_dump()
+            if isinstance(ai_score_obj, dict):
+                return ai_score_obj
+            return None
+        except asyncio.TimeoutError:
+            logger.warning(f"[AiScore] Timed out for {stock_code}, degrade to analysis without ai_score")
+            return None
+        except Exception as e:
+            logger.warning(f"[AiScore] Failed to calculate for {stock_code}: {e}")
+            return None
     
     async def get_ai_analysis(self, df: pd.DataFrame, stock_code: str, stock_name: str = "", market_type: str = 'A', stream: bool = False) -> AsyncGenerator[str, None]:
         """
@@ -531,17 +563,12 @@ class AIAnalyzer:
                         recommendation = self.scorer.get_recommendation(score)
 
                         # 计算 AI 综合评分（Spec v1.0）
-                        try:
-                            ai_score_obj = self.ai_score_calc.calculate(
-                                df=df,
-                                stock_code=stock_code,
-                                market_type=market_type,
-                                analysis_v1=analysis_v1_json,
-                            )
-                            ai_score = ai_score_obj.model_dump()
-                        except Exception as e:
-                            logger.warning(f"[AiScore] Failed to calculate for {stock_code}: {e}")
-                            ai_score = None
+                        ai_score = await self._calculate_ai_score_with_timeout(
+                            df=df,
+                            stock_code=stock_code,
+                            market_type=market_type,
+                            analysis_v1=analysis_v1_json,
+                        )
                         
                         # 如果成功解析 Analysis V1 JSON，发送结构化数据
                         if analysis_v1_json:
@@ -592,17 +619,12 @@ class AIAnalyzer:
                     recommendation = self.scorer.get_recommendation(score)
 
                     # 计算 AI 综合评分（Spec v1.0）
-                    try:
-                        ai_score_obj = self.ai_score_calc.calculate(
-                            df=df,
-                            stock_code=stock_code,
-                            market_type=market_type,
-                            analysis_v1=None,
-                        )
-                        ai_score = ai_score_obj.model_dump()
-                    except Exception as e:
-                        logger.warning(f"[AiScore] Failed to calculate for {stock_code}: {e}")
-                        ai_score = None
+                    ai_score = await self._calculate_ai_score_with_timeout(
+                        df=df,
+                        stock_code=stock_code,
+                        market_type=market_type,
+                        analysis_v1=None,
+                    )
                     
                     # 发送完整的分析结果
                     yield json.dumps({

@@ -15,6 +15,55 @@
 7. 支持GitHub Actions 一键部署  
 8. 支持Nginx反向代理，可通过80/443端口访问
 
+## 用户体系 Phase 1
+
+当前版本已经完成用户体系 Phase 1 的最小闭环，核心原则是：
+- 分析能力保持开放，游客无需注册即可体验核心分析
+- 个人资产渐进沉淀，在形成观察、判断、邀请关系后再引导绑定邮箱
+- 邮箱绑定的目的不是“先注册”，而是让资产长期保存、可跨设备恢复
+
+已落地能力：
+- 统一用户模型：匿名 ID、`aguai_uid`、邮箱绑定身份统一收口到 `user_id`
+- 我的观察：游客可试用，绑定后长期保存
+- 判断日记：游客可临时保存，绑定后持续追踪与复盘
+- 用户中心：`/me` 页面提供绑定状态、额度、观察数量、待复盘数量、最近判断概览
+- 额度与邀请：按统一 `user_id` 归集，避免同一用户多身份导致奖励裂变
+- 绑定引导：在加入观察、保存判断、额度耗尽等关键资产动作时触发
+
+当前导航结构：
+- `Aguai` Logo：首页入口
+- `分析专栏`
+- `我的`
+- `实盘策略平台`
+
+`我的` 下拉包含：
+- `我的观察`
+- `判断日记`
+- `用户中心`
+- `额度与邀请`
+
+## 验证命令
+
+后端验证：
+
+```bash
+python -m pytest tests/test_user_identity_flow.py -v
+python -m pytest tests/test_watchlist_integration.py -v
+python -m pytest tests/test_verification_integration.py -v
+python -m compileall routes services web_server.py
+```
+
+前端验证：
+
+```bash
+cd frontend
+npm run build
+```
+
+说明：
+- 前端构建当前仍会出现 `vendor-echarts` 的 chunk size warning，这是打包体积提示，不影响当前功能正确性
+- 如需继续推进，可优先进入后续的打包优化与前端按需拆分工作
+
 ## Docker镜像一键部署
 
 ```

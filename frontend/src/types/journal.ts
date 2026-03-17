@@ -24,6 +24,13 @@ export interface JournalReview {
     notes?: string
 }
 
+export interface JournalListResponse {
+    records: JournalRecord[]
+    page: number
+    is_temporary: boolean
+    trial_message: string | null
+}
+
 export interface ReviewTrigger {
     check_id: string
     result: 'triggered' | 'passed' | 'skip'

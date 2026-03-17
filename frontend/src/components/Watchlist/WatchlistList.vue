@@ -13,6 +13,37 @@
       </div>
     </div>
 
+    <n-alert
+      v-if="watchlistState.isTemporary && watchlistState.trialMessage"
+      type="warning"
+      :bordered="false"
+      class="trial-alert"
+    >
+      <template #header>
+        当前为游客观察列表
+      </template>
+      <div class="trial-alert-content">
+        <span>{{ watchlistState.trialMessage }}</span>
+        <n-button type="primary" secondary size="small" @click="showBindDialog = true">
+          绑定邮箱
+        </n-button>
+      </div>
+    </n-alert>
+
+    <n-alert
+      v-if="watchlistState.isTemporary"
+      type="info"
+      :bordered="false"
+      class="bind-value-alert"
+    >
+      <div class="trial-alert-content">
+        <span>绑定邮箱，保存你的观察资产。绑定后资产不会因换设备或清缓存而丢失。</span>
+        <n-button tertiary type="primary" size="small" @click="showBindDialog = true">
+          立即绑定
+        </n-button>
+      </div>
+    </n-alert>
+
     <!-- 筛选与排序 -->
     <watchlist-filters
       :sort="currentSort"
@@ -60,6 +91,14 @@
       <!-- 批量操作 -->
       <div v-if="selectedCodes.length > 0" class="batch-actions">
         <n-text>已选择 {{ selectedCodes.length }} 只</n-text>
+        <n-button
+          v-if="watchlistState.isTemporary"
+          tertiary
+          type="warning"
+          @click="showBindDialog = true"
+        >
+          绑定后长期保存
+        </n-button>
         <n-button type="info" @click="navigateToCompare">
           进入比较
         </n-button>
@@ -98,6 +137,11 @@
         </n-space>
       </template>
     </n-modal>
+
+    <AnchorBindDialog
+      v-model:show="showBindDialog"
+      @bind-success="handleBindSuccess"
+    />
   </div>
 </template>
 
@@ -106,13 +150,16 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
   NButton, NIcon, NText, NModal, NForm, NFormItem, 
-  NInput, NSpace, NCard, NSkeleton, useMessage 
+  NInput, NSpace, NCard, NSkeleton, NAlert, useMessage 
 } from 'naive-ui'
 import { AddCircleOutline } from '@vicons/ionicons5'
 import WatchlistFilters from './WatchlistFilters.vue'
 import WatchlistItemCard from './WatchlistItemCard.vue'
 import EmptyState from '../common/EmptyState.vue'
-import type { WatchlistSummary } from '@/types/watchlist'
+import AnchorBindDialog from '../AnchorBindDialog.vue'
+import { apiService } from '@/services/api'
+import type { WatchlistSummary, Watchlist } from '@/types/watchlist'
+import { hasAnchorToken } from '@/utils/anchorToken'
 
 const router = useRouter()
 const message = useMessage()
@@ -127,20 +174,29 @@ const currentFilters = ref<string[]>([])
 const selectedCodes = ref<string[]>([])
 const showAddDialog = ref(false)
 const newCodes = ref('')
+const showBindDialog = ref(false)
+const WATCHLIST_ADD_COUNT_KEY = 'aguai_watchlist_add_count'
+const watchlistState = ref({
+  isTemporary: false,
+  trialMessage: null as string | null
+})
+
+const applyWatchlistState = (source?: Partial<WatchlistSummary & Watchlist> | null) => {
+  watchlistState.value = {
+    isTemporary: Boolean(source?.is_temporary),
+    trialMessage: source?.trial_message || null
+  }
+}
 
 // 加载摘要数据
 const loadSummary = async () => {
   loading.value = true
   try {
-    const response = await fetch(
-      `/api/watchlists/${watchlistId.value}/summary?` +
-      `sort=${currentSort.value}&` +
-      `filters=${currentFilters.value.join(',')}`
-    )
-    
-    if (!response.ok) throw new Error('Failed to load summary')
-    
-    summaryData.value = await response.json()
+    summaryData.value = await apiService.getWatchlistSummary(watchlistId.value, {
+      sort: currentSort.value,
+      filters: currentFilters.value
+    })
+    applyWatchlistState(summaryData.value)
   } catch (error) {
     console.error('Load summary error:', error)
     message.error('加载失败')
@@ -154,24 +210,16 @@ const initWatchlist = async () => {
   loading.value = true // Ensure loading state covers initialization
   try {
     // 获取用户的自选股列表
-    const response = await fetch('/api/watchlists')
-    if (!response.ok) throw new Error('Failed to get watchlists')
-    
-    const watchlists = await response.json()
+    const watchlists = await apiService.getWatchlists()
     
     if (watchlists.length === 0) {
       // 创建默认自选股
-      const createResp = await fetch('/api/watchlists', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: '默认自选' })
-      })
-      if (!createResp.ok) throw new Error('Failed to create watchlist')
-      
-      const newList = await createResp.json()
+      const newList = await apiService.createWatchlist('默认自选')
       watchlistId.value = newList.id
+      applyWatchlistState(newList)
     } else {
       watchlistId.value = watchlists[0].id
+      applyWatchlistState(watchlists[0])
     }
     
     await loadSummary()
@@ -218,16 +266,9 @@ const handleAdd = async () => {
   
   adding.value = true
   try {
-    const response = await fetch(`/api/watchlists/${watchlistId.value}/symbols`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ts_codes: codes })
-    })
-    
-    if (!response.ok) throw new Error('Failed to add symbols')
-    
-    const result = await response.json()
+    const result = await apiService.addWatchlistSymbols(watchlistId.value, codes)
     message.success(`成功添加 ${result.added} 只`)
+    checkAndTriggerBindAfterAdd(result.added)
     
     showAddDialog.value = false
     newCodes.value = ''
@@ -240,16 +281,24 @@ const handleAdd = async () => {
   }
 }
 
+const checkAndTriggerBindAfterAdd = (addedCount: number) => {
+  if (!watchlistState.value.isTemporary || hasAnchorToken() || addedCount <= 0) return
+
+  const count = parseInt(localStorage.getItem(WATCHLIST_ADD_COUNT_KEY) || '0', 10) + 1
+  localStorage.setItem(WATCHLIST_ADD_COUNT_KEY, count.toString())
+
+  if (count === 1) {
+    message.info('绑定邮箱，保存你的观察资产。绑定后资产不会因换设备或清缓存而丢失。')
+    setTimeout(() => {
+      showBindDialog.value = true
+    }, 600)
+  }
+}
+
 // 移除标的
 const handleRemove = async (code: string) => {
   try {
-    const response = await fetch(
-      `/api/watchlists/${watchlistId.value}/symbols/${code}`,
-      { method: 'DELETE' }
-    )
-    
-    if (!response.ok) throw new Error('Failed to remove')
-    
+    await apiService.removeWatchlistSymbol(watchlistId.value, code)
     message.success('已移除')
     await loadSummary()
   } catch (error) {
@@ -265,10 +314,18 @@ const navigateToAnalysis = (code: string) => {
 
 // 进入比较页
 const navigateToCompare = () => {
+  if (watchlistState.value.isTemporary) {
+    message.info('当前观察为临时资产，绑定后可长期保存并跨设备同步')
+  }
   router.push({
     path: '/compare',
     query: { codes: selectedCodes.value.join(',') }
   })
+}
+
+const handleBindSuccess = async () => {
+  message.success('已绑定邮箱，你的观察列表现在会长期保存')
+  await initWatchlist()
 }
 
 onMounted(() => {
@@ -294,6 +351,22 @@ onMounted(() => {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
+}
+
+.trial-alert {
+  margin-bottom: 16px;
+}
+
+.bind-value-alert {
+  margin-bottom: 16px;
+}
+
+.trial-alert-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .loading-container {

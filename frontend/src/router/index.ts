@@ -51,6 +51,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/me',
+    name: 'UserCenter',
+    component: () => import('@/components/UserCenter/UserCenterPage.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
     path: '/help/judgment-verification',
     name: 'JudgmentHelp',
     component: () => import('@/components/JudgmentHelp.vue'),

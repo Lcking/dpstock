@@ -156,6 +156,11 @@
       v-model:show="showQuotaExceededModal"
       :error-data="quotaExceededData"
       @open-invite="handleOpenInviteFromQuota"
+      @open-bind="handleOpenBindFromQuota"
+    />
+
+    <AnchorBindDialog
+      v-model:show="showBindDialog"
     />
   </div>
 </template>
@@ -196,6 +201,7 @@ import StockCard from './StockCard.vue';
 import AiScorePanel from './AiScorePanel.vue';
 import AnnouncementBanner from './AnnouncementBanner.vue';
 import QuotaExceededModal from './QuotaExceededModal.vue';
+import AnchorBindDialog from './AnchorBindDialog.vue';
 
 import { apiService } from '@/services/api';
 import type { StockInfo, StreamInitMessage, StreamAnalysisUpdate } from '@/types';
@@ -212,6 +218,7 @@ const showAnnouncementBanner = ref(true);
 // 配额超限弹窗
 const showQuotaExceededModal = ref(false);
 const quotaExceededData = ref<any>(null);
+const showBindDialog = ref(false);
 
 // 股票分析配置
 const marketType = ref('A');
@@ -1017,6 +1024,11 @@ function handleOpenInviteFromQuota() {
   // 目前只是关闭配额超限弹窗
   showQuotaExceededModal.value = false;
   message.info('请在导航栏点击"邀请"按钮生成邀请链接');
+}
+
+function handleOpenBindFromQuota() {
+  showQuotaExceededModal.value = false;
+  showBindDialog.value = true;
 }
 
 //analyzedStocks 控制台调试代码
