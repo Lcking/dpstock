@@ -169,7 +169,7 @@ def test_nginx_http_healthcheck_matches_config():
     compose_text = (repo_root / "docker-compose.prod.yml").read_text(encoding="utf-8")
     nginx_text = (repo_root / "nginx/nginx.conf").read_text(encoding="utf-8")
 
-    assert 'http://localhost/health' in compose_text
+    assert 'http://127.0.0.1/health' in compose_text
     assert 'location = /health' in nginx_text
     http_server_block = nginx_text.split('# HTTPS服务器', 1)[0]
     assert 'return 200 "healthy\\n";' in http_server_block
