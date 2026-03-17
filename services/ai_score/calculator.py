@@ -124,6 +124,7 @@ class AiScoreCalculator:
         stock_code: str,
         market_type: str = "A",
         analysis_v1: Optional[Dict[str, Any]] = None,
+        include_enhancements: bool = True,
     ) -> AiScore:
         latest = df.iloc[-1] if not df.empty else None
         close = _safe_float(latest.get("Close")) if latest is not None else None
@@ -163,7 +164,7 @@ class AiScoreCalculator:
         rs_mod = None
         flow_mod = None
         events_mod = None
-        if market_type == "A":
+        if market_type == "A" and include_enhancements:
             try:
                 ts_code = normalize_ts_code(stock_code)
                 enh = enhancement_orchestrator.enhance(ts_code)

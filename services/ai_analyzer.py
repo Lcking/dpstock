@@ -41,6 +41,41 @@ class AIAnalyzer:
         self.ai_score_calc = AiScoreCalculator()
         
         logger.debug(f"初始化AIAnalyzer: API_URL={self.API_URL}, API_MODEL={self.API_MODEL}, API_KEY={'已提供' if self.API_KEY else '未提供'}, API_TIMEOUT={self.API_TIMEOUT}")
+
+    @staticmethod
+    def _normalize_ai_score_result(ai_score_obj: Any) -> Optional[dict]:
+        if hasattr(ai_score_obj, "model_dump"):
+            return ai_score_obj.model_dump()
+        if isinstance(ai_score_obj, dict):
+            return ai_score_obj
+        return None
+
+    async def _calculate_ai_score_fallback(
+        self,
+        df: pd.DataFrame,
+        stock_code: str,
+        market_type: str,
+        analysis_v1: Optional[dict],
+        reason: str,
+    ) -> Optional[dict]:
+        try:
+            logger.warning(
+                f"[AiScore] {reason} for {stock_code}, fallback to base score without enhancements"
+            )
+            ai_score_obj = await asyncio.to_thread(
+                self.ai_score_calc.calculate,
+                df=df,
+                stock_code=stock_code,
+                market_type=market_type,
+                analysis_v1=analysis_v1,
+                include_enhancements=False,
+            )
+            return self._normalize_ai_score_result(ai_score_obj)
+        except Exception as fallback_error:
+            logger.warning(
+                f"[AiScore] Fallback score failed for {stock_code}: {fallback_error}"
+            )
+            return None
     
     async def _calculate_ai_score_with_timeout(
         self,
@@ -60,17 +95,23 @@ class AIAnalyzer:
                 ),
                 timeout=self.AI_SCORE_TIMEOUT,
             )
-            if hasattr(ai_score_obj, "model_dump"):
-                return ai_score_obj.model_dump()
-            if isinstance(ai_score_obj, dict):
-                return ai_score_obj
-            return None
+            return self._normalize_ai_score_result(ai_score_obj)
         except asyncio.TimeoutError:
-            logger.warning(f"[AiScore] Timed out for {stock_code}, degrade to analysis without ai_score")
-            return None
+            return await self._calculate_ai_score_fallback(
+                df=df,
+                stock_code=stock_code,
+                market_type=market_type,
+                analysis_v1=analysis_v1,
+                reason="Timed out",
+            )
         except Exception as e:
-            logger.warning(f"[AiScore] Failed to calculate for {stock_code}: {e}")
-            return None
+            return await self._calculate_ai_score_fallback(
+                df=df,
+                stock_code=stock_code,
+                market_type=market_type,
+                analysis_v1=analysis_v1,
+                reason=f"Failed to calculate ({e})",
+            )
     
     async def get_ai_analysis(self, df: pd.DataFrame, stock_code: str, stock_name: str = "", market_type: str = 'A', stream: bool = False) -> AsyncGenerator[str, None]:
         """

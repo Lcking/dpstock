@@ -95,3 +95,35 @@ def test_structure_direction_adjustment_changes_score():
 
     assert s_up > s_side > s_down
 
+
+def test_calculate_can_skip_enhancements_for_fast_fallback(monkeypatch):
+    calc = AiScoreCalculator()
+    called = {"enhance": 0}
+
+    def _should_not_run(_ts_code: str):
+        called["enhance"] += 1
+        raise AssertionError("enhancement lookup should be skipped in fast fallback mode")
+
+    monkeypatch.setattr(
+        "services.ai_score.calculator.enhancement_orchestrator.enhance",
+        _should_not_run,
+    )
+
+    df = pd.DataFrame(
+        [
+            {"Close": 100, "MA5": 101, "MA20": 100, "MA60": 99, "MA200": 98, "Volatility": 5.0},
+            {"Close": 102, "MA5": 102, "MA20": 101, "MA60": 100, "MA200": 98.5, "Volatility": 5.0},
+        ]
+    )
+
+    score = calc.calculate(
+        df=df,
+        stock_code="600519",
+        market_type="A",
+        analysis_v1={"risk_of_misreading": {"risk_flags": []}},
+        include_enhancements=False,
+    )
+
+    assert score.overall.score >= 0
+    assert called["enhance"] == 0
+

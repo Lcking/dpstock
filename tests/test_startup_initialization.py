@@ -247,10 +247,13 @@ async def test_ai_score_timeout_degrades_without_blocking():
     analyzer = AIAnalyzer()
 
     class _SlowCalculator:
-        def calculate(self, **kwargs):
+        def calculate(self, include_enhancements: bool = True, **kwargs):
             import time
-            time.sleep(0.05)
-            return {"score": 1}
+
+            if include_enhancements:
+                time.sleep(0.05)
+                return {"overall": {"score": 1}, "version": "slow"}
+            return {"overall": {"score": 63}, "version": "fallback"}
 
     analyzer.ai_score_calc = _SlowCalculator()
     analyzer.AI_SCORE_TIMEOUT = 0.01
@@ -262,4 +265,4 @@ async def test_ai_score_timeout_degrades_without_blocking():
         analysis_v1=None,
     )
 
-    assert result is None
+    assert result == {"overall": {"score": 63}, "version": "fallback"}
