@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+import pandas as pd
 
 from services.ai_analyzer import AIAnalyzer
 from services.judgment_service import JudgmentService
@@ -123,6 +124,44 @@ def test_lookup_stock_name_does_not_call_tushare_on_cache_miss(monkeypatch):
 
     assert provider.lookup_stock_name("600519") == ""
     namechange.assert_not_called()
+
+
+def test_get_a_share_list_initializes_tushare_before_fallback(monkeypatch):
+    StockDataProvider._shared_a_share_list_cache = None
+    provider = StockDataProvider()
+
+    class _FakeTushareClient:
+        def __init__(self):
+            self.pro = None
+            self.is_available = False
+            self.ensure_initialized_called = False
+
+        def ensure_initialized(self, log_missing_token: bool = False):
+            self.ensure_initialized_called = True
+            self.is_available = True
+            self.pro = SimpleNamespace(
+                stock_basic=lambda **kwargs: pd.DataFrame(
+                    [{"ts_code": "600519.SH", "name": "贵州茅台"}]
+                )
+            )
+
+    fake_tushare = _FakeTushareClient()
+
+    monkeypatch.setattr("services.stock_data_provider.tushare_client", fake_tushare)
+    monkeypatch.setitem(sys.modules, "akshare", SimpleNamespace(stock_info_a_code_name=lambda: (_ for _ in ()).throw(RuntimeError("akshare down"))))
+
+    rows = provider.get_a_share_list()
+
+    assert fake_tushare.ensure_initialized_called is True
+    assert rows[0]["code"] == "600519"
+    assert rows[0]["name"] == "贵州茅台"
+
+
+def test_prod_compose_exports_tushare_token():
+    repo_root = Path(__file__).resolve().parents[1]
+    compose_text = (repo_root / "docker-compose.prod.yml").read_text(encoding="utf-8")
+
+    assert "- TUSHARE_TOKEN=${TUSHARE_TOKEN}" in compose_text
 
 
 @pytest.mark.asyncio

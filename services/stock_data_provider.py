@@ -67,8 +67,8 @@ class StockDataProvider:
 
         # --- 降级：tushare ---
         try:
-            from services.tushare.client import tushare_client
             import concurrent.futures
+            tushare_client.ensure_initialized(log_missing_token=False)
             if tushare_client.is_available:
                 logger.info("正在获取A股列表 (tushare)…")
                 with concurrent.futures.ThreadPoolExecutor() as pool:
@@ -166,8 +166,8 @@ class StockDataProvider:
 
         # 2. 仅在显式允许时做单次 tushare 查询
         try:
-            from services.tushare.client import tushare_client
             import concurrent.futures
+            tushare_client.ensure_initialized(log_missing_token=False)
             if tushare_client.is_available:
                 if stock_code.startswith('6'):
                     ts_code = f"{stock_code}.SH"

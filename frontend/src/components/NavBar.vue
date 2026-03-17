@@ -1,5 +1,5 @@
 <template>
-  <!-- Fixed glassmorphism header -->
+  <!-- Sticky glassmorphism header -->
   <n-layout-header class="nav-header">
     <div class="nav-inner">
       <router-link to="/" class="nav-logo">
@@ -10,17 +10,6 @@
         <router-link to="/analysis" class="nav-btn">
           <span class="btn-text">分析专栏</span>
         </router-link>
-
-        <n-dropdown trigger="click" :options="myMenuOptions" @select="handleMyMenuSelect">
-          <button class="nav-btn nav-btn-button" type="button">
-            <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[0, 4]">
-              <span class="btn-text">我的</span>
-            </n-badge>
-            <n-icon size="14" class="dropdown-icon">
-              <CaretDownOutline />
-            </n-icon>
-          </button>
-        </n-dropdown>
 
         <a
           v-for="link in links"
@@ -41,6 +30,17 @@
         >
           <span class="btn-text">绑定邮箱</span>
         </button>
+
+        <n-dropdown trigger="click" :options="myMenuOptions" @select="handleMyMenuSelect">
+          <button class="nav-btn nav-btn-button" type="button">
+            <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[0, 4]">
+              <span class="btn-text">我的</span>
+            </n-badge>
+            <n-icon size="14" class="dropdown-icon">
+              <CaretDownOutline />
+            </n-icon>
+          </button>
+        </n-dropdown>
         
         <!-- Quota Status -->
         <QuotaStatus 
@@ -153,7 +153,7 @@ onMounted(() => {
 <style scoped>
 /* Glassmorphism Navigation */
 .nav-header {
-  position: fixed;
+  position: sticky;
   top: 0;
   left: 0;
   width: 100%;
@@ -165,11 +165,6 @@ onMounted(() => {
     0 10px 36px rgba(79, 93, 160, 0.10),
     0 1px 0 rgba(255, 255, 255, 0.68) inset;
   border-bottom: 1px solid rgba(91, 103, 241, 0.10);
-}
-
-/* Push body content below the fixed bar */
-:global(body) {
-  padding-top: 95px;
 }
 
 .nav-inner {
@@ -278,10 +273,6 @@ onMounted(() => {
   .nav-inner {
     height: 60px;
     padding: 0 16px;
-  }
-  
-  :global(body) {
-    padding-top: 71px;
   }
   
   .nav-logo {
