@@ -175,6 +175,17 @@ def test_nginx_http_healthcheck_matches_config():
     assert 'return 200 "healthy\\n";' in http_server_block
 
 
+def test_nginx_uses_modern_http2_directive_without_stapling_warning_config():
+    repo_root = Path(__file__).resolve().parents[1]
+    nginx_text = (repo_root / "nginx/nginx.conf").read_text(encoding="utf-8")
+
+    assert "listen 443 ssl;" in nginx_text
+    assert "http2 on;" in nginx_text
+    assert "listen 443 ssl http2;" not in nginx_text
+    assert "ssl_stapling on;" not in nginx_text
+    assert "ssl_stapling_verify on;" not in nginx_text
+
+
 @pytest.mark.asyncio
 async def test_search_global_returns_partial_results_when_us_search_times_out(monkeypatch):
     import web_server
