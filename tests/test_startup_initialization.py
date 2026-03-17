@@ -186,6 +186,17 @@ def test_nginx_uses_modern_http2_directive_without_stapling_warning_config():
     assert "ssl_stapling_verify on;" not in nginx_text
 
 
+def test_nginx_blocks_common_scanner_paths_before_spa_fallback():
+    repo_root = Path(__file__).resolve().parents[1]
+    nginx_text = (repo_root / "nginx/nginx.conf").read_text(encoding="utf-8")
+
+    assert "location ~*" in nginx_text
+    assert "server-info" in nginx_text
+    assert "debug\\.log" in nginx_text
+    assert "storage/" in nginx_text
+    assert "return 404;" in nginx_text
+
+
 @pytest.mark.asyncio
 async def test_search_global_returns_partial_results_when_us_search_times_out(monkeypatch):
     import web_server
