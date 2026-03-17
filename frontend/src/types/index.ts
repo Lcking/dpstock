@@ -69,6 +69,17 @@ export interface MarketTimeInfo {
   usMarket: MarketStatus;
 }
 
+export interface MarketOverviewItem {
+  key: string;
+  name: string;
+  market: string;
+  symbol: string;
+  price: number | null;
+  change: number | null;
+  change_percent: number | null;
+  status: 'ok' | 'unavailable';
+}
+
 // 分析请求和响应
 export interface AnalyzeRequest {
   stock_codes: string[];

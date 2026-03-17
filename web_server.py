@@ -14,6 +14,7 @@ from services.stock_analyzer_service import StockAnalyzerService
 from services.us_stock_service_async import USStockServiceAsync
 from services.fund_service_async import FundServiceAsync
 from services.search_snapshot_service import SearchSnapshotService
+from services.market_overview_service import MarketOverviewService
 import asyncio
 import httpx
 from services.anchor_service import AnchorService
@@ -115,6 +116,7 @@ async def _refresh_search_snapshot_background():
 us_stock_service = USStockServiceAsync()
 fund_service = FundServiceAsync()
 search_snapshot_service = SearchSnapshotService()
+market_overview_service = MarketOverviewService()
 SEARCH_TASK_TIMEOUT_SECONDS = 2.5
 
 # 定义请求和响应模型
@@ -503,6 +505,15 @@ async def get_kline(code: str, market_type: str = "A", days: int = 100, username
     except Exception as e:
         logger.error(f"获取K线数据出错: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/market-overview")
+async def get_market_overview(username: str = Depends(verify_token)):
+    try:
+        return await asyncio.to_thread(market_overview_service.get_overview)
+    except Exception as e:
+        logger.error(f"获取首页指数概览失败: {str(e)}")
+        return {"items": [], "updated_at": None}
 
 # 获取文章列表 (分析专栏)
 @app.get("/api/articles")

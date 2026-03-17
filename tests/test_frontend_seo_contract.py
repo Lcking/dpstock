@@ -47,8 +47,9 @@ def test_home_and_article_pages_apply_page_level_seo():
     assert "applyPageSeo({" in home_text
     assert "<h1" in home_text
     assert "免费AI在线股票分析平台系统 - 智能诊股助手_软件" in home_text
-    assert home_text.index("analysis-container") < home_text.index("MarketTimeDisplay")
-    assert home_text.index("analysis-container") < home_text.index("ValueLoop")
+    assert "MarketOverviewPanel" in home_text
+    assert home_text.index("MarketOverviewPanel") < home_text.index("ValueLoop")
+    assert home_text.index("ValueLoop") < home_text.index("analysis-container")
 
     assert "setCanonicalUrl(" in article_text
     assert "twitter:card" in article_text
@@ -88,3 +89,23 @@ def test_sitemap_and_robots_are_accessible_for_crawlers():
 
     assert robots.status_code == 200
     assert "Sitemap: https://aguai.net/sitemap.xml" in robots.text
+
+
+def test_market_overview_endpoint_exists():
+    with TestClient(app) as client:
+        response = client.get("/api/market-overview")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+
+
+def test_frontend_has_market_overview_panel_and_api_method():
+    repo_root = Path(__file__).resolve().parents[1]
+    api_text = (repo_root / "frontend/src/services/api.ts").read_text(encoding="utf-8")
+    panel_text = (repo_root / "frontend/src/components/MarketOverviewPanel.vue").read_text(encoding="utf-8")
+
+    assert "getMarketOverview" in api_text
+    assert "上证指数" in panel_text
+    assert "恒生指数" in panel_text
+    assert "纳斯达克" in panel_text

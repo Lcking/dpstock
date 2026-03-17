@@ -11,6 +11,11 @@
     
     <n-layout class="main-layout">
       <n-layout-content class="main-content mobile-content-container">
+        <MarketOverviewPanel />
+        
+        <!-- 核心价值闭环 -->
+        <ValueLoop />
+
         <!-- 主要内容 -->
         <n-card class="analysis-container mobile-card mobile-card-spacing mobile-shadow">
           
@@ -142,12 +147,6 @@
           </n-grid>
         </n-card>
 
-        <!-- 市场时间显示 -->
-        <MarketTimeDisplay :is-mobile="isMobile" />
-        
-        <!-- 核心价值闭环 -->
-        <ValueLoop />
-
       </n-layout-content>
     </n-layout>
     
@@ -169,7 +168,7 @@
 
 import HtmlRenderer from './HtmlRenderer';
 import { h } from 'vue';
-import { ref, onMounted, computed, onBeforeUnmount } from 'vue';
+import { ref, onMounted } from 'vue';
 import { 
   NLayout, 
   NLayoutContent, 
@@ -195,7 +194,7 @@ import {
   DownloadOutline as DownloadIcon,
 } from '@vicons/ionicons5';
 
-import MarketTimeDisplay from './MarketTimeDisplay.vue';
+import MarketOverviewPanel from './MarketOverviewPanel.vue';
 import ValueLoop from './ValueLoop.vue';
 import StockCard from './StockCard.vue';
 import AiScorePanel from './AiScorePanel.vue';
@@ -233,17 +232,6 @@ const analyzedStocks = ref<StockInfo[]>([]);
 (window as any).analyzedStocks = analyzedStocks;
 
 const displayMode = ref<'card' | 'table'>('card');
-
-// 移动端检测
-const isMobile = computed(() => {
-  return window.innerWidth <= 768;
-});
-
-// 监听窗口大小变化
-function handleResize() {
-  // 窗口大小变化时，isMobile计算属性会自动更新
-  // 这里可以添加其他需要在窗口大小变化时执行的逻辑
-}
 
 // 显示系统公告
 const showAnnouncement = (content: string) => {
@@ -998,9 +986,6 @@ onMounted(async () => {
       keywords: 'Agu AI,智能股票分析,股票分析平台,A股分析,港股分析,美股分析,ETF分析',
     });
 
-    // 添加窗口大小变化监听
-    window.addEventListener('resize', handleResize);
-
     await handleInviteAcceptance();
     
     // 从 API 获取公告信息
@@ -1014,11 +999,6 @@ onMounted(async () => {
   } catch (error) {
     console.error('获取配置时出错:', error);
   }
-});
-
-// 组件销毁前移除事件监听
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize);
 });
 
 // 处理公告关闭事件

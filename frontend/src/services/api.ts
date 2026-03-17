@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse } from '@/types';
+import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse, MarketOverviewItem } from '@/types';
 import type { JournalListResponse } from '@/types/journal';
 import type { Watchlist, WatchlistSummary } from '@/types/watchlist';
 
@@ -177,6 +177,22 @@ export const apiService = {
       console.error('获取配置时出错:', error);
       return {
         announcement: ''
+      };
+    }
+  },
+
+  getMarketOverview: async (): Promise<{ items: MarketOverviewItem[]; updated_at: number | null }> => {
+    try {
+      const response = await axiosInstance.get('/market-overview');
+      return {
+        items: response.data.items || [],
+        updated_at: response.data.updated_at ?? null,
+      };
+    } catch (error) {
+      console.error('获取首页指数概览时出错:', error);
+      return {
+        items: [],
+        updated_at: null,
       };
     }
   },
