@@ -98,6 +98,7 @@ def test_market_overview_endpoint_exists():
     assert response.status_code == 200
     data = response.json()
     assert "items" in data
+    assert "trend" in data["items"][0]
 
 
 def test_frontend_has_market_overview_panel_and_api_method():
@@ -109,3 +110,7 @@ def test_frontend_has_market_overview_panel_and_api_method():
     assert "上证指数" in panel_text
     assert "恒生指数" in panel_text
     assert "纳斯达克" in panel_text
+    assert "sparkline-svg" in panel_text
+    assert "buildSparklinePath" in panel_text
+    assert "min-height: 112px;" in panel_text
+    assert "用更直接的市场温度" not in panel_text

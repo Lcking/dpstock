@@ -1,10 +1,7 @@
 <template>
   <div class="market-overview-card">
     <div class="panel-header">
-      <div>
-        <h2>核心指数概览</h2>
-        <p>用更直接的市场温度，替代开休市提示。</p>
-      </div>
+      <h2>核心指数概览</h2>
       <span v-if="updatedLabel" class="updated-at">更新于 {{ updatedLabel }}</span>
     </div>
 
@@ -22,10 +19,27 @@
           </div>
 
           <template v-if="item.status === 'ok' && item.price !== null">
-            <div class="index-price">{{ formatPrice(item.price) }}</div>
-            <div class="index-change" :class="changeClass(item.change_percent)">
-              {{ formatSigned(item.change) }}
-              <span>{{ formatPercent(item.change_percent) }}</span>
+            <div class="index-main-row">
+              <div>
+                <div class="index-price">{{ formatPrice(item.price) }}</div>
+                <div class="index-change" :class="changeClass(item.change_percent)">
+                  {{ formatSigned(item.change) }}
+                  <span>{{ formatPercent(item.change_percent) }}</span>
+                </div>
+              </div>
+              <svg
+                v-if="item.trend?.length"
+                class="sparkline-svg"
+                viewBox="0 0 96 32"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="sparkline-path"
+                  :class="changeClass(item.change_percent)"
+                  :d="buildSparklinePath(item.trend)"
+                />
+              </svg>
             </div>
           </template>
           <template v-else>
@@ -45,10 +59,10 @@ import { apiService } from '@/services/api'
 import type { MarketOverviewItem } from '@/types'
 
 const items = ref<MarketOverviewItem[]>([
-  { key: 'shanghai', name: '上证指数', market: 'A', symbol: '000001.SS', price: null, change: null, change_percent: null, status: 'unavailable' },
-  { key: 'csi300', name: '沪深300', market: 'A', symbol: '000300.SS', price: null, change: null, change_percent: null, status: 'unavailable' },
-  { key: 'hangseng', name: '恒生指数', market: 'HK', symbol: '^HSI', price: null, change: null, change_percent: null, status: 'unavailable' },
-  { key: 'nasdaq', name: '纳斯达克', market: 'US', symbol: '^IXIC', price: null, change: null, change_percent: null, status: 'unavailable' },
+  { key: 'shanghai', name: '上证指数', market: 'A', symbol: '000001.SS', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
+  { key: 'csi300', name: '沪深300', market: 'A', symbol: '000300.SS', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
+  { key: 'hangseng', name: '恒生指数', market: 'HK', symbol: '^HSI', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
+  { key: 'nasdaq', name: '纳斯达克', market: 'US', symbol: '^IXIC', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
 ])
 const updatedAt = ref<number | null>(null)
 let refreshTimer: number | null = null
@@ -109,6 +123,23 @@ const formatPercent = (value: number | null) => {
   return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
 }
 
+const buildSparklinePath = (points: number[]) => {
+  if (!points.length) return ''
+  if (points.length === 1) return 'M0,16 L96,16'
+
+  const min = Math.min(...points)
+  const max = Math.max(...points)
+  const range = max - min || 1
+
+  return points
+    .map((point, index) => {
+      const x = (index / (points.length - 1)) * 96
+      const y = 28 - ((point - min) / range) * 24
+      return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`
+    })
+    .join(' ')
+}
+
 onMounted(() => {
   loadOverview()
   refreshTimer = window.setInterval(loadOverview, 300000)
@@ -125,7 +156,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .market-overview-card {
   margin-bottom: 1.5rem;
-  padding: 1.25rem;
+  padding: 0.95rem 1.05rem;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(20px);
@@ -138,34 +169,28 @@ onBeforeUnmount(() => {
 
 .panel-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .panel-header h2 {
-  margin: 0 0 6px;
-  font-size: 1.15rem;
-  color: #1f2540;
-}
-
-.panel-header p {
   margin: 0;
-  color: #667085;
-  font-size: 0.92rem;
+  font-size: 1rem;
+  color: #1f2540;
 }
 
 .updated-at {
   color: #94a3b8;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   white-space: nowrap;
 }
 
 .index-card {
-  min-height: 156px;
-  padding: 16px;
-  border-radius: 18px;
+  min-height: 112px;
+  padding: 12px 13px;
+  border-radius: 16px;
   background: rgba(248, 250, 252, 0.82);
   border: 1px solid rgba(148, 163, 184, 0.15);
   display: flex;
@@ -192,19 +217,27 @@ onBeforeUnmount(() => {
 
 .index-name {
   margin: 0;
+  font-size: 0.92rem;
   font-weight: 700;
   color: #1f2937;
 }
 
 .index-symbol {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: #94a3b8;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
+}
+
+.index-main-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .index-price {
-  margin-top: 18px;
-  font-size: 1.9rem;
+  font-size: 1.4rem;
   line-height: 1.1;
   font-weight: 800;
   color: #0f172a;
@@ -219,8 +252,9 @@ onBeforeUnmount(() => {
 .index-change {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.98rem;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.84rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -237,24 +271,55 @@ onBeforeUnmount(() => {
   color: #64748b;
 }
 
+.sparkline-svg {
+  width: 96px;
+  height: 32px;
+  flex: 0 0 96px;
+  overflow: visible;
+}
+
+.sparkline-path {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sparkline-path.up {
+  stroke: #059669;
+}
+
+.sparkline-path.down {
+  stroke: #dc2626;
+}
+
+.sparkline-path.neutral {
+  stroke: #94a3b8;
+}
+
 @media (max-width: 768px) {
   .market-overview-card {
-    padding: 1rem;
+    padding: 0.9rem;
     border-radius: 16px;
     margin-bottom: 1rem;
   }
 
   .panel-header {
-    flex-direction: column;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
   }
 
   .index-card {
-    min-height: 132px;
+    min-height: 104px;
   }
 
   .index-price {
-    font-size: 1.55rem;
+    font-size: 1.22rem;
+  }
+
+  .sparkline-svg {
+    width: 82px;
+    height: 28px;
+    flex-basis: 82px;
   }
 }
 </style>

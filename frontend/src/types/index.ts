@@ -77,6 +77,7 @@ export interface MarketOverviewItem {
   price: number | null;
   change: number | null;
   change_percent: number | null;
+  trend: number[];
   status: 'ok' | 'unavailable';
 }
 

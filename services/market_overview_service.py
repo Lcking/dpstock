@@ -19,6 +19,7 @@ class MarketOverviewService:
     """轻量首页指数快照服务。"""
 
     CACHE_TTL_SECONDS = 300
+    TREND_POINTS = 20
 
     INDEX_SPECS = [
         MarketIndexSpec(key="shanghai", name="上证指数", market="A", symbol="000001.SS"),
@@ -53,7 +54,8 @@ class MarketOverviewService:
             if history is None or history.empty or len(history) < 2:
                 raise ValueError("insufficient index history")
 
-            closes = history["Close"].dropna().tail(2).tolist()
+            close_series = history["Close"].dropna().tail(self.TREND_POINTS)
+            closes = close_series.tail(2).tolist()
             if len(closes) < 2:
                 raise ValueError("insufficient close history")
 
@@ -70,6 +72,7 @@ class MarketOverviewService:
                 "price": round(latest_close, 2),
                 "change": round(change, 2),
                 "change_percent": round(change_percent, 2),
+                "trend": [round(float(value), 2) for value in close_series.tolist()],
                 "status": "ok",
             }
         except Exception as exc:
@@ -82,5 +85,6 @@ class MarketOverviewService:
                 "price": None,
                 "change": None,
                 "change_percent": None,
+                "trend": [],
                 "status": "unavailable",
             }
