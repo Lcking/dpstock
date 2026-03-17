@@ -77,12 +77,6 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
-    path: '/secret-admin',
-    name: 'AdminDashboard',
-    component: () => import('@/components/AdminDashboard.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }

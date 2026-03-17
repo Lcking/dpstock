@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import pandas as pd
+from fastapi.testclient import TestClient
 
 from services.ai_analyzer import AIAnalyzer
 from services.judgment_service import JudgmentService
@@ -266,3 +267,21 @@ async def test_ai_score_timeout_degrades_without_blocking():
     )
 
     assert result == {"overall": {"score": 63}, "version": "fallback"}
+
+
+def test_admin_api_is_disabled_by_default():
+    import web_server
+
+    with TestClient(web_server.app) as client:
+        stats = client.get("/api/admin/stats")
+        users = client.get("/api/admin/users")
+
+    assert stats.status_code == 404
+    assert users.status_code == 404
+
+
+def test_admin_route_has_no_hardcoded_default_token():
+    repo_root = Path(__file__).resolve().parents[1]
+    admin_route_text = (repo_root / "routes/admin.py").read_text(encoding="utf-8")
+
+    assert "stock-admin-2026" not in admin_route_text

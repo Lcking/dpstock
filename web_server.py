@@ -22,7 +22,7 @@ from services.quota_service import QuotaService
 from services.invite_service import InviteService
 from services.user_service import UserService
 from services.verification_scheduler import start_verification_scheduler
-from routes import captcha, auth, judgments, quota, invite, anchor, admin, enhancements, watchlists, compare, journal, user_center
+from routes import captcha, auth, judgments, quota, invite, anchor, enhancements, watchlists, compare, journal, user_center
 
 from utils.logger import get_logger
 import uvicorn
@@ -60,7 +60,6 @@ app.include_router(judgments.router)
 app.include_router(quota.router)
 app.include_router(invite.router)
 app.include_router(anchor.router)  # Anchor system for email binding
-app.include_router(admin.router)   # Admin overview
 app.include_router(enhancements.router)  # Tushare data enhancements
 app.include_router(watchlists.router)    # Watchlists module
 app.include_router(compare.router)       # Compare bucketing

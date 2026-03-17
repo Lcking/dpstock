@@ -52,3 +52,13 @@ def test_nav_bar_uses_sticky_layout_instead_of_fixed_body_padding():
     assert "nav-spacer" in nav_text
     assert "padding-top: 95px;" not in nav_text
     assert "padding-top: 71px;" not in nav_text
+
+
+def test_public_frontend_no_longer_exposes_secret_admin_entry():
+    repo_root = Path(__file__).resolve().parents[1]
+    router_text = (repo_root / "frontend/src/router/index.ts").read_text(encoding="utf-8")
+    footer_text = (repo_root / "frontend/src/components/Footer.vue").read_text(encoding="utf-8")
+
+    assert "path: '/secret-admin'" not in router_text
+    assert 'to="/secret-admin"' not in footer_text
+    assert "AdminDashboard" not in router_text
