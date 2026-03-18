@@ -68,6 +68,7 @@ const items = ref<MarketOverviewItem[]>([
   { key: 'nasdaq', name: '纳斯达克', market: 'US', symbol: '^IXIC', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
 ])
 const updatedAt = ref<number | null>(null)
+const MARKET_OVERVIEW_REFRESH_MS = 60000
 let refreshTimer: number | null = null
 
 const updatedLabel = computed(() => {
@@ -145,7 +146,7 @@ const buildSparklinePath = (points: number[]) => {
 
 onMounted(() => {
   loadOverview()
-  refreshTimer = window.setInterval(loadOverview, 300000)
+  refreshTimer = window.setInterval(loadOverview, MARKET_OVERVIEW_REFRESH_MS)
 })
 
 onBeforeUnmount(() => {

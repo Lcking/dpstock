@@ -165,6 +165,13 @@ def test_prod_compose_exports_tushare_token():
     assert "- TUSHARE_TOKEN=${TUSHARE_TOKEN}" in compose_text
 
 
+def test_prod_compose_exports_jumdata_app_code():
+    repo_root = Path(__file__).resolve().parents[1]
+    compose_text = (repo_root / "docker-compose.prod.yml").read_text(encoding="utf-8")
+
+    assert "- JUMDATA_APP_CODE=${JUMDATA_APP_CODE}" in compose_text
+
+
 def test_nginx_http_healthcheck_matches_config():
     repo_root = Path(__file__).resolve().parents[1]
     compose_text = (repo_root / "docker-compose.prod.yml").read_text(encoding="utf-8")

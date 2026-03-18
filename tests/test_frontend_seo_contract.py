@@ -116,4 +116,5 @@ def test_frontend_has_market_overview_panel_and_api_method():
     assert "sparkline-svg" in panel_text
     assert "buildSparklinePath" in panel_text
     assert "min-height: 112px;" in panel_text
+    assert "MARKET_OVERVIEW_REFRESH_MS = 60000" in panel_text
     assert "用更直接的市场温度" not in panel_text
