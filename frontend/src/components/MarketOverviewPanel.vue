@@ -25,7 +25,7 @@
             <div class="index-main-row">
               <div>
                 <div class="index-price">{{ formatPrice(item.price) }}</div>
-                <div class="index-change" :class="changeClass(item.change_percent)">
+                <div class="index-change" :class="changeClass(item.market, item.change_percent)">
                   {{ formatSigned(item.change) }}
                   <span>{{ formatPercent(item.change_percent) }}</span>
                 </div>
@@ -39,7 +39,7 @@
               >
                 <path
                   class="sparkline-path"
-                  :class="changeClass(item.change_percent)"
+                  :class="changeClass(item.market, item.change_percent)"
                   :d="buildSparklinePath(item.trend)"
                 />
               </svg>
@@ -98,15 +98,16 @@ const marketLabel = (market: string) => {
 
 const statusClass = (item: MarketOverviewItem) => {
   if (item.status !== 'ok' || item.change_percent === null) return 'is-neutral'
-  if (item.change_percent > 0) return 'is-up'
-  if (item.change_percent < 0) return 'is-down'
-  return 'is-neutral'
+  const tone = changeClass(item.market, item.change_percent)
+  return tone === 'neutral' ? 'is-neutral' : `is-${tone}`
 }
 
-const changeClass = (value: number | null) => {
+const changeClass = (market: string, value: number | null) => {
   if (value === null) return 'neutral'
-  if (value > 0) return 'up'
-  if (value < 0) return 'down'
+  const riseClass = market === 'A' ? 'down' : 'up'
+  const fallClass = market === 'A' ? 'up' : 'down'
+  if (value > 0) return riseClass
+  if (value < 0) return fallClass
   return 'neutral'
 }
 

@@ -117,4 +117,8 @@ def test_frontend_has_market_overview_panel_and_api_method():
     assert "buildSparklinePath" in panel_text
     assert "min-height: 112px;" in panel_text
     assert "MARKET_OVERVIEW_REFRESH_MS = 60000" in panel_text
+    assert "const changeClass = (market: string, value: number | null)" in panel_text
+    assert "market === 'A'" in panel_text
+    assert ":class=\"changeClass(item.market, item.change_percent)\"" in panel_text
+    assert ":class=\"changeClass(item.market, item.change_percent)\"" in panel_text
     assert "用更直接的市场温度" not in panel_text
