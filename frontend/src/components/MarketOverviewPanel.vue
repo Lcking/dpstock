@@ -1,8 +1,11 @@
 <template>
   <div class="market-overview-card">
     <div class="panel-header">
-      <h2>核心指数概览</h2>
-      <span v-if="updatedLabel" class="updated-at">更新于 {{ updatedLabel }}</span>
+      <div class="panel-heading">
+        <h2>核心指数市场快照</h2>
+        <p class="panel-note">帮助快速了解主要指数日线变化，适合作为概览参考。</p>
+      </div>
+      <span v-if="updatedLabel" class="updated-at">快照更新 {{ updatedLabel }}</span>
     </div>
 
     <n-grid cols="1 s:2 xl:4" :x-gap="16" :y-gap="16" responsive="screen">
@@ -169,16 +172,28 @@ onBeforeUnmount(() => {
 
 .panel-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 10px;
+}
+
+.panel-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .panel-header h2 {
   margin: 0;
   font-size: 1rem;
   color: #1f2540;
+}
+
+.panel-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
 }
 
 .updated-at {
@@ -305,6 +320,8 @@ onBeforeUnmount(() => {
   }
 
   .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
     margin-bottom: 10px;
   }
 

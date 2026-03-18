@@ -107,6 +107,9 @@ def test_frontend_has_market_overview_panel_and_api_method():
     panel_text = (repo_root / "frontend/src/components/MarketOverviewPanel.vue").read_text(encoding="utf-8")
 
     assert "getMarketOverview" in api_text
+    assert "市场快照" in panel_text
+    assert "快照更新" in panel_text
+    assert "帮助快速了解主要指数日线变化" in panel_text
     assert "上证指数" in panel_text
     assert "恒生指数" in panel_text
     assert "纳斯达克" in panel_text
