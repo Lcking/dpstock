@@ -59,8 +59,8 @@ import { apiService } from '@/services/api'
 import type { MarketOverviewItem } from '@/types'
 
 const items = ref<MarketOverviewItem[]>([
-  { key: 'shanghai', name: '上证指数', market: 'A', symbol: '000001.SS', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
-  { key: 'csi300', name: '沪深300', market: 'A', symbol: '000300.SS', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
+  { key: 'shanghai', name: '上证指数', market: 'A', symbol: '000001.SH', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
+  { key: 'csi300', name: '沪深300', market: 'A', symbol: '000300.SH', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
   { key: 'hangseng', name: '恒生指数', market: 'HK', symbol: '^HSI', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
   { key: 'nasdaq', name: '纳斯达克', market: 'US', symbol: '^IXIC', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
 ])
