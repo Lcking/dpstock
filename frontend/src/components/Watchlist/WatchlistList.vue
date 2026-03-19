@@ -52,41 +52,28 @@
       @update:filters="handleFiltersChange"
     />
 
-    <!-- 加载状态：骨架屏 -->
-    <div v-if="loading" class="watchlist-grid">
-      <n-card v-for="i in 6" :key="i" class="watchlist-skeleton">
-        <template #header>
-          <n-skeleton text style="width: 40%" />
-        </template>
-        <template #header-extra>
-          <n-skeleton text style="width: 60px" />
-        </template>
-        <n-space vertical>
-          <n-skeleton text :repeat="2" />
-          <n-skeleton text style="width: 60%" />
-        </n-space>
-      </n-card>
-    </div>
-
-    <!-- 列表内容 -->
-    <div v-else-if="summaryData && summaryData.items.length > 0" class="watchlist-content">
-      <div class="watchlist-stats">
+    <!-- 表格内容 -->
+    <div v-if="loading || (summaryData && summaryData.items.length > 0)" class="watchlist-content">
+      <div v-if="summaryData" class="watchlist-stats">
         <n-text depth="3">
           共 {{ summaryData.total_count }} 只，筛选后 {{ summaryData.filtered_count }} 只
         </n-text>
       </div>
 
-      <div class="watchlist-grid">
-        <watchlist-item-card
-          v-for="item in summaryData.items"
-          :key="item.ts_code"
-          :item="item"
-          :selected="selectedCodes.includes(item.ts_code)"
-          @select="toggleSelect(item.ts_code)"
-          @remove="handleRemove(item.ts_code)"
-          @click="navigateToAnalysis(item.ts_code)"
-        />
-      </div>
+      <n-data-table
+        :columns="tableColumns"
+        :data="tableData"
+        :row-key="(row: WatchlistItemSummary) => row.ts_code"
+        :checked-row-keys="selectedCodes"
+        :loading="loading"
+        :bordered="false"
+        :single-line="false"
+        :scroll-x="820"
+        size="small"
+        striped
+        @update:checked-row-keys="handleCheckedRowKeysChange"
+        @update:sorter="handleTableSorterChange"
+      />
 
       <!-- 批量操作 -->
       <div v-if="selectedCodes.length > 0" class="batch-actions">
@@ -146,24 +133,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, h, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { 
-  NButton, NIcon, NText, NModal, NForm, NFormItem, 
-  NInput, NSpace, NCard, NSkeleton, NAlert, useMessage 
+import {
+  NButton, NIcon, NText, NModal, NForm, NFormItem,
+  NInput, NSpace, NAlert, NDataTable, NTag, useMessage, useDialog,
+  type DataTableColumns, type DataTableRowKey
 } from 'naive-ui'
 import { AddCircleOutline } from '@vicons/ionicons5'
 import WatchlistFilters from './WatchlistFilters.vue'
-import WatchlistItemCard from './WatchlistItemCard.vue'
 import EmptyState from '../common/EmptyState.vue'
 import AnchorBindDialog from '../AnchorBindDialog.vue'
 import { apiService } from '@/services/api'
-import type { WatchlistSummary, Watchlist } from '@/types/watchlist'
+import type { WatchlistSummary, Watchlist, WatchlistItemSummary } from '@/types/watchlist'
 import { hasAnchorToken } from '@/utils/anchorToken'
 import { applyPageSeo } from '@/utils/seo'
 
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 
 // State
 const loading = ref(false)
@@ -187,6 +175,160 @@ const applyWatchlistState = (source?: Partial<WatchlistSummary & Watchlist> | nu
     isTemporary: Boolean(source?.is_temporary),
     trialMessage: source?.trial_message || null
   }
+}
+
+// ── 表格相关 ──
+
+const tableData = computed(() => summaryData.value?.items ?? [])
+
+const formatPercent = (value: number | null) => {
+  if (value === null || value === undefined) return '--'
+  const str = (value * 100).toFixed(2)
+  return value >= 0 ? `+${str}%` : `${str}%`
+}
+
+const trendMap: Record<string, string> = { up: '上涨', down: '下跌', sideways: '震荡' }
+const trendTypeMap: Record<string, 'success' | 'error' | 'default'> = { up: 'success', down: 'error', sideways: 'default' }
+const rsMap: Record<string, string> = { strong: '强势', neutral: '中性', weak: '弱势' }
+const rsTypeMap: Record<string, 'success' | 'default' | 'warning'> = { strong: 'success', neutral: 'default', weak: 'warning' }
+const riskMap: Record<string, string> = { low: '低', medium: '中', high: '高' }
+const riskTypeMap: Record<string, 'success' | 'warning' | 'error'> = { low: 'success', medium: 'warning', high: 'error' }
+
+function flowTagType(label: string) {
+  if (label === '承接放量') return 'success'
+  if (label === '分歧放量' || label === '缩量阴跌') return 'error'
+  if (label === '不可用') return 'default'
+  return 'info'
+}
+
+const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
+  { type: 'selection', fixed: 'left', width: 40 },
+  {
+    title: '股票',
+    key: 'name',
+    width: 130,
+    fixed: 'left',
+    render(row) {
+      return h('div', { class: 'cell-stock', onClick: () => navigateToAnalysis(row.ts_code), style: 'cursor:pointer' }, [
+        h('span', { class: 'cell-stock-name' }, row.name || row.ts_code),
+        h('span', { class: 'cell-stock-code' }, row.ts_code),
+      ])
+    },
+  },
+  {
+    title: '价格',
+    key: 'price',
+    width: 90,
+    align: 'right',
+    sorter: (a, b) => a.price - b.price,
+    render(row) {
+      return h('span', { class: 'cell-price' }, `¥${row.price.toFixed(2)}`)
+    },
+  },
+  {
+    title: '涨跌幅',
+    key: 'change_pct',
+    width: 90,
+    align: 'right',
+    sorter: (a, b) => (a.change_pct ?? 0) - (b.change_pct ?? 0),
+    render(row) {
+      const cls = row.change_pct === null ? '' : row.change_pct > 0 ? 'cell-up' : row.change_pct < 0 ? 'cell-down' : ''
+      return h('span', { class: `cell-change ${cls}` }, formatPercent(row.change_pct))
+    },
+  },
+  {
+    title: '趋势',
+    key: 'trend',
+    width: 100,
+    render(row) {
+      return h('div', { class: 'cell-trend' }, [
+        h(NTag, { type: trendTypeMap[row.trend.direction], size: 'small', bordered: false }, () => trendMap[row.trend.direction]),
+        h('span', { class: 'cell-trend-num' }, String(row.trend.strength)),
+      ])
+    },
+  },
+  {
+    title: '相对强弱',
+    key: 'relative_strength',
+    width: 90,
+    render(row) {
+      const label = row.relative_strength.label_20d
+      if (!label) return h('span', { class: 'cell-na' }, '-')
+      return h(NTag, { type: rsTypeMap[label], size: 'small', bordered: false }, () => rsMap[label])
+    },
+  },
+  {
+    title: '资金',
+    key: 'capital_flow',
+    width: 100,
+    render(row) {
+      return h(NTag, { type: flowTagType(row.capital_flow.label) as any, size: 'small', bordered: false }, () => row.capital_flow.label)
+    },
+  },
+  {
+    title: '风险',
+    key: 'risk',
+    width: 70,
+    render(row) {
+      return h(NTag, { type: riskTypeMap[row.risk.level], size: 'small', bordered: false }, () => riskMap[row.risk.level])
+    },
+  },
+  {
+    title: '事件',
+    key: 'events',
+    width: 80,
+    render(row) {
+      if (row.events.flag === 'none') return h('span', { class: 'cell-na' }, '无')
+      const map: Record<string, string> = { minor: '次要', major: '重大', unavailable: '不可用' }
+      const typeMap: Record<string, string> = { minor: 'warning', major: 'error', unavailable: 'default' }
+      return h(NTag, { type: typeMap[row.events.flag] as any, size: 'small', bordered: false }, () => map[row.events.flag] || '无')
+    },
+  },
+  {
+    title: '判断',
+    key: 'judgement',
+    width: 100,
+    render(row) {
+      if (!row.judgement.has_active) return h('span', { class: 'cell-na' }, '-')
+      const children = [
+        h(NTag, { type: 'info', size: 'small', bordered: false }, () => row.judgement.candidate),
+      ]
+      if (row.judgement.days_left !== null) {
+        children.push(h('span', { class: 'cell-days' }, `${row.judgement.days_left}天`))
+      }
+      return h('div', { class: 'cell-judgement' }, children)
+    },
+  },
+  {
+    title: '',
+    key: 'actions',
+    width: 120,
+    fixed: 'right',
+    render(row) {
+      return h('div', { class: 'cell-actions' }, [
+        h(NButton, { text: true, size: 'small', type: 'info', onClick: () => navigateToAnalysis(row.ts_code) }, () => '分析'),
+        h(NButton, { text: true, size: 'small', type: 'error', onClick: () => confirmRemove(row) }, () => '移除'),
+      ])
+    },
+  },
+])
+
+const handleCheckedRowKeysChange = (keys: DataTableRowKey[]) => {
+  selectedCodes.value = keys as string[]
+}
+
+const handleTableSorterChange = () => {
+  // NDataTable handles client-side sort internally; no extra action needed
+}
+
+const confirmRemove = (row: WatchlistItemSummary) => {
+  dialog.warning({
+    title: '确认移除',
+    content: `确定要从自选股中移除 ${row.name || row.ts_code} 吗？`,
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: () => handleRemove(row.ts_code),
+  })
 }
 
 // 加载摘要数据
@@ -241,16 +383,6 @@ const handleSortChange = (sort: string) => {
 const handleFiltersChange = (filters: string[]) => {
   currentFilters.value = filters
   loadSummary()
-}
-
-// 选择/取消选择
-const toggleSelect = (code: string) => {
-  const index = selectedCodes.value.indexOf(code)
-  if (index > -1) {
-    selectedCodes.value.splice(index, 1)
-  } else {
-    selectedCodes.value.push(code)
-  }
 }
 
 // 添加标的
@@ -376,25 +508,13 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.loading-container {
-  display: flex;
-  justify-content: center;
-  padding: 60px 0;
-}
-
 .watchlist-content {
   margin-top: 20px;
 }
 
 .watchlist-stats {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   font-size: 14px;
-}
-
-.watchlist-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 16px;
 }
 
 .batch-actions {
@@ -412,10 +532,84 @@ onMounted(() => {
   z-index: 1000;
 }
 
-.empty-state {
+/* ── 表格单元格样式 ── */
+:deep(.cell-stock) {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.3;
+}
+
+:deep(.cell-stock-name) {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--n-text-color);
+}
+
+:deep(.cell-stock-code) {
+  font-size: 11px;
+  color: var(--n-text-color-3);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+:deep(.cell-price) {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+:deep(.cell-change) {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+:deep(.cell-up) {
+  color: #d03050;
+}
+
+:deep(.cell-down) {
+  color: #18a058;
+}
+
+:deep(.cell-trend) {
+  display: flex;
   align-items: center;
-  min-height: 400px;
+  gap: 6px;
+}
+
+:deep(.cell-trend-num) {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--n-text-color-2);
+}
+
+:deep(.cell-judgement) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:deep(.cell-days) {
+  font-size: 11px;
+  color: var(--n-text-color-3);
+}
+
+:deep(.cell-na) {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+:deep(.cell-actions) {
+  display: flex;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .watchlist-page {
+    padding: 12px;
+  }
+
+  .watchlist-header h1 {
+    font-size: 20px;
+  }
 }
 </style>
