@@ -11,9 +11,9 @@ def test_yfinance(code, name):
         # 获取最近1个月数据
         df = ticker.history(period="1mo")
         elapsed = time.time() - start_time
-        
+
         print(f"耗时: {elapsed:.2f}s")
-        
+
         if not df.empty:
             print(f"获取成功! 返回数据条数: {len(df)}")
             print("最后一条数据:")
@@ -22,7 +22,7 @@ def test_yfinance(code, name):
         else:
             print("获取失败: 返回数据为空")
             return False
-            
+
     except Exception as e:
         print(f"发生错误: {e}")
         return False

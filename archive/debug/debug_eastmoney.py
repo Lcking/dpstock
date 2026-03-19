@@ -13,17 +13,17 @@ def check_connection(name, headers=None):
         "beg": "20240101",
         "end": "20500101",
         "rtntype": "6",
-        "secid": "1.600519", 
+        "secid": "1.600519",
         "klt": "101", # 日线
         "fqt": "1"    # 前复权
     }
-    
+
     print(f"\n--- 测试 {name} ---")
     try:
         start_time = time.time()
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         elapsed = time.time() - start_time
-        
+
         print(f"状态码: {resp.status_code}")
         print(f"耗时: {elapsed:.2f}s")
         if resp.status_code == 200:
@@ -36,7 +36,7 @@ def check_connection(name, headers=None):
                 print(f"响应成功但无数据: {data}")
         else:
             print(f"请求失败: {resp.text[:200]}")
-            
+
     except requests.exceptions.ConnectionError as e:
         print(f"连接错误 (ConnectionError): {e}")
         print("这通常意味着 IP 被封锁或 DNS 解析失败")

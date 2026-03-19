@@ -19,7 +19,7 @@ def debug_admin_data():
         print(f"Total count: {len(rows)} (showing max 5)")
         for row in rows:
             print(dict(row))
-            
+
         cursor.execute("SELECT count(*) FROM anchors")
         print(f"Real Count: {cursor.fetchone()[0]}")
     except Exception as e:
@@ -35,18 +35,18 @@ def debug_admin_data():
 
         cursor.execute("SELECT count(*) FROM judgments")
         print(f"Real Count: {cursor.fetchone()[0]}")
-        
+
         # Check verification_status column existence
         cursor.execute("PRAGMA table_info(judgments)")
         columns = [r['name'] for r in cursor.fetchall()]
         print(f"Columns: {columns}")
-        
+
         if 'verification_status' in columns:
             cursor.execute("SELECT count(*) FROM judgments WHERE verification_status = 'CONFIRMED'")
             print(f"Confirmed Count: {cursor.fetchone()[0]}")
         else:
             print("Column 'verification_status' NOT FOUND!")
-            
+
     except Exception as e:
         print(f"Error: {e}")
 

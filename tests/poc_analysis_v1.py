@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 import httpx
 import asyncio
+from pathlib import Path
 from dotenv import load_dotenv
 from schemas.analysis_v1 import AnalysisV1Response
 from pydantic import ValidationError
@@ -234,10 +235,12 @@ async def test_analysis_v1_output():
                         print(f"  - {risk}")
                     print()
                     
-                    # 保存示例输出
-                    with open('poc_analysis_v1_output.json', 'w', encoding='utf-8') as f:
+                    # 保存示例输出到归档产物目录，避免污染项目根目录
+                    output_path = Path("archive/artifacts/poc_analysis_v1_output.json")
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(output_path, 'w', encoding='utf-8') as f:
                         json.dump(parsed_json, f, ensure_ascii=False, indent=2)
-                    print("💾 完整输出已保存到: poc_analysis_v1_output.json")
+                    print(f"💾 完整输出已保存到: {output_path}")
                     print()
                     
                     return True

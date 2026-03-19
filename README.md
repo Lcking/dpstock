@@ -15,6 +15,14 @@
 7. 支持GitHub Actions 一键部署  
 8. 支持Nginx反向代理，可通过80/443端口访问
 
+## 仓库清理与归档
+
+为保证项目树清晰并降低误删风险，历史调试文件/备份文件采用“归档不删除”策略。
+
+- 归档索引：`docs/ARCHIVE_INDEX.md`
+- 历史计划索引：`docs/plans/README.md`
+- 清理后恢复与排障：`docs/REPO_CLEANUP_RECOVERY_RUNBOOK.md`
+
 ## 用户体系 Phase 1
 
 当前版本已经完成用户体系 Phase 1 的最小闭环，核心原则是：
