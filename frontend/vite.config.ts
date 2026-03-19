@@ -21,12 +21,43 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return
 
+          if (id.includes('echarts/renderers') || id.includes('echarts/core') || id.includes('zrender')) {
+            return 'vendor-echarts-core'
+          }
+
           if (id.includes('echarts')) {
             return 'vendor-echarts'
           }
 
+          if (
+            id.includes('naive-ui/es/data-table') ||
+            id.includes('naive-ui/es/select') ||
+            id.includes('naive-ui/es/tree') ||
+            id.includes('naive-ui/es/virtual-list') ||
+            id.includes('naive-ui/es/cascader')
+          ) {
+            return 'vendor-naive-heavy'
+          }
+
+          if (
+            id.includes('naive-ui') ||
+            id.includes('@css-render') ||
+            id.includes('/vooks/') ||
+            id.includes('/evtd/')
+          ) {
+            return 'vendor-naive-ui'
+          }
+
+          if (id.includes('@vicons/')) {
+            return 'vendor-icons'
+          }
+
           if (id.includes('html2canvas')) {
             return 'vendor-html2canvas'
+          }
+
+          if (id.includes('/axios/')) {
+            return 'vendor-axios'
           }
 
           if (id.includes('@vue') || id.includes('/vue/') || id.includes('vue-router') || id.includes('pinia')) {

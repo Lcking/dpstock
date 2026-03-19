@@ -231,3 +231,4 @@ vue-tsc
 .htaccess
 .user.ini
 tencent*.txt
+frontend/build-metrics/

@@ -160,10 +160,15 @@
       <!-- K线图区域 -->
       <div class="chart-section" v-if="stock.analysisStatus === 'completed' || isAnalyzing">
         <n-divider dashed style="margin: 0 0 12px 0">行情走势 (静态回顾)</n-divider>
-        <div ref="chartRef" class="kline-chart" :style="{ height: isMobile ? '250px' : '350px' }"></div>
-        <div v-if="chartLoading" class="chart-loading">
-          <n-spin size="small" />
-          <span>加载行情数据…</span>
+        <component
+          :is="StockKlineChartAsync"
+          :stock-code="stock.code"
+          :market-type="stock.marketType"
+          :height="isMobile ? '250px' : '350px'"
+        />
+        <div v-if="chartModuleError" class="chart-module-error">
+          <n-icon><AlertCircleIcon /></n-icon>
+          <span>{{ chartModuleError }}</span>
         </div>
       </div>
 
@@ -231,7 +236,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, ref, nextTick, onMounted, onBeforeUnmount } from 'vue';
+import { computed, watch, ref, nextTick, onMounted, onBeforeUnmount, defineAsyncComponent, defineComponent, h } from 'vue';
 import { NCard, NDivider, NIcon, NTag, NButton, useMessage } from 'naive-ui';
 import { 
   AlertCircleOutline as AlertCircleIcon,
@@ -242,27 +247,6 @@ import {
   ShareSocialOutline,
   BookmarkOutline
 } from '@vicons/ionicons5';
-import {
-  BarChart,
-  CandlestickChart,
-  LineChart,
-  type BarSeriesOption,
-  type CandlestickSeriesOption,
-  type LineSeriesOption
-} from 'echarts/charts';
-import {
-  GridComponent,
-  TooltipComponent,
-  type GridComponentOption,
-  type TooltipComponentOption
-} from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
-import {
-  init as initECharts,
-  use,
-  type ComposeOption,
-  type EChartsType
-} from 'echarts/core';
 import { apiService } from '@/services/api';
 import { hasAnchorToken } from '@/utils/anchorToken';
 import { getCategoryName, parseMarkdown } from '@/utils';
@@ -270,21 +254,42 @@ import type { StockInfo } from '@/types';
 import AnalysisV1Display from './AnalysisV1Display.vue';
 import AiScorePanel from './AiScorePanel.vue';
 
-use([CandlestickChart, LineChart, BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
-
-type StockChartOption = ComposeOption<
-  | GridComponentOption
-  | TooltipComponentOption
-  | BarSeriesOption
-  | CandlestickSeriesOption
-  | LineSeriesOption
->;
-
 const props = defineProps<{
   stock: StockInfo;
 }>();
 
 const showBindAssetHint = ref(false);
+const chartModuleError = ref('');
+
+const ChartModuleLoading = defineComponent({
+  name: 'ChartModuleLoading',
+  setup() {
+    return () => h('div', { class: 'chart-module-loading' }, '图表模块加载中…');
+  }
+});
+
+const ChartModuleError = defineComponent({
+  name: 'ChartModuleError',
+  setup() {
+    return () => h('div', { class: 'chart-module-error-placeholder' }, '图表模块加载失败，请刷新重试');
+  }
+});
+
+const StockKlineChartAsync = defineAsyncComponent({
+  loader: async () => {
+    try {
+      chartModuleError.value = '';
+      return await import('@/components/charts/StockKlineChart.vue');
+    } catch (error) {
+      chartModuleError.value = '图表模块加载失败，已自动降级展示文本分析';
+      throw error;
+    }
+  },
+  loadingComponent: ChartModuleLoading,
+  errorComponent: ChartModuleError,
+  delay: 120,
+  timeout: 15000,
+});
 
 const isAnalyzing = computed(() => {
   return props.stock.analysisStatus === 'analyzing';
@@ -590,63 +595,6 @@ function handleScroll() {
   }
 }
 
-// 图表加载逻辑
-const chartRef = ref<HTMLElement | null>(null);
-const chartInstance = ref<EChartsType | null>(null);
-const chartLoading = ref(false);
-
-async function initChart() {
-  if (!chartRef.value) return;
-  
-  chartLoading.value = true;
-  try {
-    const data = await apiService.getKlineData(props.stock.code, props.stock.marketType);
-    if (data.error) throw new Error(data.error);
-
-    if (!chartInstance.value) {
-      chartInstance.value = initECharts(chartRef.value);
-    }
-
-    const option: StockChartOption = {
-      animation: false,
-      silent: true, // 禁用交互以提升性能
-      grid: [
-        { left: '8%', right: '3%', height: '50%', top: '5%' },
-        { left: '8%', right: '3%', top: '60%', height: '15%' },
-        { left: '8%', right: '3%', top: '78%', height: '18%' }
-      ],
-      xAxis: [
-        { type: 'category', data: data.dates, boundaryGap: false, axisLine: { lineStyle: { color: '#ccc' } } },
-        { type: 'category', gridIndex: 1, data: data.dates, boundaryGap: false, axisTick: { show: false }, axisLabel: { show: false } },
-        { type: 'category', gridIndex: 2, data: data.dates, boundaryGap: false, axisTick: { show: false }, axisLabel: { show: false } }
-      ],
-      yAxis: [
-        { scale: true, splitArea: { show: true }, axisLabel: { fontSize: 10 } },
-        { gridIndex: 1, splitNumber: 3, axisLabel: { show: false }, axisTick: { show: false }, splitLine: { show: false } },
-        { gridIndex: 2, splitNumber: 3, axisLabel: { show: false }, axisTick: { show: false }, splitLine: { show: false } }
-      ],
-      series: [
-        {
-          name: 'KLine',
-          type: 'candlestick',
-          data: data.values,
-          itemStyle: { color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' }
-        },
-        { name: 'MA5', type: 'line', data: data.ma5, smooth: true, showSymbol: false, lineStyle: { width: 1, color: '#f59e0b' } },
-        { name: 'MA20', type: 'line', data: data.ma20, smooth: true, showSymbol: false, lineStyle: { width: 1, color: '#6366f1' } },
-        { name: 'Volume', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: data.volumes, itemStyle: { color: '#718096' } },
-        { name: 'RSI', type: 'line', xAxisIndex: 2, yAxisIndex: 2, data: data.rsi, smooth: true, showSymbol: false, lineStyle: { width: 1, color: '#8b5cf6' } }
-      ]
-    };
-
-    chartInstance.value.setOption(option);
-  } catch (err) {
-    console.error('初始化图标失败:', err);
-  } finally {
-    chartLoading.value = false;
-  }
-}
-
 // 复制分享链接
 async function generateShareImage() {
   try {
@@ -757,11 +705,6 @@ onMounted(() => {
     analysisResultRef.value.scrollTop = analysisResultRef.value.scrollHeight;
     analysisResultRef.value.addEventListener('scroll', handleScroll);
   }
-  
-  // 如果分析已完成或正在分析，初始化图表
-  if (props.stock.analysisStatus === 'completed' || props.stock.analysisStatus === 'analyzing') {
-    initChart();
-  }
 });
 
 // 清理事件监听
@@ -822,17 +765,6 @@ function smoothScrollToBottom(element: HTMLElement) {
   });
 }
 
-// 监听状态变化，如果是开始分析，则触发图表加载
-watch(() => props.stock.analysisStatus, (status) => {
-  if (status === 'analyzing' && !chartInstance.value) {
-    nextTick(() => initChart());
-  }
-});
-
-// 处理窗口大小改变
-window.addEventListener('resize', () => {
-  chartInstance.value?.resize();
-});
 </script>
 
 <style scoped>
@@ -1383,30 +1315,41 @@ window.addEventListener('resize', () => {
   background: rgba(255, 255, 255, 0.3);
 }
 
-.kline-chart {
-  width: 100%;
-}
-
-.chart-loading {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+.chart-module-loading {
+  height: 120px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(2px);
-  gap: 8px;
-  border-radius: 12px;
-  z-index: 5;
+  border-radius: 10px;
+  border: 1px dashed rgba(100, 116, 139, 0.4);
+  color: #64748b;
+  font-size: 0.82rem;
+  background: rgba(248, 250, 252, 0.7);
 }
 
-.chart-loading span {
-  font-size: 0.75rem;
-  color: #64748b;
+.chart-module-error-placeholder {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #b91c1c;
+  font-size: 0.82rem;
+  background: rgba(254, 242, 242, 0.75);
+}
+
+.chart-module-error {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b91c1c;
+  font-size: 0.78rem;
+  background: rgba(254, 242, 242, 0.8);
+  border: 1px solid rgba(252, 165, 165, 0.45);
+  border-radius: 999px;
+  padding: 4px 10px;
 }
 
 /* New Content Divider */

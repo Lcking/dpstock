@@ -48,10 +48,14 @@
       <!-- 行情走势回顾 -->
       <section class="chart-section">
         <h3 class="section-title">行情走势回顾</h3>
-        <div ref="chartRef" class="kline-chart"></div>
-        <div v-if="chartLoading" class="chart-loading">
-          <n-spin size="small" />
-          <span>加载行情数据…</span>
+        <component
+          v-if="article"
+          :is="ArticleKlineChartAsync"
+          :stock-code="article.stock_code"
+          :market-type="article.market_type"
+        />
+        <div v-if="chartModuleError" class="chart-module-error">
+          {{ chartModuleError }}
         </div>
       </section>
 
@@ -82,31 +86,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, defineAsyncComponent, defineComponent, h } from 'vue';
 import { useRoute } from 'vue-router';
-import { NButton, NIcon, NTag, NSpin, NEmpty, NDivider } from 'naive-ui';
+import { NButton, NIcon, NTag, NEmpty, NDivider } from 'naive-ui';
 import { ArrowBackOutline as ArrowBack } from '@vicons/ionicons5';
-import {
-  BarChart,
-  CandlestickChart,
-  LineChart,
-  type BarSeriesOption,
-  type CandlestickSeriesOption,
-  type LineSeriesOption
-} from 'echarts/charts';
-import {
-  GridComponent,
-  TooltipComponent,
-  type GridComponentOption,
-  type TooltipComponentOption
-} from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
-import {
-  init as initECharts,
-  use,
-  type ComposeOption,
-  type EChartsType
-} from 'echarts/core';
 import { apiService } from '@/services/api';
 import { parseMarkdown, getCategoryName } from '@/utils';
 import { applyPageSeo, getArticlePreview, setCanonicalUrl } from '@/utils/seo';
@@ -115,19 +98,40 @@ import AnalysisV1Display from './AnalysisV1Display.vue';
 import AiScorePanel from './AiScorePanel.vue';
 import type { AiScore } from '@/types';
 
-use([CandlestickChart, LineChart, BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
-
-type ArticleChartOption = ComposeOption<
-  | GridComponentOption
-  | TooltipComponentOption
-  | BarSeriesOption
-  | CandlestickSeriesOption
-  | LineSeriesOption
->;
-
 const route = useRoute();
 const article = ref<any>(null);
 const loading = ref(true);
+const chartModuleError = ref('');
+
+const ChartModuleLoading = defineComponent({
+  name: 'ArticleChartModuleLoading',
+  setup() {
+    return () => h('div', { class: 'chart-module-loading' }, '图表模块加载中…');
+  }
+});
+
+const ChartModuleError = defineComponent({
+  name: 'ArticleChartModuleError',
+  setup() {
+    return () => h('div', { class: 'chart-module-error-placeholder' }, '图表模块加载失败，请稍后重试');
+  }
+});
+
+const ArticleKlineChartAsync = defineAsyncComponent({
+  loader: async () => {
+    try {
+      chartModuleError.value = '';
+      return await import('@/components/charts/ArticleKlineChart.vue');
+    } catch (error) {
+      chartModuleError.value = '图表模块加载失败，正文内容不受影响';
+      throw error;
+    }
+  },
+  loadingComponent: ChartModuleLoading,
+  errorComponent: ChartModuleError,
+  delay: 120,
+  timeout: 15000,
+});
 
 const aiScoreForArticle = computed<AiScore | null>(() => {
   // 1) Prefer stored ai_score_json (new articles)
@@ -162,10 +166,6 @@ async function fetchArticle() {
     console.error('获取文章详情失败:', error);
   } finally {
     loading.value = false;
-    // 等待DOM更新后再初始化图表
-    await nextTick();
-    await nextTick(); // 双重nextTick确保v-if渲染完成
-    initChart();
   }
 }
 
@@ -263,112 +263,11 @@ const schemaData = computed(() => {
   return JSON.stringify(data);
 });
 
-// 图表加载逻辑
-const chartRef = ref<HTMLElement | null>(null);
-const chartInstance = ref<EChartsType | null>(null);
-const chartLoading = ref(false);
-
 // 文章完整 URL（用于分享）
 const articleUrl = computed(() => {
   if (!article.value) return '';
   return `${window.location.origin}/analysis/${article.value.id}`;
 });
-
-
-async function initChart() {
-  if (!chartRef.value || !article.value) {
-    console.warn('initChart aborted: chartRef or article missing');
-    return;
-  }
-  
-  chartLoading.value = true;
-  try {
-    const stockCode = article.value.stock_code;
-    const marketType = article.value.market_type;
-    console.log('Loading K-line data for:', stockCode, marketType);
-    
-    const data = await apiService.getKlineData(stockCode, marketType);
-    if (!data || data.error) {
-      console.error('K-line data error:', data?.error);
-      throw new Error(data?.error || 'No data');
-    }
-    
-    console.log('K-line data received:', data.dates?.length, 'points');
-
-    // 等待DOM完全渲染
-    await nextTick();
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    if (!chartRef.value) {
-      console.error('Chart container disappeared');
-      return;
-    }
-
-    // 确保容器有尺寸
-    const containerWidth = chartRef.value.offsetWidth;
-    const containerHeight = chartRef.value.offsetHeight;
-    console.log('Chart container size:', containerWidth, 'x', containerHeight);
-    
-    if (containerWidth === 0 || containerHeight === 0) {
-      console.warn('Chart container has 0 size, setting explicit dimensions');
-      chartRef.value.style.width = '100%';
-      chartRef.value.style.height = '400px';
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-
-    if (chartInstance.value) {
-      chartInstance.value.dispose();
-    }
-
-    chartInstance.value = initECharts(chartRef.value);
-
-    // 处理 MACD 数据格式适配
-    const macdData = data.macd && data.macd.macd ? data.macd.macd : (data.macd || []);
-
-    const option: ArticleChartOption = {
-      backgroundColor: 'transparent',
-      animation: true,
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'cross' }
-      },
-      grid: [
-        { left: '8%', right: '3%', height: '55%', top: '5%' },
-        { left: '8%', right: '3%', top: '65%', height: '15%' },
-        { left: '8%', right: '3%', top: '85%', height: '10%' }
-      ],
-      xAxis: [
-        { type: 'category', data: data.dates, boundaryGap: false, axisLine: { lineStyle: { color: '#94a3b8' } } },
-        { type: 'category', gridIndex: 1, data: data.dates, boundaryGap: false, axisTick: { show: false }, axisLabel: { show: false } },
-        { type: 'category', gridIndex: 2, data: data.dates, boundaryGap: false, axisTick: { show: false }, axisLabel: { show: false } }
-      ],
-      yAxis: [
-        { scale: true, splitArea: { show: false }, splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } }, axisLabel: { fontSize: 10 } },
-        { gridIndex: 1, splitNumber: 3, axisLabel: { show: false }, axisTick: { show: false }, splitLine: { show: false } },
-        { gridIndex: 2, splitNumber: 3, axisLabel: { show: false }, axisTick: { show: false }, splitLine: { show: false } }
-      ],
-      series: [
-        {
-          name: 'K线',
-          type: 'candlestick',
-          data: data.values,
-          itemStyle: { color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' }
-        },
-        { name: 'MA5', type: 'line', data: data.ma5, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#f59e0b' } },
-        { name: 'MA20', type: 'line', data: data.ma20, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: '#6366f1' } },
-        { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: data.volumes, itemStyle: { color: (params: any) => data.values[params.dataIndex][1] > data.values[params.dataIndex][0] ? '#ef4444' : '#10b981' } },
-        { name: 'MACD', type: 'line', xAxisIndex: 2, yAxisIndex: 2, data: macdData, smooth: true, showSymbol: false, lineStyle: { width: 1, color: '#ec4899' } }
-      ]
-    };
-
-    chartInstance.value.setOption(option);
-    console.log('Chart initialized successfully');
-  } catch (err) {
-    console.error('初始化图表失败:', err);
-  } finally {
-    chartLoading.value = false;
-  }
-}
 
 // 尝试解析 Analysis V1 JSON
 const analysisV1Data = computed(() => {
@@ -532,29 +431,46 @@ onMounted(fetchArticle);
 
 .chart-section {
   margin: 32px 0;
-  height: 450px;
+  min-height: 450px;
   position: relative;
 }
 
-.kline-chart {
+.chart-module-loading {
   width: 100%;
-  height: 400px;
   min-height: 400px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 8px;
+  border: 1px dashed rgba(100, 116, 139, 0.4);
+  color: #64748b;
+  font-size: 0.92rem;
+  background: rgba(248, 250, 252, 0.72);
 }
 
-.chart-loading {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+.chart-module-error-placeholder {
+  width: 100%;
+  min-height: 400px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  color: #64748b;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #b91c1c;
+  font-size: 0.92rem;
+  background: rgba(254, 242, 242, 0.78);
+}
+
+.chart-module-error {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  background: rgba(254, 242, 242, 0.78);
+  border: 1px solid rgba(252, 165, 165, 0.5);
+  border-radius: 999px;
+  padding: 4px 10px;
 }
 
 .article-content {

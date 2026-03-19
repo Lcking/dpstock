@@ -22,6 +22,7 @@
 - 归档索引：`docs/ARCHIVE_INDEX.md`
 - 历史计划索引：`docs/plans/README.md`
 - 清理后恢复与排障：`docs/REPO_CLEANUP_RECOVERY_RUNBOOK.md`
+- 前端 Chunk 安全发布：`docs/FRONTEND_CHUNK_SAFE_RELEASE.md`
 
 ## 用户体系 Phase 1
 
