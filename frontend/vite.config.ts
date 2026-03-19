@@ -21,10 +21,6 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return
 
-          if (id.includes('echarts/renderers') || id.includes('echarts/core') || id.includes('zrender')) {
-            return 'vendor-echarts-core'
-          }
-
           if (id.includes('echarts')) {
             return 'vendor-echarts'
           }
