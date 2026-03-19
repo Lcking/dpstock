@@ -152,8 +152,8 @@ class AIAnalyzer:
             volume_status = 'HIGH' if volume_ratio > 1.5 else ('LOW' if volume_ratio < 0.5 else 'NORMAL')
             
             # AI 分析内容
-            # 最近14天的股票数据记录
-            recent_data = df.tail(14).to_dict('records')
+            # 最近60天的股票数据记录（扩大窗口，支撑形态识别）
+            recent_data = df.tail(60).to_dict('records')
             
             # 包含trend, volatility, volume_trend, rsi_level的字典
             technical_summary = {
@@ -218,6 +218,33 @@ class AIAnalyzer:
             }
             # -----------------------------------
             
+            # --- 形态检测算法 ---
+            try:
+                from services.pattern_detector import pattern_detector
+                pattern_report = pattern_detector.detect(df)
+                pattern_algo_summary = pattern_report.summary
+                best_pattern = pattern_report.patterns[0] if pattern_report.patterns else None
+                best_pattern_type = best_pattern.pattern_type if best_pattern else 'none'
+                best_pattern_desc = best_pattern.description if best_pattern else ''
+                best_pattern_comp = best_pattern.completion_rate if best_pattern else 0
+                best_pattern_confidence = best_pattern.confidence if best_pattern else 0
+                crossover_text = ""
+                if pattern_report.crossovers:
+                    lines = []
+                    for c in pattern_report.crossovers[-5:]:
+                        label = '金叉' if c.cross_type == 'golden_cross' else '死叉'
+                        lines.append(f"  - {c.date}：{c.fast_ma}/{c.slow_ma} {label}（价格 {c.price_at_cross:.2f}）")
+                    crossover_text = "\n".join(lines)
+                logger.info(f"[PatternDetector] {stock_code}: type={best_pattern_type}, confidence={best_pattern_confidence}")
+            except Exception as e:
+                logger.warning(f"[PatternDetector] Failed for {stock_code}: {e}")
+                pattern_algo_summary = "形态检测算法执行失败，请根据K线数据自行判断。"
+                best_pattern_type = 'none'
+                best_pattern_desc = ''
+                best_pattern_comp = 0
+                crossover_text = ""
+            # -----------------------------------
+            
             # 构建 Analysis V1 prompt（统一格式，适用所有市场）
             market_name_map = {'A': 'A股', 'HK': '港股', 'US': '美股', 'ETF': 'ETF', 'LOF': 'LOF'}
             market_display = market_name_map.get(market_type, market_type)
@@ -260,11 +287,15 @@ class AIAnalyzer:
 **技术指标数据：**
 {technical_summary}
 
-**近14日交易数据：**
+**近60日交易数据：**
 {recent_data}
 
 **统计上下文 (Statistical Context)：**
 {stats_context}
+
+**形态检测算法结果（重要参考）：**
+{pattern_algo_summary}
+{f"近期均线交叉信号：" + chr(10) + crossover_text if crossover_text else "近30日内无均线交叉信号。"}
 
 **数据整理要求（附正反示例）：**
 
@@ -286,13 +317,17 @@ class AIAnalyzer:
    - ❌ 错误："均线空头排列，弱势整理，缩量盘整"
 
 2. **形态拟合（Pattern Fitting）**：
-   - 只描述形态的几何特征和关键点位
-   - ✅ 正确："价格在 11.30-11.65 区间内形成 3 个高点（11.65, 11.62, 11.63）和 3 个低点（11.32, 11.35, 11.30），高点逐渐下降，低点基本持平"
+   - **必须参考上方"形态检测算法结果"**，以算法识别到的形态为基础进行描述
+   - 如果算法检测到具体形态（如双顶、头肩底、三角形等），必须在 pattern_description 中引用算法给出的关键拐点价格和日期
+   - 如果算法检测到均线交叉（金叉/死叉），必须在描述中提及
+   - 只描述形态的几何特征和关键点位，不做方向预测
+   - ✅ 正确："算法检测到双底形态：低点1 = 11.30（2026-01-05），低点2 = 11.28（2026-01-25），颈线 ≈ 11.65，当前价格 11.56，仍在颈线下方"
+   - ✅ 正确："近30日内 MA5/MA20 出现金叉（2026-01-15，价格 11.45），当前 MA5(11.48) > MA20(11.40)"
    - ❌ 错误："形成下降三角形，即将向下突破"
+   - ❌ 错误：忽略算法结果，凭空编造形态
    
    - 不说形态"完成"或"突破"，但可以描述形态的时间/空间进度
    - ✅ 正确："当前价格 11.56，位于 11.30-11.65 形态区间的后段（空间位置 80%）"
-   - ✅ 正确："completion_rate: 80 （表示当前形态已运行的时间/空间占比，非成功概率）"
    - ❌ 错误："形态完成度 80%，等待突破确认"
 
 3. **指标翻译（Indicator Translate）**：
@@ -354,9 +389,9 @@ class AIAnalyzer:
     "trend_description": "详细描述当前趋势结构，包括均线排列、价格运行特征、结构强弱等"
   }},
   "pattern_fitting": {{
-    "pattern_type": "head_shoulders|double_top_bottom|triangle|channel|wedge|flag|none",
-    "pattern_description": "详细描述形态特征、关键点位、完成度、可能的演化方向",
-    "completion_rate": 65
+    "pattern_type": "{best_pattern_type}",
+    "pattern_description": "基于算法检测结果描述形态特征、关键拐点价位及日期、均线交叉信号，只陈述几何事实",
+    "completion_rate": {best_pattern_comp}
   }},
   "indicator_translate": {{
     "indicators": [
