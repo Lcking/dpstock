@@ -68,7 +68,7 @@
         :loading="loading"
         :bordered="false"
         :single-line="false"
-        :scroll-x="820"
+        :scroll-x="740"
         size="small"
         striped
         @update:checked-row-keys="handleCheckedRowKeysChange"
@@ -208,6 +208,7 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     key: 'name',
     width: 130,
     fixed: 'left',
+    align: 'center',
     render(row) {
       return h('div', { class: 'cell-stock', onClick: () => navigateToAnalysis(row.ts_code), style: 'cursor:pointer' }, [
         h('span', { class: 'cell-stock-name' }, row.name || row.ts_code),
@@ -219,9 +220,10 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     title: '价格',
     key: 'price',
     width: 90,
-    align: 'right',
+    align: 'center',
     sorter: (a, b) => a.price - b.price,
     render(row) {
+      if (!row.price) return h('span', { class: 'cell-na' }, '--')
       return h('span', { class: 'cell-price' }, `¥${row.price.toFixed(2)}`)
     },
   },
@@ -229,10 +231,11 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     title: '涨跌幅',
     key: 'change_pct',
     width: 90,
-    align: 'right',
+    align: 'center',
     sorter: (a, b) => (a.change_pct ?? 0) - (b.change_pct ?? 0),
     render(row) {
-      const cls = row.change_pct === null ? '' : row.change_pct > 0 ? 'cell-up' : row.change_pct < 0 ? 'cell-down' : ''
+      if (row.change_pct === null || row.change_pct === undefined) return h('span', { class: 'cell-na' }, '--')
+      const cls = row.change_pct > 0 ? 'cell-up' : row.change_pct < 0 ? 'cell-down' : ''
       return h('span', { class: `cell-change ${cls}` }, formatPercent(row.change_pct))
     },
   },
@@ -240,6 +243,7 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     title: '趋势',
     key: 'trend',
     width: 100,
+    align: 'center',
     render(row) {
       return h('div', { class: 'cell-trend' }, [
         h(NTag, { type: trendTypeMap[row.trend.direction], size: 'small', bordered: false }, () => trendMap[row.trend.direction]),
@@ -251,6 +255,7 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     title: '相对强弱',
     key: 'relative_strength',
     width: 90,
+    align: 'center',
     render(row) {
       const label = row.relative_strength.label_20d
       if (!label) return h('span', { class: 'cell-na' }, '-')
@@ -261,7 +266,9 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     title: '资金',
     key: 'capital_flow',
     width: 100,
+    align: 'center',
     render(row) {
+      if (!row.capital_flow.available) return h('span', { class: 'cell-na' }, '--')
       return h(NTag, { type: flowTagType(row.capital_flow.label) as any, size: 'small', bordered: false }, () => row.capital_flow.label)
     },
   },
@@ -269,25 +276,16 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     title: '风险',
     key: 'risk',
     width: 70,
+    align: 'center',
     render(row) {
       return h(NTag, { type: riskTypeMap[row.risk.level], size: 'small', bordered: false }, () => riskMap[row.risk.level])
-    },
-  },
-  {
-    title: '事件',
-    key: 'events',
-    width: 80,
-    render(row) {
-      if (row.events.flag === 'none') return h('span', { class: 'cell-na' }, '无')
-      const map: Record<string, string> = { minor: '次要', major: '重大', unavailable: '不可用' }
-      const typeMap: Record<string, string> = { minor: 'warning', major: 'error', unavailable: 'default' }
-      return h(NTag, { type: typeMap[row.events.flag] as any, size: 'small', bordered: false }, () => map[row.events.flag] || '无')
     },
   },
   {
     title: '判断',
     key: 'judgement',
     width: 100,
+    align: 'center',
     render(row) {
       if (!row.judgement.has_active) return h('span', { class: 'cell-na' }, '-')
       const children = [
@@ -303,6 +301,7 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     title: '',
     key: 'actions',
     width: 120,
+    align: 'center',
     fixed: 'right',
     render(row) {
       return h('div', { class: 'cell-actions' }, [
@@ -440,9 +439,10 @@ const handleRemove = async (code: string) => {
   }
 }
 
-// 进入分析页
-const navigateToAnalysis = (code: string) => {
-  router.push(`/analysis/${code}`)
+// 跳转首页并自动触发该股票的分析
+const navigateToAnalysis = (tsCode: string) => {
+  const pureCode = tsCode.replace(/\.(SH|SZ|BJ)$/i, '')
+  router.push({ path: '/', query: { code: pureCode, market: 'A' } })
 }
 
 // 进入比较页
@@ -571,7 +571,7 @@ onMounted(() => {
 }
 
 :deep(.cell-trend) {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
@@ -583,7 +583,7 @@ onMounted(() => {
 }
 
 :deep(.cell-judgement) {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
@@ -599,7 +599,7 @@ onMounted(() => {
 }
 
 :deep(.cell-actions) {
-  display: flex;
+  display: inline-flex;
   gap: 10px;
 }
 

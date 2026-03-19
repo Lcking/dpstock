@@ -168,7 +168,8 @@
 
 import HtmlRenderer from './HtmlRenderer';
 import { h } from 'vue';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
+import { useRoute } from 'vue-router';
 import { 
   NLayout, 
   NLayoutContent, 
@@ -208,6 +209,7 @@ import type { StockInfo, StreamInitMessage, StreamAnalysisUpdate } from '@/types
 import { validateMultipleStockCodes, MarketType } from '@/utils/stockValidator';
 
 // 使用Naive UI的组件API
+const route = useRoute();
 const message = useMessage();
 const { copy } = useClipboard();
 
@@ -998,6 +1000,19 @@ onMounted(async () => {
     }
   } catch (error) {
     console.error('获取配置时出错:', error);
+  }
+
+  // 从 query 参数自动触发分析（如从观察列表跳转过来）
+  const queryCode = route.query.code as string | undefined
+  const queryMarket = route.query.market as string | undefined
+  if (queryCode) {
+    if (queryMarket) marketType.value = queryMarket
+    selectedStockValues.value = [queryCode]
+    searchOptions.value = [{ label: queryCode, value: queryCode }]
+    await nextTick()
+    analyzeStocks()
+    // 清理 URL 参数，避免刷新后重复触发
+    window.history.replaceState({}, '', '/')
   }
 });
 
