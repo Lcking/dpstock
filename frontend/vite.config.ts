@@ -30,16 +30,6 @@ export default defineConfig({
           }
 
           if (
-            id.includes('naive-ui/es/data-table') ||
-            id.includes('naive-ui/es/select') ||
-            id.includes('naive-ui/es/tree') ||
-            id.includes('naive-ui/es/virtual-list') ||
-            id.includes('naive-ui/es/cascader')
-          ) {
-            return 'vendor-naive-heavy'
-          }
-
-          if (
             id.includes('naive-ui') ||
             id.includes('@css-render') ||
             id.includes('/vooks/') ||

@@ -31,6 +31,7 @@ def test_vite_manual_chunks_has_ui_and_echarts_split():
     assert "vendor-naive-ui" in text
     assert "vendor-icons" in text
     assert "vendor-axios" in text
+    assert "vendor-naive-heavy" not in text
 
 
 def test_frontend_build_metrics_scripts_and_runbook_exist():
