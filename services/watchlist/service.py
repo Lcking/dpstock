@@ -514,18 +514,32 @@ class WatchlistService:
         """获取价格信息"""
         try:
             from services.tushare.client import tushare_client
-            df = tushare_client.daily(ts_code, days=5)
-            
+            from datetime import timedelta
+
+            end_dt = datetime.now()
+            start_dt = end_dt - timedelta(days=10)
+            df = tushare_client.get_daily(
+                ts_code,
+                start_date=start_dt.strftime('%Y%m%d'),
+                end_date=end_dt.strftime('%Y%m%d'),
+            )
+
             if df is not None and not df.empty:
+                df = df.sort_values('trade_date')
                 latest = df.iloc[-1]
-                return (
-                    latest['close'],
-                    latest.get('pct_chg', 0) / 100 if 'pct_chg' in latest else None,
-                    None  # TODO: 获取名称
-                )
-        except:
-            pass
-        
+                price = float(latest['close'])
+                change_pct = float(latest['pct_chg']) / 100 if 'pct_chg' in latest and latest['pct_chg'] is not None else None
+                return price, change_pct, None
+
+            # 尝试获取股票名称
+            name_df = tushare_client.get_stock_basic(ts_code)
+            name = None
+            if name_df is not None and not name_df.empty:
+                name = name_df.iloc[0].get('name')
+            return 0.0, None, name
+        except Exception as e:
+            logger.warning(f"[Watchlist] _get_price_info failed for {ts_code}: {e}")
+
         return 0.0, None, None
     
     def _degraded_summary(self, ts_code: str, asof: str) -> WatchlistItemSummary:
