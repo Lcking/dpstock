@@ -210,9 +210,11 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     fixed: 'left',
     align: 'center',
     render(row) {
+      const displayName = row.name && row.name !== row.ts_code ? row.name : ''
+      const codeOnly = row.ts_code.replace(/\.(SH|SZ|BJ)$/i, '')
       return h('div', { class: 'cell-stock', onClick: () => navigateToAnalysis(row.ts_code), style: 'cursor:pointer' }, [
-        h('span', { class: 'cell-stock-name' }, row.name || row.ts_code),
-        h('span', { class: 'cell-stock-code' }, row.ts_code),
+        h('span', { class: 'cell-stock-name' }, displayName || codeOnly),
+        h('span', { class: 'cell-stock-code' }, displayName ? codeOnly : ''),
       ])
     },
   },

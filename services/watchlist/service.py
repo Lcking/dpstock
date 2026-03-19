@@ -103,6 +103,23 @@ class WatchlistService:
             for row in rows
         ]
     
+    @staticmethod
+    def _normalize_ts_code(raw: str) -> str:
+        """将用户输入的股票代码标准化为 tushare 格式（如 600519 → 600519.SH）"""
+        code = raw.strip().upper()
+        if '.' in code:
+            return code
+        digits = code.lstrip('SHZ')
+        if not digits.isdigit():
+            return code
+        if digits.startswith('6'):
+            return f"{digits}.SH"
+        if digits.startswith(('0', '3')):
+            return f"{digits}.SZ"
+        if digits.startswith(('4', '8')):
+            return f"{digits}.BJ"
+        return code
+
     def add_symbols(self, watchlist_id: str, ts_codes: List[str]) -> int:
         """添加标的到自选股列表"""
         now = datetime.utcnow().isoformat() + 'Z'
@@ -110,7 +127,8 @@ class WatchlistService:
         
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
-            for ts_code in ts_codes:
+            for raw_code in ts_codes:
+                ts_code = self._normalize_ts_code(raw_code)
                 try:
                     cursor.execute("""
                         INSERT OR IGNORE INTO watchlist_items (watchlist_id, ts_code, added_at)
@@ -235,22 +253,22 @@ class WatchlistService:
         return summaries
     
     def _generate_single_summary(
-        self, 
-        ts_code: str, 
+        self,
+        ts_code: str,
         asof: str
     ) -> WatchlistItemSummary:
         """生成单个标的摘要（带缓存）"""
         from .cache import watchlist_summary_cache
-        
-        # Check cache first
+
+        ts_code = self._normalize_ts_code(ts_code)
+
         cached = watchlist_summary_cache.get(ts_code, asof)
         if cached is not None:
             logger.debug(f"[Watchlist] Cache HIT for {ts_code}")
             return cached
-        
+
         logger.debug(f"[Watchlist] Cache MISS for {ts_code}, generating...")
-        
-        # 获取增强数据
+
         enhancements = enhancement_orchestrator.enhance(ts_code, asof)
         
         # 提取各模块数据
@@ -300,21 +318,19 @@ class WatchlistService:
     
     def _build_trend(self, ts_code: str, asof: str) -> TrendResult:
         """构建趋势数据"""
-        # TODO: 从股票数据服务获取MA数据
-        # 暂时返回降级结果
         try:
             from services.tushare.client import tushare_client
             from datetime import timedelta
             
-            # 计算日期范围
+            normalized = self._normalize_ts_code(ts_code)
+            
             end_date = datetime.now()
-            start_date = end_date - timedelta(days=400) # 获取足够多的数据以计算MA200
+            start_date = end_date - timedelta(days=400)
             
             start_str = start_date.strftime('%Y%m%d')
             end_str = end_date.strftime('%Y%m%d')
             
-            # 获取日线数据
-            df = tushare_client.get_daily(ts_code, start_date=start_str, end_date=end_str)
+            df = tushare_client.get_daily(normalized, start_date=start_str, end_date=end_str)
             
             if df is None or df.empty:
                 return TrendResult(
@@ -511,15 +527,28 @@ class WatchlistService:
         return JudgementSummary(has_active=False)
     
     def _get_price_info(self, ts_code: str, asof: str):
-        """获取价格信息"""
+        """获取价格信息及股票名称"""
         try:
             from services.tushare.client import tushare_client
             from datetime import timedelta
 
+            # 确保代码带后缀
+            normalized = self._normalize_ts_code(ts_code)
+
+            # 获取股票名称
+            name = None
+            try:
+                name_df = tushare_client.get_stock_basic(normalized)
+                if name_df is not None and not name_df.empty:
+                    name = name_df.iloc[0].get('name')
+            except Exception:
+                pass
+
+            # 获取最近行情
             end_dt = datetime.now()
             start_dt = end_dt - timedelta(days=10)
             df = tushare_client.get_daily(
-                ts_code,
+                normalized,
                 start_date=start_dt.strftime('%Y%m%d'),
                 end_date=end_dt.strftime('%Y%m%d'),
             )
@@ -529,13 +558,8 @@ class WatchlistService:
                 latest = df.iloc[-1]
                 price = float(latest['close'])
                 change_pct = float(latest['pct_chg']) / 100 if 'pct_chg' in latest and latest['pct_chg'] is not None else None
-                return price, change_pct, None
+                return price, change_pct, name
 
-            # 尝试获取股票名称
-            name_df = tushare_client.get_stock_basic(ts_code)
-            name = None
-            if name_df is not None and not name_df.empty:
-                name = name_df.iloc[0].get('name')
             return 0.0, None, name
         except Exception as e:
             logger.warning(f"[Watchlist] _get_price_info failed for {ts_code}: {e}")
