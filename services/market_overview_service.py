@@ -92,20 +92,48 @@ class MarketOverviewService:
 
         return self._fetch_index_from_yfinance(spec)
 
-    def _fetch_a_share_index(self, spec: MarketIndexSpec) -> Dict[str, Any] | None:
-        daily_context = self._fetch_a_share_index_daily_context(spec)
-        minute_context = self._fetch_a_share_index_minute_context(spec)
+    # 东方财富 secid 映射
+    _EASTMONEY_SECID_MAP: Dict[str, str] = {
+        "000001.SH": "1.000001",
+        "000300.SH": "1.000300",
+    }
 
-        if minute_context is not None and daily_context is not None:
+    def _fetch_a_share_index(self, spec: MarketIndexSpec) -> Dict[str, Any] | None:
+        # 1. 实时价格：优先 JumData 分钟级，回退东方财富
+        realtime = self._fetch_a_share_index_minute_context(spec)
+        if realtime is None:
+            realtime = self._fetch_eastmoney_realtime(spec)
+
+        # 2. 历史趋势 + 前收盘（用于 JumData 模式的涨跌计算）
+        daily_context = self._fetch_a_share_index_daily_context(spec)
+
+        if realtime is not None and realtime.get("change") is not None:
+            trend = realtime.get("trend") or []
+            if not trend and daily_context:
+                trend = [round(float(v), 2) for v in daily_context["closes"][-self.TREND_POINTS:]]
+            return {
+                "key": spec.key,
+                "name": spec.name,
+                "market": spec.market,
+                "symbol": spec.symbol,
+                "price": realtime["latest_close"],
+                "change": realtime["change"],
+                "change_percent": realtime["change_percent"],
+                "trend": trend,
+                "status": "ok",
+            }
+
+        if realtime is not None and daily_context is not None:
             previous_close = self._resolve_previous_close(
                 daily_context["trade_dates"],
                 daily_context["closes"],
-                minute_context["trade_date"],
+                realtime.get("trade_date", ""),
             )
             if previous_close:
-                latest_close = minute_context["latest_close"]
+                latest_close = realtime["latest_close"]
                 change = latest_close - previous_close
                 change_percent = (change / previous_close * 100) if previous_close else 0.0
+                trend = realtime.get("trend") or [round(float(v), 2) for v in daily_context["closes"][-self.TREND_POINTS:]]
                 return {
                     "key": spec.key,
                     "name": spec.name,
@@ -114,7 +142,7 @@ class MarketOverviewService:
                     "price": round(latest_close, 2),
                     "change": round(change, 2),
                     "change_percent": round(change_percent, 2),
-                    "trend": minute_context["trend"],
+                    "trend": trend,
                     "status": "ok",
                 }
 
@@ -131,11 +159,56 @@ class MarketOverviewService:
                 "price": round(latest_close, 2),
                 "change": round(change, 2),
                 "change_percent": round(change_percent, 2),
-                "trend": [round(float(value), 2) for value in closes[-self.TREND_POINTS :]],
+                "trend": [round(float(value), 2) for value in closes[-self.TREND_POINTS:]],
                 "status": "ok",
             }
 
         return None
+
+    def _fetch_eastmoney_realtime(self, spec: MarketIndexSpec) -> Dict[str, Any] | None:
+        """从东方财富获取 A 股指数实时行情（免费，无需 API Key）"""
+        secid = self._EASTMONEY_SECID_MAP.get(spec.tushare_symbol or "")
+        if not secid:
+            return None
+
+        try:
+            url = "https://push2.eastmoney.com/api/qt/stock/get"
+            params = {
+                "secid": secid,
+                "fields": "f43,f44,f45,f46,f47,f58,f60,f169,f170",
+                "fltt": "2",
+            }
+            headers = {
+                "User-Agent": "Mozilla/5.0",
+                "Referer": "https://quote.eastmoney.com/",
+            }
+            with httpx.Client(timeout=8.0) as client:
+                resp = client.get(url, params=params, headers=headers)
+                resp.raise_for_status()
+                body = resp.json()
+
+            item = body.get("data")
+            if not item:
+                return None
+
+            price = item.get("f43")
+            change = item.get("f169")
+            change_pct = item.get("f170")
+            prev_close = item.get("f60")
+
+            if price is None or price == "-":
+                return None
+
+            return {
+                "latest_close": round(float(price), 2),
+                "change": round(float(change), 2) if change is not None else None,
+                "change_percent": round(float(change_pct), 2) if change_pct is not None else None,
+                "trade_date": datetime.now().strftime("%Y%m%d"),
+                "trend": [],
+            }
+        except Exception as exc:
+            logger.warning(f"[MarketOverview] eastmoney realtime failed for {spec.name}: {exc}")
+            return None
 
     def _fetch_a_share_index_daily_context(self, spec: MarketIndexSpec) -> Dict[str, Any] | None:
         if not spec.tushare_symbol:
