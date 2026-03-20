@@ -15,6 +15,50 @@ from services.ai_score.calculator import AiScoreCalculator
 # 获取日志器
 logger = get_logger()
 
+
+def _repair_json(text: str) -> Optional[dict]:
+    """
+    尝试修复 AI 生成的常见 JSON 格式错误：
+    - 字符串值缺少引号（如 "key":value 而非 "key":"value"）
+    - 尾部多余逗号
+    - 单引号替代双引号
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    fixed = text
+    fixed = re.sub(r',\s*([}\]])', r'\1', fixed)
+
+    # 逐行修复：检测 "key": 后面没有引号的情况
+    repaired_lines = []
+    for line in fixed.split('\n'):
+        stripped = line.strip()
+        m = re.match(r'^"([^"]+)"\s*:\s*(.+)$', stripped)
+        if m:
+            key, val = m.group(1), m.group(2)
+            val_stripped = val.rstrip().rstrip(',')
+            needs_comma = val.rstrip().endswith(',')
+            if (val_stripped and
+                not val_stripped.startswith('"') and
+                not val_stripped.startswith('{') and
+                not val_stripped.startswith('[') and
+                not re.match(r'^-?\d', val_stripped) and
+                val_stripped not in ('true', 'false', 'null')):
+                escaped = val_stripped.replace('\\', '\\\\').replace('"', '\\"')
+                indent = line[:len(line) - len(line.lstrip())]
+                line = f'{indent}"{key}": "{escaped}"{"," if needs_comma else ""}'
+        repaired_lines.append(line)
+    fixed = '\n'.join(repaired_lines)
+
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
+
+    return None
+
 class AIAnalyzer:
     """
     异步AI分析服务
@@ -151,9 +195,13 @@ class AIAnalyzer:
             volume_ratio = latest_data.get('Volume_Ratio', 1)
             volume_status = 'HIGH' if volume_ratio > 1.5 else ('LOW' if volume_ratio < 0.5 else 'NORMAL')
             
-            # AI 分析内容
-            # 最近60天的股票数据记录（扩大窗口，支撑形态识别）
-            recent_data = df.tail(60).to_dict('records')
+            # 发送精简的 K 线数据：只保留关键列，减少 token 消耗
+            slim_cols = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'MA5', 'MA20', 'MA60', 'RSI']
+            slim_cols = [c for c in slim_cols if c in df.columns]
+            recent_df = df.tail(60)[slim_cols].copy()
+            for c in recent_df.select_dtypes(include=['float64']).columns:
+                recent_df[c] = recent_df[c].round(2)
+            recent_data = recent_df.to_dict('records')
             
             # 包含trend, volatility, volume_trend, rsi_level的字典
             technical_summary = {
@@ -608,27 +656,26 @@ class AIAnalyzer:
                         # 尝试从完整内容中提取 Analysis V1 JSON
                         analysis_v1_json = None
                         try:
-                            # 移除可能的 markdown 代码块标记
                             json_str = full_content
                             if "```json" in json_str:
                                 json_str = json_str.split("```json")[1].split("```")[0].strip()
                             elif "```" in json_str:
                                 json_str = json_str.split("```")[1].split("```")[0].strip()
                             
-                            # 尝试解析 JSON
-                            analysis_v1_json = json.loads(json_str)
-                            logger.info(f"成功解析 Analysis V1 JSON for {stock_code}")
+                            analysis_v1_json = _repair_json(json_str)
                             
-                            # 验证是否包含必要字段
-                            required_fields = ['structure_snapshot', 'pattern_fitting', 'indicator_translate', 
-                                             'risk_of_misreading', 'judgment_zone']
-                            if all(field in analysis_v1_json for field in required_fields):
-                                logger.info(f"Analysis V1 JSON 包含所有必要字段")
+                            if analysis_v1_json:
+                                required_fields = ['structure_snapshot', 'pattern_fitting', 'indicator_translate', 
+                                                 'risk_of_misreading', 'judgment_zone']
+                                if all(field in analysis_v1_json for field in required_fields):
+                                    logger.info(f"成功解析 Analysis V1 JSON for {stock_code}")
+                                else:
+                                    logger.warning(f"Analysis V1 JSON 缺少某些字段")
+                                    analysis_v1_json = None
                             else:
-                                logger.warning(f"Analysis V1 JSON 缺少某些字段")
-                                analysis_v1_json = None
+                                logger.warning(f"无法解析/修复 Analysis V1 JSON for {stock_code}")
                                 
-                        except (json.JSONDecodeError, IndexError) as e:
+                        except Exception as e:
                             logger.warning(f"无法解析 Analysis V1 JSON: {str(e)}, 将作为普通文本处理")
                             analysis_v1_json = None
                         

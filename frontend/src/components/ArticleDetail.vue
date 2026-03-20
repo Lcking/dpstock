@@ -270,30 +270,59 @@ const articleUrl = computed(() => {
 });
 
 // 尝试解析 Analysis V1 JSON
+function repairJson(text: string): any | null {
+  try {
+    return JSON.parse(text)
+  } catch {
+    // pass
+  }
+  let fixed = text.replace(/,\s*([}\]])/g, '$1')
+  const lines = fixed.split('\n')
+  const repaired = lines.map(line => {
+    const stripped = line.trim()
+    const m = stripped.match(/^"([^"]+)"\s*:\s*(.+)$/)
+    if (m) {
+      let val = m[2].trimEnd()
+      const hasComma = val.endsWith(',')
+      if (hasComma) val = val.slice(0, -1)
+      if (val && !val.startsWith('"') && !val.startsWith('{') && !val.startsWith('[')
+          && !/^-?\d/.test(val) && !['true', 'false', 'null'].includes(val)) {
+        const escaped = val.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        const indent = line.substring(0, line.length - line.trimStart().length)
+        return `${indent}"${m[1]}": "${escaped}"${hasComma ? ',' : ''}`
+      }
+    }
+    return line
+  })
+  try {
+    return JSON.parse(repaired.join('\n'))
+  } catch {
+    return null
+  }
+}
+
 const analysisV1Data = computed(() => {
   if (!article.value?.content) return null;
   
   try {
     let jsonStr = article.value.content;
     
-    // 移除可能的 markdown 代码块标记
     if (jsonStr.includes('```json')) {
       jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
     } else if (jsonStr.includes('```')) {
       jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
     }
     
-    // 尝试解析 JSON
-    const parsed = JSON.parse(jsonStr);
+    const parsed = repairJson(jsonStr);
     
-    // 验证是否包含 Analysis V1 必要字段
-    const requiredFields = ['structure_snapshot', 'pattern_fitting', 'indicator_translate', 
-                           'risk_of_misreading', 'judgment_zone'];
-    if (requiredFields.every(field => field in parsed)) {
-      return parsed;
+    if (parsed) {
+      const requiredFields = ['structure_snapshot', 'pattern_fitting', 'indicator_translate', 
+                             'risk_of_misreading', 'judgment_zone'];
+      if (requiredFields.every(field => field in parsed)) {
+        return parsed;
+      }
     }
   } catch (e) {
-    // 不是 JSON 或解析失败，返回 null
     console.warn('Failed to parse Analysis V1 JSON:', e);
   }
   

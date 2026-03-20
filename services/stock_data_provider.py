@@ -164,26 +164,16 @@ class StockDataProvider:
         if not allow_network:
             return ""
 
-        # 2. 仅在显式允许时做单次 tushare 查询
+        # 2. 仅在显式允许时做 tushare 查询
         try:
-            import concurrent.futures
             tushare_client.ensure_initialized(log_missing_token=False)
             if tushare_client.is_available:
-                if stock_code.startswith('6'):
-                    ts_code = f"{stock_code}.SH"
-                elif stock_code.startswith(('0', '3')):
-                    ts_code = f"{stock_code}.SZ"
-                else:
-                    ts_code = f"{stock_code}.SZ"
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    future = pool.submit(
-                        tushare_client.pro.namechange,
-                        ts_code=ts_code,
-                        fields='ts_code,name',
-                    )
-                    df = future.result(timeout=3)
+                ts_code = self._to_tushare_code(stock_code)
+                df = tushare_client.get_stock_basic(ts_code)
                 if df is not None and not df.empty:
-                    return str(df.iloc[0]['name'])
+                    name = df.iloc[0].get('name')
+                    if name:
+                        return str(name)
         except Exception as e:
             logger.debug(f"tushare 查询股票名称失败: {e}")
 

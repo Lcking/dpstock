@@ -338,7 +338,8 @@ class StockAnalyzerService:
                 # 动态获取品类名称
                 category_map = {'A': '股票', 'HK': '股票', 'US': '股票', 'ETF': 'ETF', 'LOF': 'LOF'}
                 category_name = category_map.get(market_type, '股票')
-                title = f"{datetime.now().strftime('%Y年%m月%d日')} {stock_name} {stock_code} {category_name}行情走势异动分析"
+                name_part = f"{stock_name} " if stock_name else ""
+                title = f"{datetime.now().strftime('%Y年%m月%d日')} {name_part}{stock_code} {category_name}行情走势异动分析"
                 score_version = None
                 ai_score_json = None
                 overall_score = score
