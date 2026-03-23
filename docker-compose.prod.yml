@@ -13,6 +13,9 @@ services:
       - JUMDATA_APP_CODE=${JUMDATA_APP_CODE}
       - ANNOUNCEMENT_TEXT=${ANNOUNCEMENT_TEXT}
       - LOGIN_PASSWORD=${LOGIN_PASSWORD}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - SEND_REAL_EMAIL=${SEND_REAL_EMAIL:-true}
+      - FROM_EMAIL=${FROM_EMAIL:-Aguai <noreply@aguai.net>}
       - STREAM=${STREAM:-true}
       - DB_PATH=/app/data/stocks.db
     volumes:
