@@ -507,7 +507,10 @@ async def get_kline(code: str, market_type: str = "A", days: int = 100, username
 
 
 @app.get("/api/market-overview")
-async def get_market_overview(username: str = Depends(verify_token)):
+async def get_market_overview(response: Response, username: str = Depends(verify_token)):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     try:
         return await asyncio.to_thread(market_overview_service.get_overview)
     except Exception as e:

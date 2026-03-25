@@ -531,10 +531,10 @@
 /* 小屏幕适配 */
 @media (max-width: 480px) {
   .mobile-announcement-container {
-    top: 0.25rem;
-    right: 0.25rem;
-    left: 0.25rem;
-    max-width: calc(100% - 0.5rem);
+    top: 5.5rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    max-width: calc(100% - 1rem);
   }
   
   .mobile-announcement-header {

@@ -301,8 +301,9 @@ onBeforeUnmount(() => {
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .nav-inner {
-    height: 60px;
-    padding: 0 16px;
+    min-height: 60px;
+    height: auto;
+    padding: 8px 16px;
   }
   
   .nav-logo {
@@ -319,20 +320,34 @@ onBeforeUnmount(() => {
   }
   
   .nav-btn {
-    padding: 6px 12px;
+    padding: 8px 14px;
     font-size: 13px;
+    min-height: 36px;
+    -webkit-tap-highlight-color: rgba(91, 103, 241, 0.15);
+    touch-action: manipulation;
   }
   
   .nav-btn:hover {
     transform: none;
   }
+
+  .nav-btn:active {
+    background: linear-gradient(135deg, #5b67f1 0%, #7c54d9 100%);
+    color: white;
+    border-color: transparent;
+  }
 }
 
 @media (max-width: 480px) {
+  .nav-inner {
+    padding: 6px 12px;
+  }
+
   .nav-btn {
-    padding: 5px 12px;
+    padding: 7px 12px;
     font-size: 12px;
     border-radius: 16px;
+    min-height: 34px;
   }
   
   .nav-logo {

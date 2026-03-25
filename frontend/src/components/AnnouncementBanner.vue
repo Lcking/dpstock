@@ -87,7 +87,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .announcement-container {
   position: fixed;
-  top: 1rem;
+  top: 5rem;
   right: 1rem;
   max-width: 24rem;
   z-index: 50;
