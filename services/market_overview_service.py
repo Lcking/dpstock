@@ -165,7 +165,59 @@ class MarketOverviewService:
 
         return None
 
+    # Sina Finance real-time index quote (no auth, no redirect issues)
+    _SINA_INDEX_MAP: Dict[str, str] = {
+        "000001.SH": "s_sh000001",
+        "000300.SH": "s_sh000300",
+    }
+
     def _fetch_eastmoney_realtime(self, spec: MarketIndexSpec) -> Dict[str, Any] | None:
+        """从东方财富获取 A 股指数实时行情，回退新浪财经"""
+        result = self._fetch_eastmoney_realtime_inner(spec)
+        if result is not None:
+            return result
+        return self._fetch_sina_realtime(spec)
+
+    def _fetch_sina_realtime(self, spec: MarketIndexSpec) -> Dict[str, Any] | None:
+        """新浪财经实时指数（免费、稳定、无重定向问题）"""
+        sina_code = self._SINA_INDEX_MAP.get(spec.tushare_symbol or "")
+        if not sina_code:
+            return None
+        try:
+            url = f"https://hq.sinajs.cn/list={sina_code}"
+            headers = {
+                "User-Agent": "Mozilla/5.0",
+                "Referer": "https://finance.sina.com.cn/",
+            }
+            with httpx.Client(timeout=8.0) as client:
+                resp = client.get(url, headers=headers)
+                resp.raise_for_status()
+                text = resp.text
+
+            # Format: var hq_str_s_sh000001="上证指数,3941.52,23.66,0.60,..."
+            parts = text.split('"')
+            if len(parts) < 2:
+                return None
+            fields = parts[1].split(",")
+            if len(fields) < 4:
+                return None
+
+            price = float(fields[1])
+            change = float(fields[2])
+            change_pct = float(fields[3])
+
+            return {
+                "latest_close": round(price, 2),
+                "change": round(change, 2),
+                "change_percent": round(change_pct, 2),
+                "trade_date": datetime.now().strftime("%Y%m%d"),
+                "trend": [],
+            }
+        except Exception as exc:
+            logger.warning(f"[MarketOverview] sina realtime failed for {spec.name}: {exc}")
+            return None
+
+    def _fetch_eastmoney_realtime_inner(self, spec: MarketIndexSpec) -> Dict[str, Any] | None:
         """从东方财富获取 A 股指数实时行情（免费，无需 API Key）"""
         secid = self._EASTMONEY_SECID_MAP.get(spec.tushare_symbol or "")
         if not secid:
@@ -182,7 +234,7 @@ class MarketOverviewService:
                 "User-Agent": "Mozilla/5.0",
                 "Referer": "https://quote.eastmoney.com/",
             }
-            with httpx.Client(timeout=8.0) as client:
+            with httpx.Client(timeout=8.0, follow_redirects=True) as client:
                 resp = client.get(url, params=params, headers=headers)
                 resp.raise_for_status()
                 body = resp.json()
@@ -194,7 +246,6 @@ class MarketOverviewService:
             price = item.get("f43")
             change = item.get("f169")
             change_pct = item.get("f170")
-            prev_close = item.get("f60")
 
             if price is None or price == "-":
                 return None
