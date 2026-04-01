@@ -14,16 +14,16 @@ const axiosInstance = axios.create({
 // 请求拦截器,添加token和身份headers
 axiosInstance.interceptors.request.use(
   (config) => {
-    // 1. Add legacy token (for password-based auth)
+    // 1. Add login token (for password-based auth)
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // 2. Add anchor token (for email binding)
+    // 2. Add anchor token in dedicated header (avoid overriding login token)
     const anchorToken = localStorage.getItem('aguai_anchor_token');
     if (anchorToken) {
-      config.headers.Authorization = `Bearer ${anchorToken}`;
+      config.headers['X-Anchor-Token'] = anchorToken;
     }
 
     // 3. Add anonymous ID header

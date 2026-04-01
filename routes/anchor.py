@@ -53,14 +53,21 @@ class AnchorStatusResponse(BaseModel):
 def get_actor(request: Request) -> dict:
     """
     Extract actor identity from request
-    Priority: 1. Bearer token -> 2. X-Anonymous-Id header
+    Priority: 1. X-Anchor-Token -> 2. Bearer token -> 3. X-Anonymous-Id header
     Returns: {'type': 'anchor'|'anonymous', 'id': str}
     """
-    # Check Authorization header for anchor token
+    # Prefer dedicated anchor header to avoid conflicts with login token
+    anchor_token = request.headers.get('X-Anchor-Token')
+    if anchor_token:
+        anchor_id = anchor_service.verify_anchor_token(anchor_token)
+        if anchor_id:
+            return {'type': 'anchor', 'id': anchor_id}
+
+    # Backward compatibility: fallback to Authorization Bearer
     auth_header = request.headers.get('Authorization', '')
     if auth_header.startswith('Bearer '):
-        token = auth_header.replace('Bearer ', '')
-        anchor_id = anchor_service.verify_anchor_token(token)
+        bearer_token = auth_header.replace('Bearer ', '')
+        anchor_id = anchor_service.verify_anchor_token(bearer_token)
         if anchor_id:
             return {'type': 'anchor', 'id': anchor_id}
     

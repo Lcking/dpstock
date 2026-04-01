@@ -30,24 +30,39 @@ COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # 1 year
 def get_actor(request: Request) -> dict:
     """
     Get actor identity from request
-    Priority: 1. Bearer token (anchor) -> 2. X-Anonymous-Id header -> 3. Cookie
+    Priority: 1. X-Anchor-Token -> 2. Bearer token (anchor) -> 3. X-Anonymous-Id header -> 4. Cookie
     Returns: {'type': 'anchor'|'anonymous', 'id': str}
     """
-    # Check Authorization header for anchor token
+    try:
+        from services.anchor_service import AnchorService
+        import os
+        jwt_secret = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+        anchor_service = AnchorService(jwt_secret)
+    except Exception as e:
+        logger.warning(f"Anchor service init failed: {str(e)}")
+        anchor_service = None
+
+    # Prefer dedicated anchor header to avoid conflicts with login token
+    if anchor_service:
+        anchor_token = request.headers.get('X-Anchor-Token')
+        if anchor_token:
+            try:
+                anchor_id = anchor_service.verify_anchor_token(anchor_token)
+                if anchor_id:
+                    return {'type': 'anchor', 'id': anchor_id}
+            except Exception as e:
+                logger.warning(f"Anchor header token verification failed: {str(e)}")
+
+    # Backward compatibility: fallback to Authorization Bearer
     auth_header = request.headers.get('Authorization', '')
-    if auth_header.startswith('Bearer '):
-        token = auth_header.replace('Bearer ', '')
-        # Verify anchor token
+    if auth_header.startswith('Bearer ') and anchor_service:
+        bearer_token = auth_header.replace('Bearer ', '')
         try:
-            from services.anchor_service import AnchorService
-            import os
-            jwt_secret = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
-            anchor_service = AnchorService(jwt_secret)
-            anchor_id = anchor_service.verify_anchor_token(token)
+            anchor_id = anchor_service.verify_anchor_token(bearer_token)
             if anchor_id:
                 return {'type': 'anchor', 'id': anchor_id}
         except Exception as e:
-            logger.warning(f"Token verification failed: {str(e)}")
+            logger.warning(f"Bearer token verification failed: {str(e)}")
     
     # Check X-Anonymous-Id header
     anonymous_id = request.headers.get('X-Anonymous-Id')
