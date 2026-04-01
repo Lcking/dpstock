@@ -7,9 +7,8 @@ from fastapi import FastAPI, Request, Response, Depends, HTTPException, Backgrou
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any, Generator
+from typing import List, Optional, Dict, Any
 from services.stock_analyzer_service import StockAnalyzerService
 from services.us_stock_service_async import USStockServiceAsync
 from services.fund_service_async import FundServiceAsync
@@ -17,34 +16,26 @@ from services.search_snapshot_service import SearchSnapshotService
 from services.market_overview_service import MarketOverviewService
 import asyncio
 import httpx
-from services.anchor_service import AnchorService
 from services.quota_service import QuotaService
 from services.invite_service import InviteService
 from services.user_service import UserService
 from services.verification_scheduler import start_verification_scheduler
+from auth.dependencies import (
+    require_login,
+    create_user_token,
+    UserContext,
+    REQUIRE_LOGIN,
+    LOGIN_PASSWORD,
+)
 from routes import captcha, auth, judgments, quota, invite, anchor, enhancements, watchlists, compare, journal, user_center
 
 from utils.logger import get_logger
 import uvicorn
 import json
-import secrets
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
+from datetime import datetime
 
-# 获取日志器
 logger = get_logger()
 user_service = UserService()
-
-# JWT相关配置
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_hex(32))
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 10080  # Token过期时间一周
-
-LOGIN_PASSWORD = os.getenv("LOGIN_PASSWORD", "")
-print(LOGIN_PASSWORD)
-
-# 是否需要登录
-REQUIRE_LOGIN = bool(LOGIN_PASSWORD.strip())
 
 
 app = FastAPI(
@@ -130,87 +121,35 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-# 自定义依赖项，在REQUIRE_LOGIN=False时不要求token
-class OptionalOAuth2PasswordBearer(OAuth2PasswordBearer):
-    async def __call__(self, request: Request) -> Optional[str]:
-        if not REQUIRE_LOGIN:
-            return None
-        try:
-            return await super().__call__(request)
-        except HTTPException:
-            if not REQUIRE_LOGIN:
-                return None
-            raise
-
-# 使用自定义的依赖项
-optional_oauth2_scheme = OptionalOAuth2PasswordBearer(tokenUrl="login")
-
-# 创建访问令牌
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-# 验证令牌
-async def verify_token(token: Optional[str] = Depends(optional_oauth2_scheme)):
-    # 如果未设置密码，则不需要验证
-    if not REQUIRE_LOGIN:
-        return "guest"
-        
-    # 如果没有token且不需要登录，返回guest
-    if token is None and not REQUIRE_LOGIN:
-        return "guest"
-        
-    credentials_exception = HTTPException(
-        status_code=401,
-        detail="无效的认证凭据",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
-    # 如果需要登录但没有token，抛出异常
-    if token is None:
-        raise credentials_exception
-        
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        return username
-    except JWTError:
-        raise credentials_exception
-
 # 用户登录接口
 @app.post("/api/login")
 async def login(request: LoginRequest):
-    """用户登录接口"""
-    # 如果未设置密码，表示不需要登录
+    """用户登录接口 — issues a unified JWT"""
     if not REQUIRE_LOGIN:
-        access_token = create_access_token(data={"sub": "guest"})
-        return {"access_token": access_token, "token_type": "bearer"}
-        
+        token = create_user_token(
+            user_id="guest",
+            identity_type="login",
+            sub="guest",
+        )
+        return {"access_token": token, "token_type": "bearer"}
+
     if request.password != LOGIN_PASSWORD:
         logger.warning("登录失败：密码错误")
         raise HTTPException(status_code=401, detail="密码错误")
-    
-    # 创建访问令牌
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": "user"}, expires_delta=access_token_expires
+
+    token = create_user_token(
+        user_id="login_user",
+        identity_type="login",
+        sub="user",
     )
     logger.info("用户登录成功")
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": token, "token_type": "bearer"}
 
 # 检查用户认证状态
 @app.get("/api/check_auth")
-async def check_auth(username: str = Depends(verify_token)):
+async def check_auth(user: UserContext = Depends(require_login)):
     """检查用户认证状态"""
-    return {"authenticated": True, "username": username}
+    return {"authenticated": True, "username": user.user_id}
 
 # 获取系统配置
 @app.get("/api/config")
@@ -228,28 +167,19 @@ async def health():
 # AI分析股票
 @app.post("/api/analyze")
 async def analyze(
-    request: AnalyzeRequest, 
+    request: AnalyzeRequest,
     response: Response,
-    username: str = Depends(verify_token),
-    aguai_uid: Optional[str] = Cookie(None),
-    aguai_ref: Optional[str] = Cookie(None)
+    user: UserContext = Depends(require_login),
+    aguai_ref: Optional[str] = Cookie(None),
 ):
     try:
         logger.info("开始处理分析请求")
         stock_codes = request.stock_codes
         market_type = request.market_type
-        
-        # Initialize quota service
+
         quota_service_instance = QuotaService()
         invite_service_instance = InviteService()
-        canonical_user_id = None
-        if aguai_uid:
-            resolved_user = user_service.resolve_request_user(cookie_uid=aguai_uid)
-            canonical_user_id = resolved_user["user_id"]
-            user_service.migrate_identities_to_user(
-                user_id=canonical_user_id,
-                cookie_uid=aguai_uid,
-            )
+        canonical_user_id = user.user_id
         
         # Quota check for single stock analysis only (batch analysis not subject to quota)
         if len(stock_codes) == 1 and canonical_user_id:
@@ -383,7 +313,7 @@ async def analyze(
 
 # 搜索美股代码
 @app.get("/api/search_us_stocks")
-async def search_us_stocks(keyword: str = "", username: str = Depends(verify_token)):
+async def search_us_stocks(keyword: str = "", user: UserContext = Depends(require_login)):
     try:
         if not keyword:
             raise HTTPException(status_code=400, detail="请输入搜索关键词")
@@ -396,7 +326,7 @@ async def search_us_stocks(keyword: str = "", username: str = Depends(verify_tok
 
 # 搜索 A 股代码
 @app.get("/api/search_a_shares")
-async def search_a_shares(keyword: str = "", username: str = Depends(verify_token)):
+async def search_a_shares(keyword: str = "", user: UserContext = Depends(require_login)):
     try:
         if not keyword:
             raise HTTPException(status_code=400, detail="请输入搜索关键词")
@@ -409,7 +339,7 @@ async def search_a_shares(keyword: str = "", username: str = Depends(verify_toke
 
 # 搜索港股代码
 @app.get("/api/search_hk_shares")
-async def search_hk_shares(keyword: str = "", username: str = Depends(verify_token)):
+async def search_hk_shares(keyword: str = "", user: UserContext = Depends(require_login)):
     try:
         if not keyword:
             raise HTTPException(status_code=400, detail="请输入搜索关键词")
@@ -422,7 +352,7 @@ async def search_hk_shares(keyword: str = "", username: str = Depends(verify_tok
 
 # 全局搜索接口 (A股, 港股, 美股, 基金)
 @app.get("/api/search_global")
-async def search_global(keyword: str = "", market_type: str = "ALL", username: str = Depends(verify_token)):
+async def search_global(keyword: str = "", market_type: str = "ALL", user: UserContext = Depends(require_login)):
     try:
         if not keyword:
             return {"results": []}
@@ -466,7 +396,7 @@ async def search_global(keyword: str = "", market_type: str = "ALL", username: s
 
 # 获取美股详情
 @app.get("/api/us_stock_detail/{symbol}")
-async def get_us_stock_detail(symbol: str, username: str = Depends(verify_token)):
+async def get_us_stock_detail(symbol: str, user: UserContext = Depends(require_login)):
     try:
         if not symbol:
             raise HTTPException(status_code=400, detail="请提供股票代码")
@@ -481,7 +411,7 @@ async def get_us_stock_detail(symbol: str, username: str = Depends(verify_token)
 
 # 获取基金详情
 @app.get("/api/fund_detail/{symbol}")
-async def get_fund_detail(symbol: str, market_type: str = "ETF", username: str = Depends(verify_token)):
+async def get_fund_detail(symbol: str, market_type: str = "ETF", user: UserContext = Depends(require_login)):
     try:
         if not symbol:
             raise HTTPException(status_code=400, detail="请提供基金代码")
@@ -496,7 +426,7 @@ async def get_fund_detail(symbol: str, market_type: str = "ETF", username: str =
 
 # 获取K线数据
 @app.get("/api/kline/{code}")
-async def get_kline(code: str, market_type: str = "A", days: int = 100, username: str = Depends(verify_token)):
+async def get_kline(code: str, market_type: str = "A", days: int = 100, user: UserContext = Depends(require_login)):
     try:
         analyzer = StockAnalyzerService()
         data = await analyzer.get_kline_data(code, market_type, days)
@@ -507,7 +437,7 @@ async def get_kline(code: str, market_type: str = "A", days: int = 100, username
 
 
 @app.get("/api/market-overview")
-async def get_market_overview(response: Response, username: str = Depends(verify_token)):
+async def get_market_overview(response: Response, user: UserContext = Depends(require_login)):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"

@@ -65,10 +65,12 @@ async def test_search_routes_use_snapshot_service_instead_of_remote_sources(monk
     monkeypatch.setattr(web_server, "StockAnalyzerService", MagicMock(side_effect=AssertionError("should not build analyzer for search")))
     monkeypatch.setattr(web_server.us_stock_service, "search_us_stocks", AsyncMock(side_effect=AssertionError("should not query us remote service")))
 
-    a_result = await web_server.search_a_shares(keyword="600", username="guest")
-    hk_result = await web_server.search_hk_shares(keyword="腾讯", username="guest")
-    us_result = await web_server.search_us_stocks(keyword="aapl", username="guest")
-    global_result = await web_server.search_global(keyword="a", market_type="ALL", username="guest")
+    from auth.dependencies import UserContext
+    dummy_user = UserContext(user_id="guest", identity_type="login", is_authenticated=False)
+    a_result = await web_server.search_a_shares(keyword="600", user=dummy_user)
+    hk_result = await web_server.search_hk_shares(keyword="腾讯", user=dummy_user)
+    us_result = await web_server.search_us_stocks(keyword="aapl", user=dummy_user)
+    global_result = await web_server.search_global(keyword="a", market_type="ALL", user=dummy_user)
 
     assert a_result["results"][0]["symbol"] == "600519"
     assert hk_result["results"][0]["symbol"] == "00700"

@@ -1,48 +1,51 @@
 /**
- * Anchor Token Management
- * Manages anchor (email binding) token for cross-device access
+ * Anchor (email binding) status management.
+ *
+ * After the unified-auth migration the anchor token is no longer stored
+ * separately — it is the same token as the main `token` in localStorage.
+ * We keep this module's public API unchanged so existing components
+ * (AnchorStatus, AnchorBindDialog, etc.) continue to work without changes.
+ *
+ * "Is the user email-bound?" is now determined by whether a masked email
+ * is stored in localStorage.
  */
 
-const ANCHOR_TOKEN_KEY = 'aguai_anchor_token';
+const MASKED_EMAIL_KEY = 'aguai_masked_email';
 
 /**
- * Save anchor token after successful binding
- * @param token - JWT token from backend
+ * After a successful email-bind, store the unified token as the main token.
+ * (The backend now returns a unified JWT from verify_and_bind.)
  */
 export function saveAnchorToken(token: string): void {
-    localStorage.setItem(ANCHOR_TOKEN_KEY, token);
-    console.log('[AnchorToken] Saved anchor token');
+    localStorage.setItem('token', token);
+    console.log('[AnchorToken] Saved unified token after email binding');
 }
 
 /**
- * Get anchor token
- * @returns token or null
- */
-export function getAnchorToken(): string | null {
-    return localStorage.getItem(ANCHOR_TOKEN_KEY);
-}
-
-/**
- * Check if user has anchor token (is bound)
- * @returns true if bound
+ * Check if the user has bound their email.
  */
 export function hasAnchorToken(): boolean {
-    return !!localStorage.getItem(ANCHOR_TOKEN_KEY);
+    return !!localStorage.getItem(MASKED_EMAIL_KEY);
 }
 
 /**
- * Clear anchor token (logout)
+ * Get the current auth token (unified).
+ */
+export function getAnchorToken(): string | null {
+    return localStorage.getItem('token');
+}
+
+/**
+ * Clear binding state (logout / unbind).
  */
 export function clearAnchorToken(): void {
-    localStorage.removeItem(ANCHOR_TOKEN_KEY);
-    console.log('[AnchorToken] Cleared anchor token');
+    localStorage.removeItem(MASKED_EMAIL_KEY);
+    console.log('[AnchorToken] Cleared email binding status');
 }
 
-/**
- * Get masked email from localStorage
- * Saved during binding process
- */
-const MASKED_EMAIL_KEY = 'aguai_masked_email';
+// ---------------------------------------------------------------------------
+// Masked email helpers
+// ---------------------------------------------------------------------------
 
 export function saveMaskedEmail(email: string): void {
     localStorage.setItem(MASKED_EMAIL_KEY, email);

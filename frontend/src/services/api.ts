@@ -3,30 +3,38 @@ import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse, MarketO
 import type { JournalListResponse } from '@/types/journal';
 import type { Watchlist, WatchlistSummary } from '@/types/watchlist';
 
-// API前缀
 const API_PREFIX = '/api';
 
-// 创建axios实例
 const axiosInstance = axios.create({
   baseURL: API_PREFIX
 });
 
-// 请求拦截器,添加token和身份headers
+// ---------------------------------------------------------------------------
+// Legacy token migration: move old aguai_anchor_token → token
+// Runs once on module load so existing users keep their identity.
+// ---------------------------------------------------------------------------
+(function migrateOldAnchorToken() {
+  const oldAnchor = localStorage.getItem('aguai_anchor_token');
+  if (oldAnchor && !localStorage.getItem('token')) {
+    localStorage.setItem('token', oldAnchor);
+    localStorage.removeItem('aguai_anchor_token');
+    console.log('[Auth] Migrated legacy anchor token → unified token');
+  } else if (oldAnchor) {
+    localStorage.removeItem('aguai_anchor_token');
+    console.log('[Auth] Cleared stale anchor token (unified token already present)');
+  }
+})();
+
+// ---------------------------------------------------------------------------
+// Request interceptor — single Authorization header + anonymous ID
+// ---------------------------------------------------------------------------
 axiosInstance.interceptors.request.use(
   (config) => {
-    // 1. Add login token (for password-based auth)
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // 2. Add anchor token in dedicated header (avoid overriding login token)
-    const anchorToken = localStorage.getItem('aguai_anchor_token');
-    if (anchorToken) {
-      config.headers['X-Anchor-Token'] = anchorToken;
-    }
-
-    // 3. Add anonymous ID header
     const anonymousId = localStorage.getItem('aguai_anonymous_id');
     if (anonymousId) {
       config.headers['X-Anonymous-Id'] = anonymousId;
@@ -34,28 +42,23 @@ axiosInstance.interceptors.request.use(
 
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error),
 );
 
-// 响应拦截器，处理401错误
+// ---------------------------------------------------------------------------
+// Response interceptor — clear token on 401
+// ---------------------------------------------------------------------------
 axiosInstance.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // 清除token
       localStorage.removeItem('token');
-      // 不要在这里跳转，避免循环重定向
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export const apiService = {
-  // 用户登录
   login: async (request: LoginRequest): Promise<LoginResponse> => {
     try {
       const response = await axiosInstance.post('/login', request);
@@ -77,7 +80,6 @@ export const apiService = {
     }
   },
 
-  // 全局搜索
   searchGlobal: async (keyword: string, marketType: string = 'ALL'): Promise<SearchResult[]> => {
     try {
       const response = await axiosInstance.get('/search_global', {
@@ -90,33 +92,27 @@ export const apiService = {
     }
   },
 
-  // 检查认证状态
   checkAuth: async (): Promise<boolean> => {
     try {
       const response = await axiosInstance.get('/check_auth');
       return response.data.authenticated === true;
     } catch (error) {
-      // 认证失败，清除token
       localStorage.removeItem('token');
       return false;
     }
   },
 
-  // 登出
   logout: () => {
     localStorage.removeItem('token');
-    // 简化登出逻辑
     window.location.href = '/login';
   },
 
-  // 分析股票
   analyzeStocks: async (request: AnalyzeRequest) => {
     return axiosInstance.post('/analyze', request, {
       responseType: 'stream'
     });
   },
 
-  // 搜索美股
   searchUsStocks: async (keyword: string): Promise<SearchResult[]> => {
     try {
       const response = await axiosInstance.get('/search_us_stocks', {
@@ -129,7 +125,6 @@ export const apiService = {
     }
   },
 
-  // 搜索 A 股
   searchAShares: async (keyword: string): Promise<SearchResult[]> => {
     try {
       const response = await axiosInstance.get('/search_a_shares', {
@@ -142,7 +137,6 @@ export const apiService = {
     }
   },
 
-  // 搜索港股
   searchHKShares: async (keyword: string): Promise<SearchResult[]> => {
     try {
       const response = await axiosInstance.get('/search_hk_shares', {
@@ -155,7 +149,6 @@ export const apiService = {
     }
   },
 
-  // 搜索基金
   searchFunds: async (keyword: string, marketType: string = 'ETF'): Promise<SearchResult[]> => {
     try {
       const response = await axiosInstance.get('/search_funds', {
@@ -168,7 +161,6 @@ export const apiService = {
     }
   },
 
-  // 获取公告配置
   getConfig: async () => {
     try {
       const response = await axiosInstance.get('/config');
@@ -197,19 +189,16 @@ export const apiService = {
     }
   },
 
-  // 检查是否需要登录
   checkNeedLogin: async (): Promise<boolean> => {
     try {
       const response = await axiosInstance.get('/need_login');
       return response.data.require_login;
     } catch (error) {
       console.error('检查是否需要登录时出错:', error);
-      // 默认为需要登录，确保安全
       return true;
     }
   },
 
-  // 获取K线数据
   getKlineData: async (code: string, marketType: string = 'A', days: number = 100) => {
     try {
       const response = await axiosInstance.get(`/kline/${code}`, {
@@ -222,7 +211,6 @@ export const apiService = {
     }
   },
 
-  // 获取文章列表
   getArticles: async (limit: number = 20, offset: number = 0, q?: string) => {
     try {
       const response = await axiosInstance.get('/articles', {
@@ -235,7 +223,6 @@ export const apiService = {
     }
   },
 
-  // 获取文章详情
   getArticleDetail: async (articleId: number) => {
     try {
       const response = await axiosInstance.get(`/articles/${articleId}`);
@@ -248,7 +235,6 @@ export const apiService = {
 
   // ========== Judgment API ==========
 
-  // 保存判断快照 (迁移至 Journal 系统)
   saveJudgment: async (data: any) => {
     try {
       const response = await axiosInstance.post('/journal', data);
@@ -259,7 +245,6 @@ export const apiService = {
     }
   },
 
-  // 获取我的判断列表
   getMyJudgments: async (limit: number = 50) => {
     try {
       const response = await axiosInstance.get('/v1/me/judgments', {
@@ -272,7 +257,6 @@ export const apiService = {
     }
   },
 
-  // 获取判断详情
   getJudgmentDetail: async (judgmentId: string) => {
     try {
       const response = await axiosInstance.get(`/v1/judgments/${judgmentId}`);
@@ -283,7 +267,6 @@ export const apiService = {
     }
   },
 
-  // 获取待复盘数量
   getDueCount: async (): Promise<number> => {
     try {
       const response = await axiosInstance.get('/journal/due-count');
@@ -294,7 +277,6 @@ export const apiService = {
     }
   },
 
-  // 获取判断记录列表 (新版 Journal)
   getJournalRecords: async (params: { status?: string, ts_code?: string, page?: number } = {}): Promise<JournalListResponse> => {
     try {
       const response = await axiosInstance.get('/journal', { params });
@@ -305,7 +287,6 @@ export const apiService = {
     }
   },
 
-  // 复盘判断记录
   reviewRecord: async (recordId: string, notes: string | null) => {
     try {
       const response = await axiosInstance.post(`/journal/${recordId}/review`, { notes });
@@ -316,7 +297,6 @@ export const apiService = {
     }
   },
 
-  // 删除判断记录（Journal）
   deleteJournalRecord: async (recordId: string) => {
     try {
       const response = await axiosInstance.delete(`/journal/${recordId}`);
@@ -327,7 +307,6 @@ export const apiService = {
     }
   },
 
-  // 删除判断
   deleteJudgment: async (judgmentId: string): Promise<void> => {
     const response = await axiosInstance.delete(`/v1/judgments/${judgmentId}`);
     return response.data;
@@ -382,7 +361,6 @@ export const apiService = {
 
   // ========== Quota API ==========
 
-  // 获取额度状态
   getQuotaStatus: async () => {
     try {
       const response = await axiosInstance.get('/v1/quota/status');
@@ -393,7 +371,6 @@ export const apiService = {
     }
   },
 
-  // 检查额度
   checkQuota: async (stockCode: string) => {
     try {
       const response = await axiosInstance.post('/v1/quota/check', {
@@ -408,7 +385,6 @@ export const apiService = {
 
   // ========== Invite API ==========
 
-  // 生成邀请码
   generateInviteCode: async () => {
     try {
       const response = await axiosInstance.post('/v1/invite/generate');
@@ -419,7 +395,6 @@ export const apiService = {
     }
   },
 
-  // 接受邀请
   acceptInvite: async (code: string) => {
     try {
       const response = await axiosInstance.get('/v1/invite/accept', {
@@ -434,7 +409,6 @@ export const apiService = {
 
   // ========== Anchor API (Email Binding) ==========
 
-  // 发送验证码到邮箱
   sendVerificationCode: async (email: string) => {
     try {
       const response = await axiosInstance.post('/anchor/send_code', {
@@ -447,7 +421,6 @@ export const apiService = {
     }
   },
 
-  // 验证验证码并绑定邮箱
   verifyAndBind: async (email: string, code: string) => {
     try {
       const response = await axiosInstance.post('/anchor/verify_and_bind', {
@@ -461,7 +434,6 @@ export const apiService = {
     }
   },
 
-  // 获取anchor状态
   getAnchorStatus: async () => {
     try {
       const response = await axiosInstance.get('/anchor/status');

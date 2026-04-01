@@ -80,7 +80,7 @@ def test_importing_judgments_route_does_not_construct_service_eagerly(monkeypatc
 
     module = importlib.import_module("routes.judgments")
 
-    assert hasattr(module, "get_actor")
+    assert hasattr(module, "router")
 
 
 def test_importing_admin_route_does_not_construct_service_eagerly(monkeypatch):
@@ -231,7 +231,9 @@ async def test_search_global_returns_partial_results_when_us_search_times_out(mo
     monkeypatch.setattr(web_server, "StockAnalyzerService", _DummyAnalyzer)
     monkeypatch.setattr(web_server.us_stock_service, "search_us_stocks", _slow_us_search)
 
-    result = await web_server.search_global(keyword="600519", market_type="ALL", username="guest")
+    from auth.dependencies import UserContext
+    dummy_user = UserContext(user_id="guest", identity_type="login", is_authenticated=False)
+    result = await web_server.search_global(keyword="600519", market_type="ALL", user=dummy_user)
 
     assert result["results"]
     assert result["results"][0]["value"] == "600519"
