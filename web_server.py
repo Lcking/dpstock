@@ -226,25 +226,44 @@ async def analyze(
                 # 单个股票分析流式处理
                 input_code = stock_codes[0].strip()
                 logger.info(f"开始单股流式分析: {input_code}")
-                
-                # 在发送init消息前解析代码
-                try:
-                    resolved_code, resolved_name = await asyncio.to_thread(analyzer.data_provider.resolve_stock_code, input_code, market_type)
-                    target_code = resolved_code if resolved_code else input_code
-                    logger.info(f"解析结果: {input_code} -> {target_code} ({resolved_name})")
-                except Exception as e:
-                    logger.error(f"解析股票代码出错: {e}")
-                    target_code = input_code
 
-                stock_code_json = json.dumps(target_code)
+                # 先发送 init，避免前端在首包前无限等待
+                stock_code_json = json.dumps(input_code)
                 init_message = f'{{"stream_type": "single", "stock_code": {stock_code_json}}}\n'
                 yield init_message
+
+                # 再解析代码；解析超时则回退原始代码
+                target_code = input_code
+                try:
+                    resolved_code, resolved_name = await asyncio.wait_for(
+                        asyncio.to_thread(analyzer.data_provider.resolve_stock_code, input_code, market_type),
+                        timeout=8.0,
+                    )
+                    target_code = resolved_code if resolved_code else input_code
+                    logger.info(f"解析结果: {input_code} -> {target_code} ({resolved_name})")
+                except asyncio.TimeoutError:
+                    logger.warning(f"解析股票代码超时，使用原始代码继续: {input_code}")
+                except Exception as e:
+                    logger.error(f"解析股票代码出错: {e}")
                 
                 logger.debug(f"开始处理股票 {target_code} 的流式响应")
                 chunk_count = 0
-                
-                # 使用异步生成器
-                async for chunk in analyzer.analyze_stock(target_code, market_type, stream=True):
+
+                # 使用异步生成器，并对每个 chunk 设置超时，避免连接无输出挂起
+                stream_iter = analyzer.analyze_stock(target_code, market_type, stream=True)
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(stream_iter.__anext__(), timeout=90.0)
+                    except StopAsyncIteration:
+                        break
+                    except asyncio.TimeoutError:
+                        logger.error(f"分析流超时（90s无输出）: {target_code}")
+                        timeout_payload = json.dumps({
+                            "stock_code": target_code,
+                            "error": "分析超时，请稍后重试",
+                        }, ensure_ascii=False)
+                        yield timeout_payload + '\n'
+                        break
                     chunk_count += 1
                     yield chunk + '\n'
                 
