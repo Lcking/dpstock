@@ -3,6 +3,10 @@ services:
     build: .
     container_name: stock-scanner-app
     restart: unless-stopped
+    # autoheal 容器会监听这个 label：健康检查失败时自动 docker restart 本容器
+    # 用于解决"网站活着但诊股链路静默挂死"的月度复发问题
+    labels:
+      - autoheal=true
     environment:
       - API_TYPE=${API_TYPE}
       - API_KEY=${API_KEY}
@@ -61,6 +65,20 @@ services:
       - ./certbot/www:/var/www/certbot:rw
       - ./certbot/conf:/etc/letsencrypt:rw
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done;'"
+
+  # Watchdog：监听带 autoheal=true label 的容器，healthcheck 持续 unhealthy 就自动 docker restart
+  # 这是 docker compose 里实现"健康检查失败自动重启"的标准做法（compose 自身不会因 healthcheck 失败重启）
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: stock-scanner-autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+      - DOCKER_SOCK=/var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 networks:
   stock-scanner-network:

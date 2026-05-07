@@ -160,10 +160,61 @@ async def get_config():
         'announcement': os.getenv('ANNOUNCEMENT_TEXT') or ''
     }
 
-# 健康检查（用于 Docker healthcheck）
+# 健康检查（用于 Docker healthcheck + 外部 watchdog）
+# 真实健康：覆盖"网站活着但子链路死了"这种月度复发故障
+# 任一关键依赖失败 -> 503，Docker healthcheck 会标记 unhealthy，autoheal 自动重启容器
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "ts": datetime.utcnow().isoformat() + "Z"}
+    import sqlite3
+    import shutil
+
+    checks: Dict[str, str] = {}
+    overall_ok = True
+
+    # 1) DB 可读：SQLite 锁累积/损坏会让分析归档静默失败
+    db_path = os.getenv("DB_PATH", "/app/data/stocks.db")
+    def _ping_db():
+        conn = sqlite3.connect(db_path, timeout=2.0)
+        try:
+            conn.execute("SELECT 1").fetchone()
+        finally:
+            conn.close()
+    try:
+        await asyncio.to_thread(_ping_db)
+        checks["db"] = "ok"
+    except Exception as e:
+        checks["db"] = f"fail: {type(e).__name__}: {e}"
+        overall_ok = False
+
+    # 2) AI 关键配置存在：仅检测配置就位，不发起真实上游调用，避免把上游故障当成本服务故障
+    if os.getenv("API_URL") and os.getenv("API_KEY"):
+        checks["ai_config"] = "ok"
+    else:
+        checks["ai_config"] = "missing"
+        overall_ok = False
+
+    # 3) 数据目录磁盘余量：日志/归档表写入路径阻塞是常见月度复发原因
+    try:
+        data_dir = os.path.dirname(db_path) or "/app/data"
+        usage = shutil.disk_usage(data_dir)
+        free_mb = usage.free // (1024 * 1024)
+        if free_mb < 100:
+            checks["disk"] = f"low: {free_mb}MB free"
+            overall_ok = False
+        else:
+            checks["disk"] = f"ok: {free_mb}MB free"
+    except Exception as e:
+        checks["disk"] = f"fail: {type(e).__name__}: {e}"
+        overall_ok = False
+
+    body = {
+        "ok": overall_ok,
+        "ts": datetime.utcnow().isoformat() + "Z",
+        "checks": checks,
+    }
+    if not overall_ok:
+        return JSONResponse(status_code=503, content=body)
+    return body
 
 
 @app.get("/api/ops/analyze-slo")
