@@ -490,7 +490,29 @@ function processStreamData(text: string) {
   try {
     // 尝试解析为JSON
     const data = JSON.parse(text);
-    
+
+    // 心跳包：仅用于保持连接活跃，前端无需 UI 变更
+    if (data && data.event === 'heartbeat') {
+      return;
+    }
+
+    // 服务端结束帧：将仍在 analyzing 的标的收口，结束本次会话
+    if (data && data.event === 'stream_end') {
+      analyzedStocks.value = analyzedStocks.value.map(stock => {
+        if (stock.analysisStatus === 'analyzing' || stock.analysisStatus === 'waiting') {
+          return {
+            ...stock,
+            analysisStatus: data.status === 'timeout' || data.status === 'error'
+              ? 'error' as const
+              : 'completed' as const,
+          };
+        }
+        return stock;
+      });
+      isAnalyzing.value = false;
+      return;
+    }
+
     // 判断是初始消息还是更新消息
     if (data.stream_type === 'single' || data.stream_type === 'batch') {
       // 初始消息

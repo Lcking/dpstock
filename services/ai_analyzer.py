@@ -551,7 +551,8 @@ class AIAnalyzer:
                                         if content is None or content == "":
                                             continue
 
-                                        logger.info(f"AI返回delta内容: {content}")
+                                        # 避免逐 token INFO 日志淹没磁盘与拖慢流式吞吐
+                                        logger.debug(f"AI返回delta内容: {content[:120]}")
                                         
                                         chunk_count += 1
                                         buffer += content

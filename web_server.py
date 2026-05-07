@@ -229,6 +229,7 @@ async def analyze(
         # 定义流式生成器
         async def generate_stream():
             import asyncio
+            import time
             try:
                 if len(stock_codes) == 1:
                     # 单个股票分析流式处理
@@ -258,20 +259,44 @@ async def analyze(
                     
                     logger.debug(f"开始处理股票 {target_code} 的流式响应")
                     chunk_count = 0
+                    completed_seen = False
 
                     # 使用异步生成器，并对每个 chunk 设置超时，避免连接无输出挂起
                     stream_iter = analyzer.analyze_stock(target_code, market_type, stream=True)
+                    stream_idle_timeout_s = 90.0
+                    heartbeat_interval_s = 10.0
+                    idle_deadline = time.monotonic() + stream_idle_timeout_s
                     while True:
                         try:
-                            chunk = await asyncio.wait_for(stream_iter.__anext__(), timeout=90.0)
+                            remaining = idle_deadline - time.monotonic()
+                            if remaining <= 0:
+                                raise asyncio.TimeoutError()
+                            chunk = await asyncio.wait_for(
+                                stream_iter.__anext__(),
+                                timeout=min(heartbeat_interval_s, remaining),
+                            )
                         except StopAsyncIteration:
                             analyze_slo_tracker.finish(slo_sample, "completed")
                             break
                         except asyncio.TimeoutError:
+                            if time.monotonic() < idle_deadline:
+                                # 心跳包：保持连接活跃并让前端可观测“仍在处理中”
+                                heartbeat_payload = json.dumps({
+                                    "stock_code": target_code,
+                                    "status": "analyzing",
+                                    "event": "heartbeat",
+                                }, ensure_ascii=False)
+                                if slo_sample.first_chunk_ms is None:
+                                    analyze_slo_tracker.mark_first_chunk(slo_sample)
+                                analyze_slo_tracker.add_chunk(slo_sample)
+                                yield heartbeat_payload + '\n'
+                                continue
+
                             logger.error(f"分析流超时（90s无输出）: {target_code}")
                             timeout_payload = json.dumps({
                                 "stock_code": target_code,
                                 "error": "分析超时，请稍后重试",
+                                "status": "timeout",
                             }, ensure_ascii=False)
                             if slo_sample.first_chunk_ms is None:
                                 analyze_slo_tracker.mark_first_chunk(slo_sample)
@@ -279,10 +304,18 @@ async def analyze(
                             analyze_slo_tracker.finish(slo_sample, "timeout")
                             yield timeout_payload + '\n'
                             break
+
+                        idle_deadline = time.monotonic() + stream_idle_timeout_s
                         chunk_count += 1
                         if slo_sample.first_chunk_ms is None:
                             analyze_slo_tracker.mark_first_chunk(slo_sample)
                         analyze_slo_tracker.add_chunk(slo_sample)
+                        try:
+                            chunk_obj = json.loads(chunk)
+                            if chunk_obj.get("status") == "completed":
+                                completed_seen = True
+                        except Exception:
+                            pass
                         yield chunk + '\n'
                     
                     if slo_sample.status == "running":
@@ -290,6 +323,14 @@ async def analyze(
                         logger.info(f"股票 {target_code} 流式分析完成，共发送 {chunk_count} 个块")
                     else:
                         logger.warning(f"股票 {target_code} 流式提前结束，status={slo_sample.status}, chunks={chunk_count}")
+
+                    end_payload = json.dumps({
+                        "stock_code": target_code,
+                        "event": "stream_end",
+                        "status": "completed" if completed_seen else slo_sample.status,
+                    }, ensure_ascii=False)
+                    analyze_slo_tracker.add_chunk(slo_sample)
+                    yield end_payload + '\n'
 
                     # Record analysis consumption
                     if canonical_user_id:
@@ -340,6 +381,13 @@ async def analyze(
 
                     logger.info(f"批量流式分析完成，共发送 {chunk_count} 个块")
                     analyze_slo_tracker.finish(slo_sample, "completed")
+                    end_payload = json.dumps({
+                        "stock_codes": resolved_codes,
+                        "event": "stream_end",
+                        "status": "completed",
+                    }, ensure_ascii=False)
+                    analyze_slo_tracker.add_chunk(slo_sample)
+                    yield end_payload + '\n'
             except Exception as stream_exc:
                 logger.error(f"分析流异常: {stream_exc}")
                 if slo_sample.status == "running":
@@ -773,4 +821,5 @@ else:
 
 
 if __name__ == '__main__':
-    uvicorn.run("web_server:app", host="0.0.0.0", port=8888, reload=True)
+    reload_enabled = os.getenv("UVICORN_RELOAD", "false").lower() == "true"
+    uvicorn.run("web_server:app", host="0.0.0.0", port=8888, reload=reload_enabled)

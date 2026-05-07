@@ -1,5 +1,6 @@
 import json
 import asyncio
+import math
 from copy import deepcopy
 from datetime import datetime
 from typing import List, AsyncGenerator, Dict, Any, Optional
@@ -14,6 +15,24 @@ from services.archive_service import ArchiveService
 logger = get_logger()
 
 
+def _json_safe(value: Any) -> Any:
+    """递归清洗 NaN/Inf，确保输出为标准 JSON。"""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+def _safe_dumps(value: Any, ensure_ascii: bool = False) -> str:
+    """统一 JSON 序列化入口，避免 NaN/Inf 进入响应流。"""
+    return json.dumps(_json_safe(value), ensure_ascii=ensure_ascii, allow_nan=False)
+
+
 def _normalize_turnover_rate(value: Any) -> Optional[float]:
     """将原始换手率标准化为可展示的百分比值。"""
     if value is None:
@@ -25,6 +44,9 @@ def _normalize_turnover_rate(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
 
+    # JSON 不支持 NaN/Inf，统一按缺失值处理
+    if not math.isfinite(turnover):
+        return None
     if turnover <= 0:
         return None
     return round(turnover, 2)
@@ -281,8 +303,8 @@ class StockAnalyzerService:
             }
             
             # 输出基本分析结果
-            logger.info(f"基本分析结果: {json.dumps(basic_result)}")
-            yield json.dumps(basic_result)
+            logger.info(f"基本分析结果: {_safe_dumps(basic_result)}")
+            yield _safe_dumps(basic_result)
             
             # 使用AI进行深入分析
             full_analysis = ""
@@ -306,11 +328,11 @@ class StockAnalyzerService:
                                 turnover_rate,
                             )
                             chunk_data["analysis_v1"] = analysis_v1
-                            outgoing_chunk = json.dumps(chunk_data, ensure_ascii=False)
+                            outgoing_chunk = _safe_dumps(chunk_data, ensure_ascii=False)
                         if chunk_data.get("status") == "completed":
                             chunk_data["turnover_rate"] = turnover_rate
                             chunk_data["turnover_profile"] = turnover_profile
-                            outgoing_chunk = json.dumps(chunk_data, ensure_ascii=False)
+                            outgoing_chunk = _safe_dumps(chunk_data, ensure_ascii=False)
                     except:
                         pass
                 else:
@@ -327,7 +349,7 @@ class StockAnalyzerService:
                             chunk_data["analysis_v1"] = analysis_v1
                         chunk_data["turnover_rate"] = turnover_rate
                         chunk_data["turnover_profile"] = turnover_profile
-                        outgoing_chunk = json.dumps(chunk_data, ensure_ascii=False)
+                        outgoing_chunk = _safe_dumps(chunk_data, ensure_ascii=False)
                     except:
                         pass
                 
