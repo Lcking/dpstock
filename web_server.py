@@ -276,7 +276,6 @@ async def analyze(
                                 timeout=min(heartbeat_interval_s, remaining),
                             )
                         except StopAsyncIteration:
-                            analyze_slo_tracker.finish(slo_sample, "completed")
                             break
                         except asyncio.TimeoutError:
                             if time.monotonic() < idle_deadline:
@@ -320,9 +319,16 @@ async def analyze(
                     
                     if slo_sample.status == "running":
                         analyze_slo_tracker.finish(slo_sample, "completed")
+                    if slo_sample.status == "completed":
                         logger.info(f"股票 {target_code} 流式分析完成，共发送 {chunk_count} 个块")
+                    elif slo_sample.status == "timeout":
+                        logger.warning(
+                            f"股票 {target_code} 流式因超时结束，chunks={chunk_count}"
+                        )
                     else:
-                        logger.warning(f"股票 {target_code} 流式提前结束，status={slo_sample.status}, chunks={chunk_count}")
+                        logger.warning(
+                            f"股票 {target_code} 流式未正常完成，status={slo_sample.status}, chunks={chunk_count}"
+                        )
 
                     end_payload = json.dumps({
                         "stock_code": target_code,

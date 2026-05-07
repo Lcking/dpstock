@@ -1,4 +1,5 @@
 import json
+import math
 import asyncio
 import math
 from copy import deepcopy
@@ -44,12 +45,32 @@ def _normalize_turnover_rate(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
 
-    # JSON 不支持 NaN/Inf，统一按缺失值处理
-    if not math.isfinite(turnover):
-        return None
-    if turnover <= 0:
+    if not math.isfinite(turnover) or turnover <= 0:
         return None
     return round(turnover, 2)
+
+
+def _sanitize_for_json(obj: Any) -> Any:
+    """将 NaN/Inf 等无法被标准 JSON 表示的浮点值转为 None，避免前端 JSON.parse 失败。"""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    if isinstance(obj, (str,)):
+        return obj
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, int):
+        return obj
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    try:
+        f = float(obj)
+        return f if math.isfinite(f) else None
+    except (TypeError, ValueError):
+        return obj
 
 
 def _build_turnover_profile(turnover_rate: Optional[float]) -> Optional[Dict[str, str]]:
