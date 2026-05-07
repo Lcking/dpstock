@@ -265,7 +265,6 @@ async def analyze(
                         try:
                             chunk = await asyncio.wait_for(stream_iter.__anext__(), timeout=90.0)
                         except StopAsyncIteration:
-                            analyze_slo_tracker.finish(slo_sample, "completed")
                             break
                         except asyncio.TimeoutError:
                             logger.error(f"分析流超时（90s无输出）: {target_code}")
@@ -287,9 +286,16 @@ async def analyze(
                     
                     if slo_sample.status == "running":
                         analyze_slo_tracker.finish(slo_sample, "completed")
+                    if slo_sample.status == "completed":
                         logger.info(f"股票 {target_code} 流式分析完成，共发送 {chunk_count} 个块")
+                    elif slo_sample.status == "timeout":
+                        logger.warning(
+                            f"股票 {target_code} 流式因超时结束，chunks={chunk_count}"
+                        )
                     else:
-                        logger.warning(f"股票 {target_code} 流式提前结束，status={slo_sample.status}, chunks={chunk_count}")
+                        logger.warning(
+                            f"股票 {target_code} 流式未正常完成，status={slo_sample.status}, chunks={chunk_count}"
+                        )
 
                     # Record analysis consumption
                     if canonical_user_id:
@@ -773,4 +779,7 @@ else:
 
 
 if __name__ == '__main__':
-    uvicorn.run("web_server:app", host="0.0.0.0", port=8888, reload=True)
+    # 生产默认关闭 reload，避免 worker 抖动放大长连接流式请求的不稳定。
+    # 本地开发可设置：UVICORN_RELOAD=1
+    _reload = os.environ.get("UVICORN_RELOAD", "").lower() in ("1", "true", "yes")
+    uvicorn.run("web_server:app", host="0.0.0.0", port=8888, reload=_reload)

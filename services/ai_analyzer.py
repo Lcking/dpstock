@@ -513,66 +513,89 @@ class AIAnalyzer:
                             })
                             return
                             
-                        # 处理流式响应
+                        # 处理流式响应（按行缓冲，避免 TCP 拆包导致半行 JSON 被误解析）
                         buffer = ""
                         collected_messages = []
                         chunk_count = 0
-                        
+                        sse_line_buf = ""
+
                         async for chunk in response.aiter_text():
-                            if chunk:
-                                lines = chunk.strip().split('\n')
-                                for raw_line in lines:
-                                    line = raw_line.strip()
-                                    if not line:
+                            if not chunk:
+                                continue
+                            sse_line_buf += chunk
+                            while "\n" in sse_line_buf:
+                                raw_line, sse_line_buf = sse_line_buf.split("\n", 1)
+                                line = raw_line.strip()
+                                if not line:
+                                    continue
+
+                                # 确保统一去除 data: 前缀
+                                while line.startswith("data: "):
+                                    line = line[len("data: "):]
+
+                                if line == "[DONE]":
+                                    logger.debug("收到流结束标记 [DONE]")
+                                    continue
+
+                                try:
+                                    chunk_data = json.loads(line)
+
+                                    # 检查是否有 finish_reason（一般是最后一次标记）
+                                    finish_reason = chunk_data.get("choices", [{}])[0].get("finish_reason")
+                                    if finish_reason == "stop":
+                                        logger.debug("收到 finish_reason=stop，流结束")
                                         continue
 
-                                    # 确保统一去除 data: 前缀
-                                    while line.startswith("data: "):
-                                        line = line[len("data: "):]
+                                    # 解析 delta
+                                    delta = chunk_data.get("choices", [{}])[0].get("delta", {})
+                                    content = delta.get("content")
 
-                                    if line == "[DONE]":
-                                        logger.debug("收到流结束标记 [DONE]")
+                                    # 过滤 None 和空字符串
+                                    if content is None or content == "":
                                         continue
 
-                                    try:
-                                        chunk_data = json.loads(line)
+                                    logger.info(f"AI返回delta内容: {content}")
 
-                                        # 检查是否有 finish_reason（一般是最后一次标记）
-                                        finish_reason = chunk_data.get("choices", [{}])[0].get("finish_reason")
-                                        if finish_reason == "stop":
-                                            logger.debug("收到 finish_reason=stop，流结束")
-                                            continue
+                                    chunk_count += 1
+                                    buffer += content
+                                    collected_messages.append(content)
 
-                                        # 解析 delta
-                                        delta = chunk_data.get("choices", [{}])[0].get("delta", {})
-                                        content = delta.get("content")
-                                        
-                                        # 过滤 None 和空字符串
-                                        if content is None or content == "":
-                                            continue
-
-                                        logger.info(f"AI返回delta内容: {content}")
-                                        
-                                        chunk_count += 1
-                                        buffer += content
-                                        collected_messages.append(content)
-
+                                    yield json.dumps({
+                                        "stock_code": stock_code,
+                                        "ai_analysis_chunk": content,
+                                        "status": "analyzing"
+                                    })
+                                except json.JSONDecodeError:
+                                    logger.error(f"JSON解析错误，块内容: {raw_line[:500]}")
+                                    if "streaming failed after retries" in raw_line.lower():
+                                        logger.error("检测到流式传输失败")
                                         yield json.dumps({
                                             "stock_code": stock_code,
-                                            "ai_analysis_chunk": content,
-                                            "status": "analyzing"
+                                            "error": "流式传输失败，请稍后重试",
+                                            "status": "error"
                                         })
-                                    except json.JSONDecodeError:
-                                        logger.error(f"JSON解析错误，块内容: {raw_line}")
-                                        if "streaming failed after retries" in raw_line.lower():
-                                            logger.error("检测到流式传输失败")
-                                            yield json.dumps({
-                                                "stock_code": stock_code,
-                                                "error": "流式传输失败，请稍后重试",
-                                                "status": "error"
-                                            })
-                                            return
-                                        continue
+                                        return
+                                    continue
+
+                        tail = sse_line_buf.strip()
+                        if tail and tail != "[DONE]":
+                            if tail.startswith("data: "):
+                                tail = tail[len("data: "):]
+                            try:
+                                chunk_data = json.loads(tail)
+                                delta = chunk_data.get("choices", [{}])[0].get("delta", {})
+                                content = delta.get("content")
+                                if content:
+                                    chunk_count += 1
+                                    buffer += content
+                                    collected_messages.append(content)
+                                    yield json.dumps({
+                                        "stock_code": stock_code,
+                                        "ai_analysis_chunk": content,
+                                        "status": "analyzing"
+                                    })
+                            except json.JSONDecodeError:
+                                logger.debug(f"流末尾残留非完整 JSON，已忽略: {tail[:200]}")
 
                         
                         logger.info(f"AI流式处理完成，共收到 {chunk_count} 个内容片段，总长度: {len(buffer)}")
