@@ -20,6 +20,7 @@ from services.quota_service import QuotaService
 from services.invite_service import InviteService
 from services.user_service import UserService
 from services.verification_scheduler import start_verification_scheduler
+from services.analyze_slo_tracker import analyze_slo_tracker
 from auth.dependencies import (
     require_login,
     create_user_token,
@@ -163,6 +164,12 @@ async def get_config():
 @app.get("/api/health")
 async def health():
     return {"ok": True, "ts": datetime.utcnow().isoformat() + "Z"}
+
+
+@app.get("/api/ops/analyze-slo")
+async def analyze_slo(user: UserContext = Depends(require_login)):
+    """Runtime SLO snapshot for /api/analyze."""
+    return analyze_slo_tracker.snapshot()
     
 # AI分析股票
 @app.post("/api/analyze")
@@ -172,6 +179,7 @@ async def analyze(
     user: UserContext = Depends(require_login),
     aguai_ref: Optional[str] = Cookie(None),
 ):
+    slo_sample = analyze_slo_tracker.start()
     try:
         logger.info("开始处理分析请求")
         stock_codes = request.stock_codes
@@ -221,110 +229,138 @@ async def analyze(
         # 定义流式生成器
         async def generate_stream():
             import asyncio
-            
-            if len(stock_codes) == 1:
-                # 单个股票分析流式处理
-                input_code = stock_codes[0].strip()
-                logger.info(f"开始单股流式分析: {input_code}")
+            try:
+                if len(stock_codes) == 1:
+                    # 单个股票分析流式处理
+                    input_code = stock_codes[0].strip()
+                    logger.info(f"开始单股流式分析: {input_code}")
 
-                # 先发送 init，避免前端在首包前无限等待
-                stock_code_json = json.dumps(input_code)
-                init_message = f'{{"stream_type": "single", "stock_code": {stock_code_json}}}\n'
-                yield init_message
+                    # 先发送 init，避免前端在首包前无限等待
+                    stock_code_json = json.dumps(input_code)
+                    init_message = f'{{"stream_type": "single", "stock_code": {stock_code_json}}}\n'
+                    analyze_slo_tracker.mark_first_chunk(slo_sample)
+                    analyze_slo_tracker.add_chunk(slo_sample)
+                    yield init_message
 
-                # 再解析代码；解析超时则回退原始代码
-                target_code = input_code
-                try:
-                    resolved_code, resolved_name = await asyncio.wait_for(
-                        asyncio.to_thread(analyzer.data_provider.resolve_stock_code, input_code, market_type),
-                        timeout=8.0,
-                    )
-                    target_code = resolved_code if resolved_code else input_code
-                    logger.info(f"解析结果: {input_code} -> {target_code} ({resolved_name})")
-                except asyncio.TimeoutError:
-                    logger.warning(f"解析股票代码超时，使用原始代码继续: {input_code}")
-                except Exception as e:
-                    logger.error(f"解析股票代码出错: {e}")
-                
-                logger.debug(f"开始处理股票 {target_code} 的流式响应")
-                chunk_count = 0
-
-                # 使用异步生成器，并对每个 chunk 设置超时，避免连接无输出挂起
-                stream_iter = analyzer.analyze_stock(target_code, market_type, stream=True)
-                while True:
+                    # 再解析代码；解析超时则回退原始代码
+                    target_code = input_code
                     try:
-                        chunk = await asyncio.wait_for(stream_iter.__anext__(), timeout=90.0)
-                    except StopAsyncIteration:
-                        break
-                    except asyncio.TimeoutError:
-                        logger.error(f"分析流超时（90s无输出）: {target_code}")
-                        timeout_payload = json.dumps({
-                            "stock_code": target_code,
-                            "error": "分析超时，请稍后重试",
-                        }, ensure_ascii=False)
-                        yield timeout_payload + '\n'
-                        break
-                    chunk_count += 1
-                    yield chunk + '\n'
-                
-                logger.info(f"股票 {target_code} 流式分析完成，共发送 {chunk_count} 个块")
-                
-                # Record analysis consumption (only for single stock with aguai_uid)
-                if canonical_user_id:
-                    quota_service_instance.record_analysis(
-                        user_id=canonical_user_id,
-                        stock_code=target_code
-                    )
-                    logger.info(f"Recorded analysis for user {canonical_user_id}, stock {target_code}")
-                    
-                    # Check and reward inviter if applicable
-                    if aguai_ref:
-                        reward_result = invite_service_instance.check_and_reward_inviter(
-                            invitee_id=canonical_user_id,
-                            referrer_id=aguai_ref
+                        resolved_code, resolved_name = await asyncio.wait_for(
+                            asyncio.to_thread(analyzer.data_provider.resolve_stock_code, input_code, market_type),
+                            timeout=8.0,
                         )
-                        if reward_result:
-                            logger.info(f"Invite reward granted: {reward_result}")
+                        target_code = resolved_code if resolved_code else input_code
+                        logger.info(f"解析结果: {input_code} -> {target_code} ({resolved_name})")
+                    except asyncio.TimeoutError:
+                        logger.warning(f"解析股票代码超时，使用原始代码继续: {input_code}")
+                    except Exception as e:
+                        logger.error(f"解析股票代码出错: {e}")
+                    
+                    logger.debug(f"开始处理股票 {target_code} 的流式响应")
+                    chunk_count = 0
 
-            else:
-                # 批量分析流式处理
-                logger.info(f"开始批量流式分析: {stock_codes}")
+                    # 使用异步生成器，并对每个 chunk 设置超时，避免连接无输出挂起
+                    stream_iter = analyzer.analyze_stock(target_code, market_type, stream=True)
+                    while True:
+                        try:
+                            chunk = await asyncio.wait_for(stream_iter.__anext__(), timeout=90.0)
+                        except StopAsyncIteration:
+                            analyze_slo_tracker.finish(slo_sample, "completed")
+                            break
+                        except asyncio.TimeoutError:
+                            logger.error(f"分析流超时（90s无输出）: {target_code}")
+                            timeout_payload = json.dumps({
+                                "stock_code": target_code,
+                                "error": "分析超时，请稍后重试",
+                            }, ensure_ascii=False)
+                            if slo_sample.first_chunk_ms is None:
+                                analyze_slo_tracker.mark_first_chunk(slo_sample)
+                            analyze_slo_tracker.add_chunk(slo_sample)
+                            analyze_slo_tracker.finish(slo_sample, "timeout")
+                            yield timeout_payload + '\n'
+                            break
+                        chunk_count += 1
+                        if slo_sample.first_chunk_ms is None:
+                            analyze_slo_tracker.mark_first_chunk(slo_sample)
+                        analyze_slo_tracker.add_chunk(slo_sample)
+                        yield chunk + '\n'
+                    
+                    if slo_sample.status == "running":
+                        analyze_slo_tracker.finish(slo_sample, "completed")
+                        logger.info(f"股票 {target_code} 流式分析完成，共发送 {chunk_count} 个块")
+                    else:
+                        logger.warning(f"股票 {target_code} 流式提前结束，status={slo_sample.status}, chunks={chunk_count}")
+
+                    # Record analysis consumption
+                    if canonical_user_id:
+                        quota_service_instance.record_analysis(
+                            user_id=canonical_user_id,
+                            stock_code=target_code
+                        )
+                        logger.info(f"Recorded analysis for user {canonical_user_id}, stock {target_code}")
+                    
+                        if aguai_ref:
+                            reward_result = invite_service_instance.check_and_reward_inviter(
+                                invitee_id=canonical_user_id,
+                                referrer_id=aguai_ref
+                            )
+                            if reward_result:
+                                logger.info(f"Invite reward granted: {reward_result}")
+
+                else:
+                    # 批量分析流式处理
+                    logger.info(f"开始批量流式分析: {stock_codes}")
+
+                    resolved_codes = []
+                    for code in stock_codes:
+                        try:
+                            r_code, r_name = await asyncio.to_thread(analyzer.data_provider.resolve_stock_code, code.strip(), market_type)
+                            resolved_codes.append(r_code if r_code else code.strip())
+                        except Exception:
+                            resolved_codes.append(code.strip())
                 
-                # 解析所有代码
-                resolved_codes = []
-                for code in stock_codes:
-                    try:
-                        r_code, r_name = await asyncio.to_thread(analyzer.data_provider.resolve_stock_code, code.strip(), market_type)
-                        resolved_codes.append(r_code if r_code else code.strip())
-                    except:
-                        resolved_codes.append(code.strip())
-                
-                stock_codes_json = json.dumps(resolved_codes)
-                init_message = f'{{"stream_type": "batch", "stock_codes": {stock_codes_json}}}\n'
-                yield init_message
-                
-                logger.debug(f"开始处理批量股票的流式响应")
-                chunk_count = 0
-                
-                # 使用异步生成器
-                async for chunk in analyzer.scan_stocks(
-                    resolved_codes, 
-                    min_score=0, 
-                    market_type=market_type,
-                    stream=True
-                ):
-                    chunk_count += 1
-                    yield chunk + '\n'
-                
-                logger.info(f"批量流式分析完成，共发送 {chunk_count} 个块")
+                    stock_codes_json = json.dumps(resolved_codes)
+                    init_message = f'{{"stream_type": "batch", "stock_codes": {stock_codes_json}}}\n'
+                    analyze_slo_tracker.mark_first_chunk(slo_sample)
+                    analyze_slo_tracker.add_chunk(slo_sample)
+                    yield init_message
+
+                    logger.debug(f"开始处理批量股票的流式响应")
+                    chunk_count = 0
+
+                    async for chunk in analyzer.scan_stocks(
+                        resolved_codes, 
+                        min_score=0, 
+                        market_type=market_type,
+                        stream=True
+                    ):
+                        chunk_count += 1
+                        analyze_slo_tracker.add_chunk(slo_sample)
+                        yield chunk + '\n'
+
+                    logger.info(f"批量流式分析完成，共发送 {chunk_count} 个块")
+                    analyze_slo_tracker.finish(slo_sample, "completed")
+            except Exception as stream_exc:
+                logger.error(f"分析流异常: {stream_exc}")
+                if slo_sample.status == "running":
+                    analyze_slo_tracker.finish(slo_sample, "error")
+                error_payload = json.dumps({
+                    "error": "分析流异常，请稍后重试",
+                    "status": "error",
+                }, ensure_ascii=False)
+                yield error_payload + '\n'
         
         logger.info("成功创建流式响应生成器")
         return StreamingResponse(generate_stream(), media_type='application/json')
             
     except HTTPException:
+        if slo_sample.status == "running":
+            analyze_slo_tracker.finish(slo_sample, "error")
         # Re-raise HTTPException (like 403 quota exceeded) without catching
         raise
     except Exception as e:
+        if slo_sample.status == "running":
+            analyze_slo_tracker.finish(slo_sample, "error")
         error_msg = f"分析时出错: {str(e)}"
         logger.error(error_msg)
         logger.exception(e)
