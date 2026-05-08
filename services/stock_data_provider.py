@@ -236,12 +236,33 @@ class StockDataProvider:
                 turnover_col = 'turnover_rate' if 'turnover_rate' in basic_df.columns else None
                 if turnover_col:
                     mapped = basic_df[['trade_date', turnover_col]].copy()
-                    mapped['trade_date'] = mapped['trade_date'].astype(str)
+                    # 关键：tushare 日期是 'YYYYMMDD'，akshare 是 'YYYY-MM-DD' 或 datetime，
+                    # 必须统一成同一种 key 再 map，否则会全部对不上、悄悄全是 NaN。
+                    mapped['__date_key__'] = pd.to_datetime(mapped['trade_date'], errors='coerce').dt.strftime('%Y%m%d')
                     mapped[turnover_col] = pd.to_numeric(mapped[turnover_col], errors='coerce')
-                    turnover_map = mapped.dropna(subset=[turnover_col]).drop_duplicates('trade_date').set_index('trade_date')[turnover_col]
-                    aligned = df['日期'].astype(str).map(turnover_map)
+                    valid = mapped.dropna(subset=['__date_key__', turnover_col])
+                    turnover_map = valid.drop_duplicates('__date_key__').set_index('__date_key__')[turnover_col]
+
+                    date_keys = pd.to_datetime(df['日期'], errors='coerce').dt.strftime('%Y%m%d')
+                    aligned = date_keys.map(turnover_map)
+
+                    before_filled = int(turnover.notna().sum())
                     turnover = turnover.where(turnover.notna(), aligned)
-                    logger.info(f"[Turnover] {stock_code} 用 tushare daily_basic 回填换手率成功")
+                    after_filled = int(turnover.notna().sum())
+                    filled_count = after_filled - before_filled
+
+                    if filled_count > 0:
+                        logger.info(
+                            f"[Turnover] {stock_code} 用 tushare daily_basic 回填换手率成功，"
+                            f"新增 {filled_count} 行（tushare 返回 {len(turnover_map)} 行）"
+                        )
+                    else:
+                        logger.warning(
+                            f"[Turnover] {stock_code} tushare daily_basic 返回 {len(turnover_map)} 行，"
+                            f"但和 akshare 日期对齐后 0 行匹配（日期格式或交易日不匹配）"
+                        )
+                else:
+                    logger.warning(f"[Turnover] {stock_code} tushare daily_basic 缺 turnover_rate 字段")
             else:
                 logger.warning(f"[Turnover] {stock_code} tushare daily_basic 返回空，换手率仍缺失")
         elif not has_real_turnover and not tushare_client.is_available:
