@@ -312,50 +312,62 @@ async def analyze(
                     chunk_count = 0
                     completed_seen = False
 
-                    # 使用异步生成器，并对每个 chunk 设置超时，避免连接无输出挂起
+                    # 使用异步生成器，每 10 秒发心跳避免连接被中间网关 idle-close。
+                    # 关键：用 shield 保护 __anext__()，不让 wait_for 的超时把它取消掉——
+                    # 取消会让 async generator 直接 close（CancelledError 不被 except Exception 捕获），
+                    # 之后再 __anext__() 立刻 StopAsyncIteration，AI 流被错杀（这就是之前的 bug）。
                     stream_iter = analyzer.analyze_stock(target_code, market_type, stream=True)
-                    stream_idle_timeout_s = 90.0
+                    stream_idle_timeout_s = 180.0  # 真正的 idle 超时（无任何 chunk 多久才放弃）
                     heartbeat_interval_s = 10.0
-                    idle_deadline = time.monotonic() + stream_idle_timeout_s
+                    last_chunk_at = time.monotonic()
+                    pending_anext: Optional[asyncio.Task] = None
+
                     while True:
+                        if pending_anext is None:
+                            pending_anext = asyncio.ensure_future(stream_iter.__anext__())
+
                         try:
-                            remaining = idle_deadline - time.monotonic()
-                            if remaining <= 0:
-                                raise asyncio.TimeoutError()
                             chunk = await asyncio.wait_for(
-                                stream_iter.__anext__(),
-                                timeout=min(heartbeat_interval_s, remaining),
+                                asyncio.shield(pending_anext),
+                                timeout=heartbeat_interval_s,
                             )
+                            pending_anext = None  # 已 resolve，下个循环新建
                         except StopAsyncIteration:
+                            pending_anext = None
                             break
                         except asyncio.TimeoutError:
-                            if time.monotonic() < idle_deadline:
-                                # 心跳包：保持连接活跃并让前端可观测“仍在处理中”
-                                heartbeat_payload = json.dumps({
+                            # 内层 __anext__() 还在跑（被 shield 保护），只是这轮没等到。
+                            # 检查是否真的 idle 太久；否则发心跳继续等。
+                            if time.monotonic() - last_chunk_at >= stream_idle_timeout_s:
+                                logger.error(
+                                    f"分析流超时（{int(stream_idle_timeout_s)}s无输出）: {target_code}"
+                                )
+                                pending_anext.cancel()
+                                pending_anext = None
+                                timeout_payload = json.dumps({
                                     "stock_code": target_code,
-                                    "status": "analyzing",
-                                    "event": "heartbeat",
+                                    "error": "分析超时，请稍后重试",
+                                    "status": "timeout",
                                 }, ensure_ascii=False)
                                 if slo_sample.first_chunk_ms is None:
                                     analyze_slo_tracker.mark_first_chunk(slo_sample)
                                 analyze_slo_tracker.add_chunk(slo_sample)
-                                yield heartbeat_payload + '\n'
-                                continue
+                                analyze_slo_tracker.finish(slo_sample, "timeout")
+                                yield timeout_payload + '\n'
+                                break
 
-                            logger.error(f"分析流超时（90s无输出）: {target_code}")
-                            timeout_payload = json.dumps({
+                            heartbeat_payload = json.dumps({
                                 "stock_code": target_code,
-                                "error": "分析超时，请稍后重试",
-                                "status": "timeout",
+                                "status": "analyzing",
+                                "event": "heartbeat",
                             }, ensure_ascii=False)
                             if slo_sample.first_chunk_ms is None:
                                 analyze_slo_tracker.mark_first_chunk(slo_sample)
                             analyze_slo_tracker.add_chunk(slo_sample)
-                            analyze_slo_tracker.finish(slo_sample, "timeout")
-                            yield timeout_payload + '\n'
-                            break
+                            yield heartbeat_payload + '\n'
+                            continue
 
-                        idle_deadline = time.monotonic() + stream_idle_timeout_s
+                        last_chunk_at = time.monotonic()
                         chunk_count += 1
                         if slo_sample.first_chunk_ms is None:
                             analyze_slo_tracker.mark_first_chunk(slo_sample)
@@ -367,7 +379,7 @@ async def analyze(
                         except Exception:
                             pass
                         yield chunk + '\n'
-                    
+
                     if slo_sample.status == "running":
                         analyze_slo_tracker.finish(slo_sample, "completed")
                     if slo_sample.status == "completed":
