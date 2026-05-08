@@ -211,7 +211,9 @@ class StockDataProvider:
         # 修复：tushare 是惰性单例，没先 ensure_initialized() 时 is_available 会返回 False，
         # 导致 daily_basic 换手率回填路径被静默跳过、换手率始终为 NaN。
         if not has_real_turnover:
-            tushare_client.ensure_initialized(log_missing_token=False)
+            _init = getattr(tushare_client, "ensure_initialized", None)
+            if callable(_init):
+                _init(log_missing_token=False)
 
         if not has_real_turnover and tushare_client.is_available:
             ts_code = self._to_tushare_code(stock_code)

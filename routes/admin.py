@@ -5,6 +5,7 @@ All routes require Bearer admin token except POST /login.
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -22,17 +23,26 @@ from database.db_factory import DatabaseFactory
 from services.app_settings_service import PATCHABLE_KEYS, AppSettingsService
 from services.archive_service import ArchiveService
 from services.nav_links_service import NavLinksService
-from services.user_service import UserService
 from utils.logger import get_logger
 
 logger = get_logger()
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-_user_service = UserService()
-_archive = ArchiveService()
-_settings = AppSettingsService()
-_nav = NavLinksService()
+
+@lru_cache(maxsize=1)
+def _archive_service() -> ArchiveService:
+    return ArchiveService()
+
+
+@lru_cache(maxsize=1)
+def _settings_service() -> AppSettingsService:
+    return AppSettingsService()
+
+
+@lru_cache(maxsize=1)
+def _nav_service() -> NavLinksService:
+    return NavLinksService()
 class AdminLoginBody(BaseModel):
     username: str = Field(..., min_length=1, max_length=128)
     password: str = Field(..., min_length=1, max_length=256)
@@ -98,7 +108,7 @@ async def admin_me(_: dict = Depends(require_admin)):
 
 @router.get("/settings")
 async def admin_get_settings(_: dict = Depends(require_admin)):
-    rows = _settings.list_all()
+    rows = _settings_service().list_all()
     # Mask nothing for now — no secret keys in PATCHABLE_KEYS
     return {"settings": rows, "patchable_keys": sorted(PATCHABLE_KEYS)}
 
@@ -126,7 +136,7 @@ async def admin_patch_settings(
         except ValueError:
             raise HTTPException(status_code=400, detail="ai.api_timeout 必须是整数秒")
     try:
-        _settings.patch_many(updates)
+        _settings_service().patch_many(updates)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True, "updated": list(updates.keys())}
@@ -141,13 +151,13 @@ async def admin_list_articles(
 ):
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
-    items = await _archive.admin_list_articles(limit, offset, q)
+    items = await _archive_service().admin_list_articles(limit, offset, q)
     return {"articles": items, "limit": limit, "offset": offset}
 
 
 @router.get("/articles/{article_id}")
 async def admin_get_article(article_id: int, _: dict = Depends(require_admin)):
-    row = await _archive.get_article_by_id(article_id)
+    row = await _archive_service().get_article_by_id(article_id)
     if not row:
         raise HTTPException(status_code=404, detail="文章不存在")
     return dict(row)
@@ -158,7 +168,7 @@ async def admin_patch_article(article_id: int, body: ArticlePatchBody, _: dict =
     patch = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     if not patch:
         raise HTTPException(status_code=400, detail="无更新字段")
-    ok = await _archive.update_article_by_id(article_id, patch)
+    ok = await _archive_service().update_article_by_id(article_id, patch)
     if not ok:
         raise HTTPException(status_code=404, detail="文章不存在或未变更")
     return {"ok": True}
@@ -166,7 +176,7 @@ async def admin_patch_article(article_id: int, body: ArticlePatchBody, _: dict =
 
 @router.delete("/articles/{article_id}")
 async def admin_delete_article(article_id: int, _: dict = Depends(require_admin)):
-    ok = await _archive.delete_article_by_id(article_id)
+    ok = await _archive_service().delete_article_by_id(article_id)
     if not ok:
         raise HTTPException(status_code=404, detail="文章不存在")
     return {"ok": True}
@@ -266,12 +276,12 @@ async def admin_invite_rewards(limit: int = 100, offset: int = 0, _: dict = Depe
 
 @router.get("/nav-links")
 async def admin_nav_list(_: dict = Depends(require_admin)):
-    return {"links": _nav.list_all()}
+    return {"links": _nav_service().list_all()}
 
 
 @router.post("/nav-links")
 async def admin_nav_create(body: NavLinkCreateBody, _: dict = Depends(require_admin)):
-    new_id = _nav.create(
+    new_id = _nav_service().create(
         label=body.label,
         href=body.href,
         target=body.target,
@@ -287,7 +297,7 @@ async def admin_nav_patch(link_id: int, body: NavLinkPatchBody, _: dict = Depend
     patch = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     if not patch:
         raise HTTPException(status_code=400, detail="无更新字段")
-    ok = _nav.update(link_id, patch)
+    ok = _nav_service().update(link_id, patch)
     if not ok:
         raise HTTPException(status_code=404, detail="链接不存在或未变更")
     return {"ok": True}
@@ -295,7 +305,7 @@ async def admin_nav_patch(link_id: int, body: NavLinkPatchBody, _: dict = Depend
 
 @router.delete("/nav-links/{link_id}")
 async def admin_nav_delete(link_id: int, _: dict = Depends(require_admin)):
-    ok = _nav.delete(link_id)
+    ok = _nav_service().delete(link_id)
     if not ok:
         raise HTTPException(status_code=404, detail="链接不存在")
     return {"ok": True}

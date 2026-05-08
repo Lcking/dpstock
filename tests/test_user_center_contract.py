@@ -61,4 +61,5 @@ def test_public_frontend_no_longer_exposes_secret_admin_entry():
 
     assert "path: '/secret-admin'" not in router_text
     assert 'to="/secret-admin"' not in footer_text
-    assert "AdminDashboard" not in router_text
+    # 正式管理入口为 /admin（独立 admin JWT），不得再使用旧 /secret-admin
+    assert "path: '/admin'" in router_text or 'path: "/admin"' in router_text

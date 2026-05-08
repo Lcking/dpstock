@@ -27,6 +27,16 @@ def test_a_share_index_prefers_tushare_daily_and_sorts_descending_rows(monkeypat
             return tushare_rows
 
     monkeypatch.setattr("services.market_overview_service.tushare_client", _FakeTushareClient())
+    monkeypatch.setattr(
+        MarketOverviewService,
+        "_fetch_a_share_index_minute_context",
+        lambda self, spec: None,
+    )
+    monkeypatch.setattr(
+        MarketOverviewService,
+        "_fetch_eastmoney_realtime",
+        lambda self, spec: None,
+    )
 
     item = service._fetch_index(
         MarketIndexSpec(

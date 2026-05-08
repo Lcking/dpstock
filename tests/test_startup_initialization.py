@@ -86,14 +86,16 @@ def test_importing_judgments_route_does_not_construct_service_eagerly(monkeypatc
 def test_importing_admin_route_does_not_construct_service_eagerly(monkeypatch):
     class _ShouldNotInstantiate:
         def __init__(self, *args, **kwargs):
-            raise AssertionError("AdminService should not be instantiated during import")
+            raise AssertionError("Admin backing services should not be instantiated during import")
 
-    monkeypatch.setattr("services.admin_service.AdminService", _ShouldNotInstantiate)
+    monkeypatch.setattr("services.archive_service.ArchiveService", _ShouldNotInstantiate)
+    monkeypatch.setattr("services.app_settings_service.AppSettingsService", _ShouldNotInstantiate)
+    monkeypatch.setattr("services.nav_links_service.NavLinksService", _ShouldNotInstantiate)
     sys.modules.pop("routes.admin", None)
 
     module = importlib.import_module("routes.admin")
 
-    assert hasattr(module, "verify_admin_token")
+    assert hasattr(module, "router")
 
 
 def test_importing_web_server_has_no_startup_info_noise():
@@ -278,7 +280,7 @@ async def test_ai_score_timeout_degrades_without_blocking():
     assert result == {"overall": {"score": 63}, "version": "fallback"}
 
 
-def test_admin_api_is_disabled_by_default():
+def test_admin_api_requires_auth_and_unknown_paths_are_404():
     import web_server
 
     with TestClient(web_server.app) as client:
@@ -286,7 +288,7 @@ def test_admin_api_is_disabled_by_default():
         users = client.get("/api/admin/users")
 
     assert stats.status_code == 404
-    assert users.status_code == 404
+    assert users.status_code == 401
 
 
 def test_admin_route_has_no_hardcoded_default_token():
