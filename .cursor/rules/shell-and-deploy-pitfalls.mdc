@@ -1,0 +1,62 @@
+---
+description: Shell / Docker / 部署相关的固定操作约束。每次给服务器命令前必须遵守。
+alwaysApply: true
+---
+
+# Shell / Docker / 部署 操作约束（项目记忆）
+
+本仓库部署在云服务器，沿用 docker compose 多容器（app / nginx / certbot / autoheal）。
+以下错误已经犯过，**不允许再犯**。给用户任何命令前先核对这一份。
+
+## 1. `docker compose exec` 配 stdin 必须加 `-T`
+
+只要命令后面接 heredoc（`<<'PY' ... PY`）、管道（`|`）、文件重定向（`< file`），
+**必须**加 `-T`，否则会报 `the input device is not a TTY`。
+
+- ❌ 错：`docker compose -f docker-compose.prod.yml exec app python - <<'PY' ... PY`
+- ✅ 对：`docker compose -f docker-compose.prod.yml exec -T app python - <<'PY' ... PY`
+
+裸 `docker exec` 同理：要 stdin 用 `-i`，不要再加 `-t`。
+
+- ❌ 错：`docker exec -it stock-scanner-app python - <<'PY' ... PY`
+- ✅ 对：`docker exec -i stock-scanner-app python - <<'PY' ... PY`
+
+只在**真正需要交互**（如要进 shell 看光标）时才加 `-it`。
+
+## 2. 生产 compose 文件路径
+
+服务器上的 compose 文件**只有** `docker-compose.prod.yml`（不是 `docker-compose.yml`）。
+所有命令必须写 `-f docker-compose.prod.yml`，否则会用错配置。
+
+## 3. 服务器代码部署流程（用户的固定工作流）
+
+```
+本地改 → git push origin main → 服务器 git pull origin main
+       → docker compose -f docker-compose.prod.yml up -d --build app
+```
+
+**不允许**：
+- 直接在服务器改代码（除非用户明确要求紧急热修）
+- 跳过 git push 直接给服务器拷贝文件
+- 重启除 `app` 以外的容器（除非用户明确要求 nginx / certbot 也需要）
+
+## 4. 流式接口验证用 `curl --http1.1 -N --max-time 120`
+
+测试 `/api/analyze` 必须：
+- `--http1.1`：避免 HTTP/2 多路复用让流式行为变模糊
+- `-N`：禁用 buffering，看到真正的逐段输出
+- `--max-time 120`：AI 分析整段下来通常 30-90s，30s 太短
+
+## 5. 健康检查与监控
+
+- `/api/health` 是深度健康检查（DB + AI 配置 + 磁盘），任何一项不健康会返回 503
+- `autoheal` 容器会基于 healthcheck 自动重启 unhealthy 的 `app`
+- `/api/ops/analyze-slo` 看分析成功率和耗时分布
+
+排障第一步永远是先看这两个端点 + `docker compose -f docker-compose.prod.yml ps`，
+不要先猜代码。
+
+## 6. tushare 客户端是惰性单例
+
+`services/tushare/client.py` 的 `is_available` **必须**在 `ensure_initialized()` 之后才有意义。
+任何新写的代码里要用 tushare 之前都要先 `tushare_client.ensure_initialized(log_missing_token=False)`。
