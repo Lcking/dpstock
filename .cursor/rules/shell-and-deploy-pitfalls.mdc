@@ -60,3 +60,45 @@ alwaysApply: true
 
 `services/tushare/client.py` 的 `is_available` **必须**在 `ensure_initialized()` 之后才有意义。
 任何新写的代码里要用 tushare 之前都要先 `tushare_client.ensure_initialized(log_missing_token=False)`。
+
+## 7. 流式 generator 的 wait_for / 心跳，必须用 `asyncio.shield`
+
+**bug 史**：`web_server.py` 里曾经写过
+
+```python
+chunk = await asyncio.wait_for(stream_iter.__anext__(), timeout=10)  # ❌
+```
+
+意图是 10 秒没 chunk 就发心跳。但 `wait_for` 超时会**取消内层 `__anext__()` 协程**，
+被取消的 async generator 直接 close（`CancelledError` 不被 `except Exception` 捕获），
+下次再 `__anext__()` 立刻 `StopAsyncIteration`——AI 流被错杀，curl 只看到 basic_result
++ analyzing + heartbeat + stream_end 共 4-5 行，文章无法归档。
+
+AI 上游首 token 通常 5-30s，10s 心跳间隔下这 bug 几乎必中。
+
+**正解**：用 `ensure_future` + `asyncio.shield` 把内层 task 和外层心跳超时解耦：
+
+```python
+pending: Optional[asyncio.Task] = None
+last_chunk_at = time.monotonic()
+while True:
+    if pending is None:
+        pending = asyncio.ensure_future(stream_iter.__anext__())
+    try:
+        chunk = await asyncio.wait_for(asyncio.shield(pending), timeout=10)
+        pending = None  # 已 resolve，下轮新建
+    except StopAsyncIteration:
+        pending = None
+        break
+    except asyncio.TimeoutError:
+        if time.monotonic() - last_chunk_at >= idle_timeout_s:
+            pending.cancel(); pending = None
+            ...真超时分支...
+            break
+        yield heartbeat + '\n'
+        continue  # 下一轮复用同一个 pending 继续等
+    last_chunk_at = time.monotonic()
+    yield chunk + '\n'
+```
+
+任何时候改流式接口，都要保留这个 shield 模式，否则 AI / 长链路 generator 必死。
