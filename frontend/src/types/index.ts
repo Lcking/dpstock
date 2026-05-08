@@ -25,6 +25,13 @@ export interface TurnoverProfile {
   interpretation: string;
 }
 
+export interface HeatSignal {
+  tag: '启动' | '加速' | '见顶预警' | '量价背离' | string;
+  signal: 'strengthening' | 'weakening' | 'extreme' | 'neutral';
+  interpretation: string;
+  action_hint?: string;
+}
+
 export interface StockInfo {
   code: string;
   name: string;
@@ -46,6 +53,8 @@ export interface StockInfo {
   volumeStatus?: string;
   turnoverRate?: number;
   turnoverProfile?: TurnoverProfile | null;
+  volumeRatio5d?: number | null;
+  heatSignal?: HeatSignal | null;
   analysisDate?: string;
 }
 
@@ -130,6 +139,8 @@ export interface StreamAnalysisUpdate {
   volume_status?: string;
   turnover_rate?: number | null;
   turnover_profile?: TurnoverProfile | null;
+  volume_ratio_5d?: number | null;
+  heat_signal?: HeatSignal | null;
   analysis_date?: string;
   ai_analysis_chunk?: string;
   ai_score?: import('./aiScore').AiScore | null;

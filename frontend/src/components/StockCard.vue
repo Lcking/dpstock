@@ -153,6 +153,29 @@
             {{ stock.turnoverProfile?.tag || getTurnoverTag(stock.turnoverRate) }}
           </div>
         </div>
+
+        <div class="indicator-item volume-ratio-indicator"
+             v-if="stock.volumeRatio5d !== undefined && stock.volumeRatio5d !== null">
+          <div class="indicator-value" :class="getVolumeRatioClass(stock.volumeRatio5d)">
+            {{ formatVolumeRatio(stock.volumeRatio5d) }}
+          </div>
+          <div class="indicator-label">量比(5日)</div>
+          <div class="indicator-subtext">
+            {{ getVolumeRatioTag(stock.volumeRatio5d) }}
+          </div>
+        </div>
+      </div>
+
+      <div class="heat-signal-banner"
+           v-if="stock.heatSignal"
+           :class="getHeatSignalClass(stock.heatSignal.signal)">
+        <div class="heat-signal-row">
+          <span class="heat-signal-tag">量价共振 · {{ stock.heatSignal.tag }}</span>
+          <span class="heat-signal-action" v-if="stock.heatSignal.action_hint">
+            {{ stock.heatSignal.action_hint }}
+          </span>
+        </div>
+        <div class="heat-signal-text">{{ stock.heatSignal.interpretation }}</div>
       </div>
     </div>
     
@@ -456,6 +479,35 @@ function getTurnoverTag(turnoverRate: number | undefined): string {
   if (turnoverRate < 3) return '正常活跃';
   if (turnoverRate < 8) return '高活跃';
   return '极高活跃';
+}
+
+function formatVolumeRatio(vr: number | undefined | null): string {
+  if (vr === undefined || vr === null) return '--';
+  return vr.toFixed(2);
+}
+
+function getVolumeRatioTag(vr: number | undefined | null): string {
+  if (vr === undefined || vr === null) return '';
+  if (vr < 0.8) return '缩量';
+  if (vr < 2) return '常态';
+  if (vr < 3) return '温和放量';
+  if (vr < 5) return '明显放量';
+  return '极端放量';
+}
+
+function getVolumeRatioClass(vr: number | undefined | null): string {
+  if (vr === undefined || vr === null) return 'volume-normal';
+  if (vr < 0.8) return 'volume-low';
+  if (vr < 2) return 'volume-normal';
+  if (vr < 5) return 'volume-high';
+  return 'volume-extreme';
+}
+
+function getHeatSignalClass(signal: string): string {
+  if (signal === 'extreme') return 'heat-extreme';
+  if (signal === 'strengthening') return 'heat-strengthening';
+  if (signal === 'weakening') return 'heat-weakening';
+  return 'heat-neutral';
 }
 
 function getTurnoverClass(turnoverRate: number | undefined): string {
@@ -1103,7 +1155,57 @@ function smoothScrollToBottom(element: HTMLElement) {
 .turnover-normal { color: #f59e0b; }
 .turnover-high { color: #ef4444; }
 .turnover-extreme { color: #8b5cf6; }
+.volume-extreme { color: #8b5cf6; }
 .recommendation { color: #667eea; }
+
+/* 量价共振横幅 */
+.heat-signal-banner {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border-left: 3px solid #94a3b8;
+  background: rgba(148, 163, 184, 0.08);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.heat-signal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.heat-signal-tag {
+  font-weight: 600;
+  font-size: 14px;
+}
+.heat-signal-action {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.05);
+}
+.heat-signal-text {
+  color: #475569;
+  font-size: 12px;
+}
+.heat-extreme {
+  border-left-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.08);
+}
+.heat-extreme .heat-signal-tag { color: #8b5cf6; }
+.heat-strengthening {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+.heat-strengthening .heat-signal-tag { color: #ef4444; }
+.heat-weakening {
+  border-left-color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+}
+.heat-weakening .heat-signal-tag { color: #10b981; }
+.heat-neutral {
+  border-left-color: #f59e0b;
+}
 
 /* Main Content Area */
 .card-content {

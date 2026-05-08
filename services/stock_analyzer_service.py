@@ -103,6 +103,153 @@ def _build_turnover_profile(turnover_rate: Optional[float]) -> Optional[Dict[str
     }
 
 
+def _compute_volume_ratio_5d(df_with_indicators: Any) -> Optional[float]:
+    """
+    计算 5 日量比 = 当日成交量 / 过去 5 日成交量均值。
+    严格区别于 technical_indicator 里 20 日窗口的 Volume_Ratio——老法师口径是 5 日。
+    需要至少 6 行数据；不足或非有限值返回 None。
+    """
+    try:
+        if df_with_indicators is None or len(df_with_indicators) < 6:
+            return None
+        if 'Volume' not in df_with_indicators.columns:
+            return None
+
+        today_volume = float(df_with_indicators['Volume'].iloc[-1])
+        prev5_mean = float(df_with_indicators['Volume'].iloc[-6:-1].mean())
+
+        if not math.isfinite(today_volume) or not math.isfinite(prev5_mean) or prev5_mean <= 0:
+            return None
+
+        ratio = today_volume / prev5_mean
+        if not math.isfinite(ratio) or ratio <= 0:
+            return None
+        return round(ratio, 2)
+    except Exception:
+        return None
+
+
+def _build_heat_signal(
+    turnover_rate: Optional[float],
+    volume_ratio_5d: Optional[float],
+) -> Optional[Dict[str, str]]:
+    """
+    基于"量比 + 换手率"组合生成热度标签。
+    经验法则（来源：A 股短线圈量价分析），对中小盘 / 题材股阈值合理，
+    对大盘蓝筹（换手日常 <1%）几乎不会触发，仅供参考。
+
+    规则优先级：见顶 > 加速 > 启动 > 量价背离 > 无信号
+    """
+    if turnover_rate is None or volume_ratio_5d is None:
+        return None
+
+    t = turnover_rate
+    v = volume_ratio_5d
+
+    if t > 10 and v > 5:
+        return {
+            "tag": "见顶预警",
+            "signal": "extreme",
+            "interpretation": (
+                f"换手率 {t:.2f}% 且 5 日量比 {v:.2f}，量能与筹码交换都达到极端水平，"
+                f"经验上对应行情末端：手中有仓位逢高减、空仓不要追高。"
+            ),
+            "action_hint": "低跟高跑",
+        }
+    if 5 <= t <= 10 and 3 <= v <= 5:
+        return {
+            "tag": "加速",
+            "signal": "strengthening",
+            "interpretation": (
+                f"换手率 {t:.2f}%、5 日量比 {v:.2f}，资金涌入与筹码交换同步放大，"
+                f"对应主升浪进行时；位置不一定低，留意是否已经吃过一段。"
+            ),
+            "action_hint": "持有为主，不轻易追高",
+        }
+    if t > 5 and 2 <= v < 3:
+        return {
+            "tag": "启动",
+            "signal": "strengthening",
+            "interpretation": (
+                f"换手率 {t:.2f}%、5 日量比 {v:.2f}，热度刚起来但量能尚未失控，"
+                f"经验上对应行情起步阶段，但要确认是否有基本面 / 板块共振。"
+            ),
+            "action_hint": "可关注",
+        }
+    if t > 5 and v < 2:
+        return {
+            "tag": "量价背离",
+            "signal": "weakening",
+            "interpretation": (
+                f"换手率 {t:.2f}% 不低，但 5 日量比仅 {v:.2f}，"
+                f"说明筹码在换手却没有新增量能进场——典型的接力资金断档信号，警惕回调。"
+            ),
+            "action_hint": "止盈 / 离场",
+        }
+    return None
+
+
+def _augment_analysis_v1_with_heat(
+    analysis_v1: Optional[Dict[str, Any]],
+    turnover_rate: Optional[float],
+    volume_ratio_5d: Optional[float],
+) -> Optional[Dict[str, Any]]:
+    """向 Analysis V1 指标翻译区追加 量比 + 量价共振 标签。"""
+    if not isinstance(analysis_v1, dict):
+        return analysis_v1
+
+    if volume_ratio_5d is None:
+        return analysis_v1
+
+    data = deepcopy(analysis_v1)
+    indicator_translate = data.setdefault("indicator_translate", {})
+    indicators = indicator_translate.setdefault("indicators", [])
+
+    # 量比指标项（独立于换手率，单独展示）
+    vr_item = {
+        "name": "量比(5日)",
+        "value": f"{volume_ratio_5d:.2f}",
+        "signal": (
+            "strengthening" if volume_ratio_5d >= 2
+            else "weakening" if volume_ratio_5d < 0.8
+            else "neutral"
+        ),
+        "interpretation": (
+            f"量比 {volume_ratio_5d:.2f}：当日成交量约为过去 5 日均量的 {volume_ratio_5d:.2f} 倍。"
+            f"≥2 视为放量，<0.8 视为缩量；放量需结合换手率判断是真热还是诱多。"
+        ),
+    }
+
+    # 热度标签（量比 + 换手率组合）
+    heat_signal = _build_heat_signal(turnover_rate, volume_ratio_5d)
+    heat_item = None
+    if heat_signal is not None:
+        heat_item = {
+            "name": "量价共振",
+            "value": heat_signal["tag"],
+            "signal": heat_signal["signal"],
+            "interpretation": (
+                f"{heat_signal['interpretation']} 操作建议：{heat_signal.get('action_hint', '—')}。"
+                f"（经验法则，对中小盘 / 题材股阈值合理；大盘蓝筹换手天然较低，几乎不会触发，仅供参考）"
+            ),
+        }
+
+    # 追加或替换
+    def _upsert(name: str, item: Optional[Dict[str, Any]]) -> None:
+        if item is None:
+            return
+        for idx, existing in enumerate(indicators):
+            if existing.get("name") == name:
+                indicators[idx] = item
+                return
+        indicators.append(item)
+
+    _upsert("量比(5日)", vr_item)
+    _upsert("量价共振", heat_item)
+
+    return data
+
+
 def _augment_analysis_v1_with_turnover(
     analysis_v1: Optional[Dict[str, Any]],
     turnover_rate: Optional[float],
@@ -299,7 +446,11 @@ class StockAnalyzerService:
 
             turnover_rate = _normalize_turnover_rate(latest_data.get('Turnover'))
             turnover_profile = _build_turnover_profile(turnover_rate)
-                
+
+            # 量比（5 日口径）+ 量价共振标签
+            volume_ratio_5d = _compute_volume_ratio_5d(df_with_indicators)
+            heat_signal = _build_heat_signal(turnover_rate, volume_ratio_5d)
+
             # 当前分析日期
             analysis_date = datetime.now().strftime('%Y-%m-%d')
             
@@ -319,6 +470,8 @@ class StockAnalyzerService:
                 "volume_status": volume_status,
                 "turnover_rate": turnover_rate,
                 "turnover_profile": turnover_profile,
+                "volume_ratio_5d": volume_ratio_5d,
+                "heat_signal": heat_signal,
                 "recommendation": recommendation,
                 "ai_analysis": ""
             }
@@ -348,11 +501,18 @@ class StockAnalyzerService:
                                 chunk_data.get("analysis_v1"),
                                 turnover_rate,
                             )
+                            analysis_v1 = _augment_analysis_v1_with_heat(
+                                analysis_v1,
+                                turnover_rate,
+                                volume_ratio_5d,
+                            )
                             chunk_data["analysis_v1"] = analysis_v1
                             outgoing_chunk = _safe_dumps(chunk_data, ensure_ascii=False)
                         if chunk_data.get("status") == "completed":
                             chunk_data["turnover_rate"] = turnover_rate
                             chunk_data["turnover_profile"] = turnover_profile
+                            chunk_data["volume_ratio_5d"] = volume_ratio_5d
+                            chunk_data["heat_signal"] = heat_signal
                             outgoing_chunk = _safe_dumps(chunk_data, ensure_ascii=False)
                     except:
                         pass
@@ -366,10 +526,17 @@ class StockAnalyzerService:
                             chunk_data.get("analysis_v1"),
                             turnover_rate,
                         )
+                        analysis_v1 = _augment_analysis_v1_with_heat(
+                            analysis_v1,
+                            turnover_rate,
+                            volume_ratio_5d,
+                        )
                         if analysis_v1 is not None:
                             chunk_data["analysis_v1"] = analysis_v1
                         chunk_data["turnover_rate"] = turnover_rate
                         chunk_data["turnover_profile"] = turnover_profile
+                        chunk_data["volume_ratio_5d"] = volume_ratio_5d
+                        chunk_data["heat_signal"] = heat_signal
                         outgoing_chunk = _safe_dumps(chunk_data, ensure_ascii=False)
                     except:
                         pass
