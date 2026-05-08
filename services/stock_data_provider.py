@@ -208,6 +208,11 @@ class StockDataProvider:
         turnover = pd.to_numeric(df['换手率'], errors='coerce')
         has_real_turnover = turnover.notna().any() and (turnover > 0).any()
 
+        # 修复：tushare 是惰性单例，没先 ensure_initialized() 时 is_available 会返回 False，
+        # 导致 daily_basic 换手率回填路径被静默跳过、换手率始终为 NaN。
+        if not has_real_turnover:
+            tushare_client.ensure_initialized(log_missing_token=False)
+
         if not has_real_turnover and tushare_client.is_available:
             ts_code = self._to_tushare_code(stock_code)
             basic_df = None
@@ -224,7 +229,7 @@ class StockDataProvider:
                 elif hasattr(tushare_client, 'get_daily_basic'):
                     basic_df = tushare_client.get_daily_basic(ts_code, trade_date=end_date)
             except Exception as e:
-                logger.debug(f"[Turnover] tushare daily_basic 查询失败 {stock_code}: {e}")
+                logger.warning(f"[Turnover] tushare daily_basic 查询失败 {stock_code}: {e}")
                 basic_df = None
 
             if basic_df is not None and not basic_df.empty and 'trade_date' in basic_df.columns:
@@ -236,6 +241,11 @@ class StockDataProvider:
                     turnover_map = mapped.dropna(subset=[turnover_col]).drop_duplicates('trade_date').set_index('trade_date')[turnover_col]
                     aligned = df['日期'].astype(str).map(turnover_map)
                     turnover = turnover.where(turnover.notna(), aligned)
+                    logger.info(f"[Turnover] {stock_code} 用 tushare daily_basic 回填换手率成功")
+            else:
+                logger.warning(f"[Turnover] {stock_code} tushare daily_basic 返回空，换手率仍缺失")
+        elif not has_real_turnover and not tushare_client.is_available:
+            logger.warning(f"[Turnover] {stock_code} 上游无换手率且 tushare 不可用（TUSHARE_TOKEN 未配置或初始化失败）")
 
         if placeholder_zero:
             turnover = turnover.where(turnover != 0, pd.NA)
@@ -471,6 +481,7 @@ class StockDataProvider:
                 # 如果 akshare 失败，尝试 tushare
                 if akshare_failed:
                     from services.tushare.client import tushare_client
+                    tushare_client.ensure_initialized(log_missing_token=False)
                     if tushare_client.is_available:
                         # 转换股票代码格式: 600519 -> 600519.SH, 000001 -> 000001.SZ
                         ts_code = self._to_tushare_code(stock_code)
