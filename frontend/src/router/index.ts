@@ -77,6 +77,18 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/admin/login',
+    name: 'AdminLogin',
+    component: () => import('@/components/Admin/AdminLogin.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/admin',
+    name: 'AdminDashboard',
+    component: () => import('@/components/Admin/AdminDashboard.vue'),
+    meta: { requiresAuth: false, requiresAdmin: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }
@@ -90,6 +102,24 @@ const router = createRouter({
 // 全局前置守卫
 router.beforeEach(async (to, from, next) => {
   console.log(`路由跳转: 从 ${from.path} 到 ${to.path}`);
+
+  // 管理后台（独立 admin_token，不走站内 LOGIN_PASSWORD）
+  if (to.path === '/admin/login') {
+    if (localStorage.getItem('admin_token')) {
+      next({ path: '/admin' });
+      return;
+    }
+    next();
+    return;
+  }
+  if (to.matched.some((record) => record.meta.requiresAdmin)) {
+    if (!localStorage.getItem('admin_token')) {
+      next({ path: '/admin/login', query: { redirect: to.fullPath } });
+      return;
+    }
+    next();
+    return;
+  }
 
   // 如果已经在登录页面，直接通过
   if (to.path === '/login') {

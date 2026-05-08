@@ -73,11 +73,23 @@ class AIAnalyzer:
         # 加载环境变量
         load_dotenv()
         
-        # 设置API配置（使用环境变量）
-        self.API_URL = os.getenv('API_URL')
-        self.API_KEY = os.getenv('API_KEY')
-        self.API_MODEL = os.getenv('API_MODEL', 'deepseek-reasoner')
-        self.API_TIMEOUT = int(os.getenv('API_TIMEOUT', 60))
+        # 设置 API 配置：环境变量为默认，SQLite app_settings 可覆盖非密钥项
+        try:
+            from services.app_settings_service import ai_runtime_overrides
+
+            overrides = ai_runtime_overrides()
+        except Exception as e:
+            logger.warning(f"[AIAnalyzer] app_settings 读取失败，仅用环境变量: {e}")
+            overrides = {"api_url": None, "api_model": None, "api_timeout": None}
+
+        self.API_URL = overrides.get("api_url") or os.getenv("API_URL")
+        self.API_KEY = os.getenv("API_KEY")
+        self.API_MODEL = overrides.get("api_model") or os.getenv("API_MODEL", "deepseek-reasoner")
+        timeout_raw = overrides.get("api_timeout") or os.getenv("API_TIMEOUT", "60")
+        try:
+            self.API_TIMEOUT = int(timeout_raw)
+        except (TypeError, ValueError):
+            self.API_TIMEOUT = int(os.getenv("API_TIMEOUT", "60"))
         self.AI_SCORE_TIMEOUT = float(os.getenv('AI_SCORE_TIMEOUT', '2.0'))
         
         # 初始化统一评分器

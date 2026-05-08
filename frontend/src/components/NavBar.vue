@@ -86,9 +86,29 @@ interface NavLink {
   rel?: string
 }
 
-const links: NavLink[] = [
-  { text: '实盘策略平台', href: 'https://www.qifuapp.net/', target: '_blank', rel: 'noopener sponsored' }
+/** 后端不可用时兜底（与迁移种子一致） */
+const DEFAULT_NAV_LINKS: NavLink[] = [
+  { text: '实盘策略平台', href: 'https://www.qifuapp.net/', target: '_blank', rel: 'noopener sponsored' },
 ];
+
+const links = ref<NavLink[]>([...DEFAULT_NAV_LINKS]);
+
+async function loadNavLinksFromConfig() {
+  try {
+    const c = await apiService.getConfig();
+    if (Array.isArray(c.nav_links) && c.nav_links.length > 0) {
+      links.value = c.nav_links.map((x: { text: string; href: string; target?: string; rel?: string }) => ({
+        text: x.text,
+        href: x.href,
+        target: x.target || '_blank',
+        rel: x.rel || 'noopener',
+      }));
+    }
+  } catch (e) {
+    console.warn('[NavBar] nav_links 使用本地默认', e);
+    links.value = [...DEFAULT_NAV_LINKS];
+  }
+}
 
 const myMenuOptions = [
   { label: '我的观察', key: '/watchlist' },
@@ -155,6 +175,7 @@ const handleBindSuccess = async () => {
 onMounted(() => {
   loadQuotaStatus();
   loadAnchorStatus();
+  loadNavLinksFromConfig();
 
   nextTick(() => {
     headerEl.value = document.querySelector('.nav-header');

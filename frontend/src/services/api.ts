@@ -168,7 +168,8 @@ export const apiService = {
     } catch (error) {
       console.error('获取配置时出错:', error);
       return {
-        announcement: ''
+        announcement: '',
+        nav_links: [] as { text: string; href: string; target?: string; rel?: string }[],
       };
     }
   },

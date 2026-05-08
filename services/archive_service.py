@@ -140,3 +140,87 @@ class ArchiveService:
         except Exception as e:
             logger.error(f"获取文章详情出错: {str(e)}")
             return None
+
+    async def admin_list_articles(
+        self, limit: int = 50, offset: int = 0, keyword: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """管理端列表（按 id，不截断字段）。"""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                if keyword:
+                    pattern = f"%{keyword}%"
+                    cursor.execute(
+                        """
+                        SELECT id, title, stock_code, stock_name, market_type, score, legacy_score,
+                               score_version, publish_date, created_at,
+                               LENGTH(content) AS content_length
+                        FROM articles
+                        WHERE title LIKE ? OR stock_code LIKE ? OR stock_name LIKE ?
+                        ORDER BY publish_date DESC, id DESC
+                        LIMIT ? OFFSET ?
+                        """,
+                        (pattern, pattern, pattern, limit, offset),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT id, title, stock_code, stock_name, market_type, score, legacy_score,
+                               score_version, publish_date, created_at,
+                               LENGTH(content) AS content_length
+                        FROM articles
+                        ORDER BY publish_date DESC, id DESC
+                        LIMIT ? OFFSET ?
+                        """,
+                        (limit, offset),
+                    )
+                return [dict(r) for r in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"管理端文章列表出错: {str(e)}")
+            return []
+
+    async def update_article_by_id(self, article_id: int, fields: Dict[str, Any]) -> bool:
+        """按主键更新文章；fields 仅允许白名单列。"""
+        allowed = {
+            "title",
+            "stock_code",
+            "stock_name",
+            "market_type",
+            "content",
+            "score",
+            "legacy_score",
+            "score_version",
+            "ai_score_json",
+            "publish_date",
+        }
+        sets = []
+        vals: List[Any] = []
+        for k, v in fields.items():
+            if k not in allowed:
+                continue
+            sets.append(f"{k} = ?")
+            vals.append(v)
+        if not sets:
+            return False
+        vals.append(article_id)
+        sql = f"UPDATE articles SET {', '.join(sets)} WHERE id = ?"
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(sql, vals)
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"更新文章出错: {str(e)}")
+            return False
+
+    async def delete_article_by_id(self, article_id: int) -> bool:
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM articles WHERE id = ?", (article_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"删除文章出错: {str(e)}")
+            return False

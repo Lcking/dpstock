@@ -28,7 +28,7 @@ from auth.dependencies import (
     REQUIRE_LOGIN,
     LOGIN_PASSWORD,
 )
-from routes import captcha, auth, judgments, quota, invite, anchor, enhancements, watchlists, compare, journal, user_center
+from routes import admin, captcha, auth, judgments, quota, invite, anchor, enhancements, watchlists, compare, journal, user_center
 
 from utils.logger import get_logger
 import uvicorn
@@ -57,6 +57,7 @@ app.include_router(watchlists.router)    # Watchlists module
 app.include_router(compare.router)       # Compare bucketing
 app.include_router(journal.router)       # Journal records
 app.include_router(user_center.router)   # User center
+app.include_router(admin.router)         # Admin (JWT separate from users)
 
 # 添加CORS中间件
 app.add_middleware(
@@ -155,10 +156,26 @@ async def check_auth(user: UserContext = Depends(require_login)):
 # 获取系统配置
 @app.get("/api/config")
 async def get_config():
-    """返回系统配置信息"""
-    return {
-        'announcement': os.getenv('ANNOUNCEMENT_TEXT') or ''
-    }
+    """返回系统配置信息（含导航外链，供 NavBar 使用）"""
+    announcement = os.getenv("ANNOUNCEMENT_TEXT") or ""
+    nav_links: List[Dict[str, Any]] = []
+    try:
+        from services.nav_links_service import NavLinksService
+
+        nav_links = NavLinksService().list_public()
+    except Exception as e:
+        logger.warning(f"[Config] nav_links 读取失败: {e}")
+    # 前端约定：text 对应 label
+    nav_for_frontend = [
+        {
+            "text": row["label"],
+            "href": row["href"],
+            "target": row.get("target") or "_blank",
+            "rel": row.get("rel") or "noopener",
+        }
+        for row in nav_links
+    ]
+    return {"announcement": announcement, "nav_links": nav_for_frontend}
 
 # 健康检查（用于 Docker healthcheck + 外部 watchdog）
 # 真实健康：覆盖"网站活着但子链路死了"这种月度复发故障
@@ -192,6 +209,13 @@ async def health():
     else:
         checks["ai_config"] = "missing"
         overall_ok = False
+
+    try:
+        from auth.admin_auth import admin_login_configured
+
+        checks["admin_login"] = "configured" if admin_login_configured() else "not_configured"
+    except Exception:
+        checks["admin_login"] = "unknown"
 
     # 3) 数据目录磁盘余量：日志/归档表写入路径阻塞是常见月度复发原因
     try:
