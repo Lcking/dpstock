@@ -4,6 +4,7 @@ Used for AI URL/model/timeout overrides; secrets like API_KEY stay in environmen
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -84,4 +85,23 @@ def ai_runtime_overrides() -> Dict[str, Optional[str]]:
         "api_url": (raw.get("ai.api_url") or "").strip() or None,
         "api_model": (raw.get("ai.api_model") or "").strip() or None,
         "api_timeout": (raw.get("ai.api_timeout") or "").strip() or None,
+    }
+
+
+def ai_effective_for_admin_display() -> Dict[str, str]:
+    """
+    Resolved AI URL / model / timeout for admin UI (same merge order as AIAnalyzer: DB then env).
+    """
+    ov = ai_runtime_overrides()
+    url = (ov.get("api_url") or "").strip() or (os.getenv("API_URL") or "").strip()
+    model = (ov.get("api_model") or "").strip() or (os.getenv("API_MODEL") or "deepseek-reasoner").strip()
+    timeout_raw = (ov.get("api_timeout") or "").strip() or (os.getenv("API_TIMEOUT") or "60")
+    try:
+        timeout_out = str(int(timeout_raw))
+    except (TypeError, ValueError):
+        timeout_out = str(timeout_raw)
+    return {
+        "ai.api_url": url,
+        "ai.api_model": model,
+        "ai.api_timeout": timeout_out,
     }

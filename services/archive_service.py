@@ -141,15 +141,23 @@ class ArchiveService:
             logger.error(f"获取文章详情出错: {str(e)}")
             return None
 
-    async def admin_list_articles(
+    async def admin_list_articles_with_total(
         self, limit: int = 50, offset: int = 0, keyword: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """管理端列表（按 id，不截断字段）。"""
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """管理端列表 + 总数（与筛选条件一致）。"""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 if keyword:
                     pattern = f"%{keyword}%"
+                    cursor.execute(
+                        """
+                        SELECT COUNT(*) AS c FROM articles
+                        WHERE title LIKE ? OR stock_code LIKE ? OR stock_name LIKE ?
+                        """,
+                        (pattern, pattern, pattern),
+                    )
+                    total = int(cursor.fetchone()["c"])
                     cursor.execute(
                         """
                         SELECT id, title, stock_code, stock_name, market_type, score, legacy_score,
@@ -163,6 +171,8 @@ class ArchiveService:
                         (pattern, pattern, pattern, limit, offset),
                     )
                 else:
+                    cursor.execute("SELECT COUNT(*) AS c FROM articles")
+                    total = int(cursor.fetchone()["c"])
                     cursor.execute(
                         """
                         SELECT id, title, stock_code, stock_name, market_type, score, legacy_score,
@@ -174,10 +184,10 @@ class ArchiveService:
                         """,
                         (limit, offset),
                     )
-                return [dict(r) for r in cursor.fetchall()]
+                return [dict(r) for r in cursor.fetchall()], total
         except Exception as e:
             logger.error(f"管理端文章列表出错: {str(e)}")
-            return []
+            return [], 0
 
     async def update_article_by_id(self, article_id: int, fields: Dict[str, Any]) -> bool:
         """按主键更新文章；fields 仅允许白名单列。"""

@@ -40,9 +40,20 @@
       <n-tab-pane name="articles" tab="文章">
         <n-space>
           <n-input v-model:value="articleQ" placeholder="搜索标题/代码" style="width: 220px" />
-          <n-button @click="loadArticles">搜索</n-button>
+          <n-button @click="searchArticles">搜索</n-button>
         </n-space>
         <n-data-table style="margin-top: 12px" :columns="articleCols" :data="articleRows" :bordered="false" />
+        <n-pagination
+          v-if="articleTotal > 0"
+          style="margin-top: 12px"
+          v-model:page="articlePage"
+          v-model:page-size="articlePageSize"
+          :item-count="articleTotal"
+          :page-sizes="[25, 50, 100]"
+          show-size-picker
+          @update:page="loadArticles"
+          @update:page-size="onArticlePageSizeChange"
+        />
         <n-modal v-model:show="articleModal" preset="card" style="width: 900px" title="编辑文章">
           <n-spin :show="articleLoading">
             <n-space vertical>
@@ -64,11 +75,30 @@
       </n-tab-pane>
 
       <n-tab-pane name="users" tab="用户">
-        <n-space>
-          <n-input v-model:value="userQ" placeholder="user_id / 邮箱 / 昵称" style="width: 240px" />
-          <n-button @click="loadUsers">搜索</n-button>
+        <n-space vertical size="small">
+          <n-space align="center">
+            <n-input v-model:value="userQ" placeholder="user_id / 邮箱 / 昵称" style="width: 240px" />
+            <n-button @click="searchUsers">搜索</n-button>
+            <n-checkbox v-model:checked="usersOnlyEmailBound" @update:checked="onUsersEmailFilterChange">
+              仅显示已绑定邮箱
+            </n-checkbox>
+          </n-space>
+          <n-text depth="3" style="font-size: 12px">
+            列表按注册时间倒序；匿名用户多时，可用「仅显示已绑定邮箱」或翻页查看。
+          </n-text>
         </n-space>
         <n-data-table style="margin-top: 12px" :columns="userCols" :data="userRows" :bordered="false" />
+        <n-pagination
+          v-if="userTotal > 0"
+          style="margin-top: 12px"
+          v-model:page="userPage"
+          v-model:page-size="userPageSize"
+          :item-count="userTotal"
+          :page-sizes="[25, 50, 100]"
+          show-size-picker
+          @update:page="loadUsers"
+          @update:page-size="onUserPageSizeChange"
+        />
       </n-tab-pane>
 
       <n-tab-pane name="invites" tab="邀请拉新">
@@ -91,6 +121,7 @@ import { useRouter } from 'vue-router';
 import type { DataTableColumns } from 'naive-ui';
 import {
   NButton,
+  NCheckbox,
   NDataTable,
   NDescriptions,
   NDescriptionsItem,
@@ -102,10 +133,12 @@ import {
   NInputNumber,
   NModal,
   NP,
+  NPagination,
   NSpace,
   NSpin,
-  NTabs,
   NTabPane,
+  NTabs,
+  NText,
   useMessage,
 } from 'naive-ui';
 import { adminApi } from '@/services/adminApi';
@@ -124,11 +157,12 @@ const savingSettings = ref(false);
 async function loadSettings() {
   try {
     const { data } = await adminApi.getSettings();
-    const map: Record<string, string> = { 'ai.api_url': '', 'ai.api_model': '', 'ai.api_timeout': '' };
-    for (const row of data.settings || []) {
-      if (row.key in map) map[row.key] = row.value || '';
-    }
-    settingsForm.value = map;
+    const eff = (data as { effective?: Record<string, string> }).effective || {};
+    settingsForm.value = {
+      'ai.api_url': eff['ai.api_url'] ?? '',
+      'ai.api_model': eff['ai.api_model'] ?? '',
+      'ai.api_timeout': eff['ai.api_timeout'] ?? '',
+    };
   } catch {
     message.error('加载设置失败');
   }
@@ -243,6 +277,9 @@ async function removeNav(id: number) {
 
 const articleQ = ref('');
 const articleRows = ref<any[]>([]);
+const articlePage = ref(1);
+const articlePageSize = ref(50);
+const articleTotal = ref(0);
 const articleModal = ref(false);
 const articleLoading = ref(false);
 const articleEdit = ref<Record<string, string>>({});
@@ -250,11 +287,27 @@ let articleEditId = 0;
 
 async function loadArticles() {
   try {
-    const { data } = await adminApi.listArticles({ limit: 80, q: articleQ.value || undefined });
+    const offset = (articlePage.value - 1) * articlePageSize.value;
+    const { data } = await adminApi.listArticles({
+      limit: articlePageSize.value,
+      offset,
+      q: articleQ.value || undefined,
+    });
     articleRows.value = data.articles || [];
+    articleTotal.value = typeof data.total === 'number' ? data.total : articleRows.value.length;
   } catch {
     message.error('加载文章失败');
   }
+}
+
+function searchArticles() {
+  articlePage.value = 1;
+  loadArticles();
+}
+
+function onArticlePageSizeChange() {
+  articlePage.value = 1;
+  loadArticles();
 }
 async function openArticle(row: any) {
   articleEditId = row.id;
@@ -320,13 +373,40 @@ const articleCols: DataTableColumns<any> = [
 
 const userQ = ref('');
 const userRows = ref<any[]>([]);
+const userPage = ref(1);
+const userPageSize = ref(50);
+const userTotal = ref(0);
+const usersOnlyEmailBound = ref(false);
+
 async function loadUsers() {
   try {
-    const { data } = await adminApi.listUsers({ limit: 100, q: userQ.value || undefined });
+    const offset = (userPage.value - 1) * userPageSize.value;
+    const { data } = await adminApi.listUsers({
+      limit: userPageSize.value,
+      offset,
+      q: userQ.value || undefined,
+      has_email: usersOnlyEmailBound.value ? 1 : undefined,
+    });
     userRows.value = data.users || [];
+    userTotal.value = typeof data.total === 'number' ? data.total : userRows.value.length;
   } catch {
     message.error('加载用户失败');
   }
+}
+
+function searchUsers() {
+  userPage.value = 1;
+  loadUsers();
+}
+
+function onUserPageSizeChange() {
+  userPage.value = 1;
+  loadUsers();
+}
+
+function onUsersEmailFilterChange() {
+  userPage.value = 1;
+  loadUsers();
 }
 async function setUserStatus(userId: string, status: 'active' | 'disabled') {
   try {

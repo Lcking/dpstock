@@ -20,7 +20,7 @@ from auth.admin_auth import (
     _rate_limit_ok,
 )
 from database.db_factory import DatabaseFactory
-from services.app_settings_service import PATCHABLE_KEYS, AppSettingsService
+from services.app_settings_service import PATCHABLE_KEYS, AppSettingsService, ai_effective_for_admin_display
 from services.archive_service import ArchiveService
 from services.nav_links_service import NavLinksService
 from utils.logger import get_logger
@@ -109,8 +109,12 @@ async def admin_me(_: dict = Depends(require_admin)):
 @router.get("/settings")
 async def admin_get_settings(_: dict = Depends(require_admin)):
     rows = _settings_service().list_all()
-    # Mask nothing for now — no secret keys in PATCHABLE_KEYS
-    return {"settings": rows, "patchable_keys": sorted(PATCHABLE_KEYS)}
+    effective = ai_effective_for_admin_display()
+    return {
+        "settings": rows,
+        "effective": effective,
+        "patchable_keys": sorted(PATCHABLE_KEYS),
+    }
 
 
 @router.patch("/settings")
@@ -151,8 +155,8 @@ async def admin_list_articles(
 ):
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
-    items = await _archive_service().admin_list_articles(limit, offset, q)
-    return {"articles": items, "limit": limit, "offset": offset}
+    items, total = await _archive_service().admin_list_articles_with_total(limit, offset, q)
+    return {"articles": items, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/articles/{article_id}")
@@ -188,6 +192,7 @@ async def admin_list_users(
     offset: int = 0,
     q: Optional[str] = None,
     email_verified: Optional[int] = None,
+    has_email: Optional[int] = None,
     _: dict = Depends(require_admin),
 ):
     limit = min(max(limit, 1), 200)
@@ -203,6 +208,8 @@ async def admin_list_users(
         if email_verified is not None:
             where.append("email_verified = ?")
             params.append(email_verified)
+        if has_email == 1:
+            where.append("(primary_email IS NOT NULL AND TRIM(primary_email) != '')")
         wh = " AND ".join(where)
         cur.execute(
             f"""

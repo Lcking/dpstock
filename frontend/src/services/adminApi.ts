@@ -38,8 +38,14 @@ export const adminApi = {
     adminAxios.patch(`/articles/${id}`, body),
   deleteArticle: (id: number) => adminAxios.delete(`/articles/${id}`),
 
-  listUsers: (params?: { limit?: number; offset?: number; q?: string; email_verified?: number }) =>
-    adminAxios.get('/users', { params }),
+  listUsers: (params?: {
+    limit?: number;
+    offset?: number;
+    q?: string;
+    email_verified?: number;
+    /** 1 = 仅 primary_email 非空的用户（便于从大量匿名账号里筛出已绑邮箱） */
+    has_email?: number;
+  }) => adminAxios.get('/users', { params }),
   patchUser: (userId: string, status: 'active' | 'disabled') =>
     adminAxios.patch(`/users/${userId}`, { status }),
 
