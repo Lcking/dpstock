@@ -136,6 +136,24 @@ async def get_record(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{record_id}/evaluation")
+async def evaluate_record(
+    record_id: str,
+    user: UserContext = Depends(get_current_user),
+):
+    try:
+        user_id = _resolve_journal_user(user)
+        result = journal_service.evaluate_record(record_id=record_id, user_id=user_id)
+        if "error" in result:
+            raise HTTPException(status_code=404, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Evaluate record error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/{record_id}/review")
 async def review_record(
     record_id: str,

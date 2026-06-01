@@ -95,6 +95,13 @@
             <div class="notes-label">复盘笔记:</div>
             <div class="notes-content">{{ record.review.notes }}</div>
           </div>
+          <div class="system-evaluation" v-if="record.review.system_evaluation">
+            <div class="notes-label">系统判卷:</div>
+            <div class="notes-content">{{ record.review.system_evaluation.summary }}</div>
+            <div class="notes-content" v-if="record.review.system_evaluation.actual_path">
+              实际路径：{{ record.review.system_evaluation.actual_path }}
+            </div>
+          </div>
         </div>
       </div>
 

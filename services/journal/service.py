@@ -3,10 +3,12 @@ Journal Service
 判断记录服务 - PRD 3.3 判断记录与到期复盘
 """
 import uuid
+import json
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from database.db_factory import DatabaseFactory
 from schemas.watchlist import WatchlistItemSummary
+from services.journal.evaluator import evaluate_journal_conditions
 from services.watchlist import watchlist_service
 from services.user_service import UserService
 from utils.logger import get_logger
@@ -277,7 +279,14 @@ class JournalService:
             
         try:
             if row.get('review'):
-                review = eval(row['review']) if isinstance(row['review'], str) else row['review']
+                if isinstance(row['review'], str):
+                    try:
+                        review = json.loads(row['review'])
+                    except Exception:
+                        import ast
+                        review = ast.literal_eval(row['review'])
+                else:
+                    review = row['review']
         except:
             review = row.get('review')
         
@@ -338,24 +347,19 @@ class JournalService:
         now = datetime.utcnow()
         
         # 获取记录
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM judgments
-                WHERE id = ? AND user_id = ?
-            """, (record_id, user_id))
-            row = cursor.fetchone()
+        row = self._get_record_row(record_id, user_id)
         
         if not row:
             return {"error": "Record not found"}
         
         # 自动评估
-        outcome, triggers = self._auto_evaluate(row)
+        outcome, triggers, system_evaluation = self._auto_evaluate(row)
         
         review = {
             "reviewed_at": now.isoformat() + 'Z',
             "outcome": outcome,
             "triggers": triggers,
+            "system_evaluation": system_evaluation,
             "notes": notes
         }
         
@@ -366,7 +370,7 @@ class JournalService:
                 UPDATE judgments
                 SET status = 'reviewed', review = ?, updated_at = ?
                 WHERE id = ?
-            """, (str(review), now.isoformat() + 'Z', record_id))
+            """, (json.dumps(review, ensure_ascii=False), now.isoformat() + 'Z', record_id))
             conn.commit()
         
         return {
@@ -374,6 +378,24 @@ class JournalService:
             "status": "reviewed",
             "review": review
         }
+
+    def evaluate_record(self, record_id: str, user_id: str) -> Dict[str, Any]:
+        """Preview the system evaluation without marking the record as reviewed."""
+        row = self._get_record_row(record_id, user_id)
+        if not row:
+            return {"error": "Record not found"}
+
+        _outcome, _triggers, system_evaluation = self._auto_evaluate(row)
+        return system_evaluation
+
+    def _get_record_row(self, record_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM judgments
+                WHERE id = ? AND user_id = ?
+            """, (record_id, user_id))
+            return cursor.fetchone()
     
     def _auto_evaluate(self, row: Dict) -> tuple:
         """
@@ -381,15 +403,123 @@ class JournalService:
         
         返回 (outcome, triggers)
         """
-        # 简化实现：暂时返回 uncertain
-        # TODO: 实现完整的评估逻辑
+        import json
+        from services.stock_data_provider import StockDataProvider
+
+        constraints = {}
+        try:
+            if row.get('constraints'):
+                constraints = json.loads(row['constraints']) if isinstance(row['constraints'], str) else row['constraints']
+        except Exception:
+            constraints = {}
+
+        candidate_descriptions = self._extract_candidate_descriptions(constraints)
+        if not candidate_descriptions:
+            system_evaluation = {
+                "summary": "缺少候选条件原文，无法自动判卷。之后保存的新判断会记录 A/B/C 条件用于验证。",
+                "actual_path": None,
+                "selected_condition": {"status": "missing_condition"},
+                "candidate_results": {},
+            }
+            return "uncertain", [], system_evaluation
+
+        try:
+            stock_code = self._normalize_stock_code(row.get('stock_code', ''))
+            start_date = self._date_to_yyyymmdd(constraints.get('snapshot_time') or row.get('created_at'))
+            end_date = self._date_to_yyyymmdd(row.get('validation_date') or datetime.utcnow().isoformat())
+            price_data = StockDataProvider()._get_stock_data_sync(
+                stock_code,
+                market_type='A',
+                start_date=start_date,
+                end_date=end_date,
+            )
+            evaluation = evaluate_journal_conditions(
+                selected_candidate=row.get('candidate'),
+                candidate_descriptions=candidate_descriptions,
+                price_data=price_data,
+            )
+        except Exception as e:
+            logger.error(f"[Journal] Auto evaluation failed for {row.get('id')}: {e}")
+            evaluation = {
+                "outcome": "uncertain",
+                "actual_path": None,
+                "summary": f"自动判卷失败：{str(e)}",
+                "selected_condition": {"status": "evaluation_error"},
+                "candidate_results": {},
+            }
+
+        triggers = self._evaluation_to_triggers(evaluation)
+        return evaluation.get("outcome", "uncertain"), triggers, evaluation
+
+    def _extract_candidate_descriptions(self, constraints: Dict[str, Any]) -> Dict[str, str]:
+        candidates = constraints.get("candidates")
+        if isinstance(candidates, dict):
+            return {
+                str(option_id).upper(): str(description)
+                for option_id, description in candidates.items()
+                if option_id and description
+            }
+        if isinstance(candidates, list):
+            result = {}
+            for candidate in candidates:
+                if not isinstance(candidate, dict):
+                    continue
+                option_id = candidate.get("option_id") or candidate.get("id")
+                description = candidate.get("description")
+                if option_id and description:
+                    result[str(option_id).upper()] = str(description)
+            return result
+        return {}
+
+    def _evaluation_to_triggers(self, evaluation: Dict[str, Any]) -> List[Dict[str, str]]:
         triggers = []
-        outcome = "uncertain"
-        
-        # 检查是否有关键失效
-        # 这需要获取当前价格与判断时的快照进行对比
-        
-        return outcome, triggers
+        selected = evaluation.get("selected_condition") or {}
+        price = selected.get("price") or {}
+        volume = selected.get("volume") or {}
+        if price:
+            triggers.append({
+                "check_id": "price_condition",
+                "result": "triggered" if price.get("triggered") else "passed",
+                "detail": self._format_price_trigger(price),
+            })
+        if volume:
+            triggers.append({
+                "check_id": "volume_condition",
+                "result": "triggered" if volume.get("triggered") else "passed",
+                "detail": self._format_volume_trigger(volume),
+            })
+        return triggers
+
+    def _format_price_trigger(self, price: Dict[str, Any]) -> str:
+        trigger_type = price.get("type")
+        if trigger_type == "breakout":
+            return f"突破价 {price.get('threshold')}，最高价 {price.get('max_price')}"
+        if trigger_type == "breakdown":
+            return f"跌破价 {price.get('threshold')}，最低价 {price.get('min_price')}"
+        if trigger_type == "range":
+            return f"区间 {price.get('lower')}-{price.get('upper')}，要求 {price.get('required_days')} 个交易日"
+        return "价格条件"
+
+    def _format_volume_trigger(self, volume: Dict[str, Any]) -> str:
+        if volume.get("type") == "above_ma20":
+            return f"量能要求 {volume.get('required_consecutive_days')} 日高于 20 日均量 {volume.get('multiple')} 倍，最高 {volume.get('max_ratio')} 倍"
+        if volume.get("type") == "within_ma20":
+            return f"量能要求回落至 20 日均量 {volume.get('lower')}-{volume.get('upper')} 倍"
+        return volume.get("reason") or "量能条件"
+
+    def _normalize_stock_code(self, stock_code: str) -> str:
+        return str(stock_code or "").split(".")[0]
+
+    def _date_to_yyyymmdd(self, value: Any) -> str:
+        if not value:
+            return datetime.utcnow().strftime("%Y%m%d")
+        if hasattr(value, "strftime"):
+            return value.strftime("%Y%m%d")
+        text = str(value).replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(text).strftime("%Y%m%d")
+        except Exception:
+            return text[:10].replace("-", "")
     
     def get_due_count(self, user_id: str) -> int:
         """获取待复盘记录数量"""

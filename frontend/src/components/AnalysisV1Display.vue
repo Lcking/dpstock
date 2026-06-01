@@ -422,6 +422,14 @@ async function handleSaveJudgment() {
 async function confirmSaveJudgment() {
   saving.value = true;
   try {
+    const candidates = props.data.judgment_zone.candidates.map((candidate: { option_id: string; description: string }) => ({
+      option_id: candidate.option_id,
+      description: candidate.description
+    }));
+    const selectedCandidateDescription = candidates.find(
+      (candidate: { option_id: string; description: string }) => candidate.option_id === selectedCandidate.value
+    )?.description || '';
+
     // 构造符合 Journal API CreateRecordRequest 的数据格式
     const recordRequest = {
       ts_code: props.stockCode,
@@ -439,6 +447,8 @@ async function confirmSaveJudgment() {
         phase: props.data.structure_snapshot.phase,
         pattern_type: props.data.pattern_fitting.pattern_type,
         key_levels: props.data.structure_snapshot.key_levels,
+        candidates,
+        selected_candidate_description: selectedCandidateDescription,
         snapshot_time: new Date().toISOString()
       },
       validation_period_days: selectedPeriod.value

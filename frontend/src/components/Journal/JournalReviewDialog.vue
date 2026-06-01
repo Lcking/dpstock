@@ -25,6 +25,23 @@
         </div>
       </div>
 
+      <!-- System Evaluation -->
+      <div class="system-evaluation">
+        <div class="section-title">系统判卷</div>
+        <n-alert v-if="evaluationLoading" type="info" size="small">
+          正在根据 A/B/C 条件自动判卷...
+        </n-alert>
+        <n-alert v-else-if="effectiveEvaluation" :type="evaluationAlertType(effectiveEvaluation.outcome)" size="small">
+          <div>{{ effectiveEvaluation.summary }}</div>
+          <div v-if="effectiveEvaluation.actual_path" class="evaluation-path">
+            实际路径：{{ effectiveEvaluation.actual_path }}
+          </div>
+        </n-alert>
+        <n-alert v-else type="warning" size="small">
+          暂时无法生成系统判卷，可先填写人工复盘笔记。
+        </n-alert>
+      </div>
+
       <!-- Notes Input -->
       <div class="notes-section">
         <div class="section-title">复盘笔记</div>
@@ -56,10 +73,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { NModal, NInput, NTag, NButton, NSpace, NAlert, useMessage } from 'naive-ui'
 import { apiService } from '@/services/api'
-import type { JournalRecord } from '@/types/journal'
+import type { JournalRecord, JournalSystemEvaluation } from '@/types/journal'
 
 interface Props {
   show: boolean
@@ -77,14 +94,38 @@ const message = useMessage()
 
 // State
 const reviewing = ref(false)
+const evaluationLoading = ref(false)
+const previewEvaluation = ref<JournalSystemEvaluation | null>(null)
 const notes = ref('')
+
+const effectiveEvaluation = computed(() => {
+  return props.record?.review?.system_evaluation || previewEvaluation.value
+})
 
 // Watch show prop to reset notes
 watch(() => props.show, (newShow) => {
   if (newShow) {
     notes.value = ''
+    loadEvaluationPreview()
   }
 })
+
+const loadEvaluationPreview = async () => {
+  if (!props.record || props.record.review?.system_evaluation) {
+    previewEvaluation.value = null
+    return
+  }
+
+  evaluationLoading.value = true
+  try {
+    previewEvaluation.value = await apiService.getRecordEvaluation(props.record.id)
+  } catch (error) {
+    console.error('Evaluation preview error:', error)
+    previewEvaluation.value = null
+  } finally {
+    evaluationLoading.value = false
+  }
+}
 
 // Submit review
 const handleReview = async () => {
@@ -121,6 +162,16 @@ const formatDate = (dateStr: string) => {
     minute: '2-digit'
   })
 }
+
+const evaluationAlertType = (outcome?: string) => {
+  const map: Record<string, 'success' | 'error' | 'warning'> = {
+    supported: 'success',
+    falsified: 'error',
+    uncertain: 'warning'
+  }
+  if (!outcome) return 'warning'
+  return map[outcome] || 'warning'
+}
 </script>
 
 <style scoped>
@@ -155,6 +206,15 @@ const formatDate = (dateStr: string) => {
 
 .notes-section {
   margin-bottom: 16px;
+}
+
+.system-evaluation {
+  margin-bottom: 16px;
+}
+
+.evaluation-path {
+  margin-top: 6px;
+  font-size: 13px;
 }
 
 .section-title {

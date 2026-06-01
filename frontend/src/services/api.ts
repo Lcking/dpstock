@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse, MarketOverviewItem } from '@/types';
-import type { JournalListResponse } from '@/types/journal';
+import type { JournalListResponse, JournalSystemEvaluation } from '@/types/journal';
 import type { Watchlist, WatchlistSummary } from '@/types/watchlist';
 
 const API_PREFIX = '/api';
@@ -294,6 +294,16 @@ export const apiService = {
       return response.data;
     } catch (error) {
       console.error('复盘保存时出错:', error);
+      throw error;
+    }
+  },
+
+  getRecordEvaluation: async (recordId: string): Promise<JournalSystemEvaluation> => {
+    try {
+      const response = await axiosInstance.get(`/journal/${recordId}/evaluation`);
+      return response.data;
+    } catch (error) {
+      console.error('获取系统判卷时出错:', error);
       throw error;
     }
   },

@@ -21,7 +21,16 @@ export interface JournalReview {
     reviewed_at: string
     outcome: 'supported' | 'falsified' | 'uncertain'
     triggers: ReviewTrigger[]
+    system_evaluation?: JournalSystemEvaluation
     notes?: string
+}
+
+export interface JournalSystemEvaluation {
+    outcome?: 'supported' | 'falsified' | 'uncertain'
+    actual_path?: string | null
+    summary?: string
+    selected_condition?: Record<string, any>
+    candidate_results?: Record<string, any>
 }
 
 export interface JournalListResponse {
