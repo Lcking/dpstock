@@ -24,3 +24,15 @@ def test_journal_review_surfaces_system_evaluation_summary():
     assert "系统判卷" in review_dialog
     assert "system_evaluation" in detail_dialog
     assert "实际路径" in detail_dialog
+
+
+def test_journal_detail_uses_saved_candidate_condition_not_hardcoded_direction():
+    detail_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalDetailDialog.vue").read_text(encoding="utf-8")
+    list_view = (REPO_ROOT / "frontend/src/components/Journal/JournalList.vue").read_text(encoding="utf-8")
+
+    assert "selectedCandidateDescription" in detail_dialog
+    assert "candidateDescription(record)" in detail_dialog
+    assert "B - 看跌/做空" not in detail_dialog
+    assert "C - 观望/不确定" not in detail_dialog
+    assert "getSelectedCandidateDescription(record)" in list_view
+    assert "B: '看跌'" not in list_view

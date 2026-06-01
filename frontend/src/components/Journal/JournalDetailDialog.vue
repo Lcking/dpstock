@@ -30,9 +30,14 @@
             <div class="choice-label">选择的候选项:</div>
             <div class="choice-value">
               <n-tag :type="candidateTagType(record.candidate)" size="large">
-                {{ candidateDescription(record.candidate) }}
+                {{ candidateDescription(record) }}
               </n-tag>
             </div>
+          </div>
+
+          <div v-if="selectedCandidateDescription(record)" class="candidate-condition">
+            <div class="sub-title">候选条件:</div>
+            <div class="condition-content">{{ selectedCandidateDescription(record) }}</div>
           </div>
           
           <!-- Selected Premises -->
@@ -204,13 +209,35 @@ const candidateTagType = (candidate: string) => {
   return map[candidate] || 'info'
 }
 
-const candidateDescription = (candidate: string) => {
-  const map: Record<string, string> = {
-    A: 'A - 看涨/做多',
-    B: 'B - 看跌/做空',
-    C: 'C - 观望/不确定'
+const selectedCandidateDescription = (record: JournalRecord) => {
+  const fromSnapshot = record.constraints?.selected_candidate_description
+  if (typeof fromSnapshot === 'string' && fromSnapshot.trim()) {
+    return fromSnapshot
   }
-  return map[candidate] || `候选 ${candidate}`
+
+  const candidates = record.constraints?.candidates
+  if (Array.isArray(candidates)) {
+    const matched = candidates.find((candidate: any) => {
+      return String(candidate?.option_id || candidate?.id || '').toUpperCase() === record.candidate
+    })
+    if (typeof matched?.description === 'string' && matched.description.trim()) {
+      return matched.description
+    }
+  }
+
+  if (candidates && typeof candidates === 'object') {
+    const description = candidates[record.candidate]
+    if (typeof description === 'string' && description.trim()) {
+      return description
+    }
+  }
+
+  return ''
+}
+
+const candidateDescription = (record: JournalRecord) => {
+  const description = selectedCandidateDescription(record)
+  return description ? `候选 ${record.candidate}` : `候选 ${record.candidate}`
 }
 
 const statusTagType = (status: string) => {
@@ -334,6 +361,15 @@ const formatDate = (dateStr: string) => {
   color: var(--n-text-color);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.condition-content {
+  padding: 10px 12px;
+  background: var(--n-color);
+  border-radius: 8px;
+  color: var(--n-text-color);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .timeline-grid {

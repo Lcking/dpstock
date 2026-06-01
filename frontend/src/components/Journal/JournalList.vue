@@ -341,15 +341,38 @@ const handleCheckedRowKeys = (keys: Array<string | number>) => {
 }
 
 const getCandidateLabel = (candidate: string) => {
-  const map: Record<string, string> = {
-    A: '看涨',
-    B: '看跌',
-    C: '观望'
+  return `候选 ${candidate}`
+}
+
+const getSelectedCandidateDescription = (record: JournalRecord) => {
+  const fromSnapshot = record.constraints?.selected_candidate_description
+  if (typeof fromSnapshot === 'string' && fromSnapshot.trim()) {
+    return fromSnapshot
   }
-  return map[candidate] || `候选 ${candidate}`
+
+  const candidates = record.constraints?.candidates
+  if (Array.isArray(candidates)) {
+    const matched = candidates.find((candidate: any) => {
+      return String(candidate?.option_id || candidate?.id || '').toUpperCase() === record.candidate
+    })
+    if (typeof matched?.description === 'string' && matched.description.trim()) {
+      return matched.description
+    }
+  }
+
+  if (candidates && typeof candidates === 'object') {
+    const description = candidates[record.candidate]
+    if (typeof description === 'string' && description.trim()) {
+      return description
+    }
+  }
+
+  return ''
 }
 
 const getJudgmentSummary = (record: JournalRecord) => {
+  const selectedDescription = getSelectedCandidateDescription(record)
+  if (selectedDescription) return selectedDescription
   const premise = record.selected_premises?.[0]
   if (premise) return premise
   const evidence = record.snapshot?.watchlist_summary?.trend?.evidence?.[0]
