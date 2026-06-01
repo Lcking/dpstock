@@ -329,6 +329,56 @@ class JournalService:
             logger.info(f"[Journal] Marked {updated} records as due")
         
         return updated
+
+    def force_due_record(self, record_id: str) -> Dict[str, Any]:
+        """
+        Admin-only helper: force an active judgment record into due status.
+
+        This is intentionally narrow for production testing of the review loop:
+        it never reopens reviewed/archived records.
+        """
+        now = datetime.utcnow()
+        forced_validation_date = (now - timedelta(seconds=1)).isoformat() + 'Z'
+        updated_at = now.isoformat() + 'Z'
+
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, status, validation_date FROM judgments WHERE id = ?",
+                (record_id,),
+            )
+            row = cursor.fetchone()
+
+            if not row:
+                return {"ok": False, "error": "Record not found"}
+
+            previous_status = row.get("status")
+            if previous_status != "active":
+                return {
+                    "ok": False,
+                    "id": record_id,
+                    "status": previous_status,
+                    "previous_status": previous_status,
+                    "reason": "Only active records can be forced due",
+                }
+
+            cursor.execute(
+                """
+                UPDATE judgments
+                SET status = 'due', validation_date = ?, updated_at = ?
+                WHERE id = ? AND status = 'active'
+                """,
+                (forced_validation_date, updated_at, record_id),
+            )
+            conn.commit()
+
+        return {
+            "ok": True,
+            "id": record_id,
+            "status": "due",
+            "previous_status": previous_status,
+            "validation_date": forced_validation_date,
+        }
     
     def review_record(
         self,

@@ -22,6 +22,7 @@ from auth.admin_auth import (
 from database.db_factory import DatabaseFactory
 from services.app_settings_service import PATCHABLE_KEYS, AppSettingsService, ai_effective_for_admin_display
 from services.archive_service import ArchiveService
+from services.journal import journal_service
 from services.nav_links_service import NavLinksService
 from utils.logger import get_logger
 
@@ -239,6 +240,16 @@ async def admin_patch_user(user_id: str, body: UserPatchBody, _: dict = Depends(
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="用户不存在")
     return {"ok": True}
+
+
+@router.post("/journal/{record_id}/force-due")
+async def admin_force_journal_due(record_id: str, _: dict = Depends(require_admin)):
+    result = journal_service.force_due_record(record_id)
+    if result.get("error") == "Record not found":
+        raise HTTPException(status_code=404, detail="判断记录不存在")
+    if not result.get("ok"):
+        raise HTTPException(status_code=409, detail=result.get("reason", "无法强制到期该记录"))
+    return result
 
 
 @router.get("/invites/summary")
