@@ -229,6 +229,93 @@ class JournalService:
             logger.info(f"[Journal] Migrated {updated} records: {from_user_id[:8]}... -> {to_user_id[:8]}...")
 
         return updated
+
+    def get_review_stats(self, user_id: str, limit: int = 30) -> Dict[str, Any]:
+        """Return a compact review scorecard for the user's recent judgments."""
+        limit = min(max(int(limit or 30), 1), 200)
+        outcome_counts = {"supported": 0, "falsified": 0, "uncertain": 0}
+        selected_candidate_counts: Dict[str, int] = {}
+        actual_path_counts: Dict[str, int] = {}
+        reviewed_count = 0
+        pending_count = 0
+
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, candidate, status, review, created_at
+                FROM judgments
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            )
+            rows = cursor.fetchall()
+
+        for row in rows:
+            candidate = str(row.get("candidate") or "").upper()
+            if candidate:
+                selected_candidate_counts[candidate] = selected_candidate_counts.get(candidate, 0) + 1
+
+            if row.get("status") != "reviewed":
+                pending_count += 1
+                continue
+
+            review = self._parse_review(row.get("review"))
+            if not review:
+                pending_count += 1
+                continue
+
+            outcome = review.get("outcome")
+            if outcome not in outcome_counts:
+                outcome = "uncertain"
+            outcome_counts[outcome] += 1
+            reviewed_count += 1
+
+            system_evaluation = review.get("system_evaluation") or {}
+            actual_path = system_evaluation.get("actual_path")
+            if actual_path:
+                actual_key = str(actual_path).upper()
+                actual_path_counts[actual_key] = actual_path_counts.get(actual_key, 0) + 1
+
+        support_rate = None
+        if reviewed_count > 0:
+            support_rate = round(outcome_counts["supported"] / reviewed_count * 100, 2)
+
+        return {
+            "limit": limit,
+            "sample_size": len(rows),
+            "reviewed_count": reviewed_count,
+            "pending_count": pending_count,
+            "outcome_counts": outcome_counts,
+            "support_rate": support_rate,
+            "selected_candidate_counts": selected_candidate_counts,
+            "actual_path_counts": actual_path_counts,
+            "most_common_actual_path": self._most_common_key(actual_path_counts),
+        }
+
+    def _parse_review(self, raw_review: Any) -> Optional[Dict[str, Any]]:
+        if not raw_review:
+            return None
+        if isinstance(raw_review, dict):
+            return raw_review
+        if isinstance(raw_review, str):
+            try:
+                return json.loads(raw_review)
+            except Exception:
+                try:
+                    import ast
+                    parsed = ast.literal_eval(raw_review)
+                    return parsed if isinstance(parsed, dict) else None
+                except Exception:
+                    return None
+        return None
+
+    def _most_common_key(self, counts: Dict[str, int]) -> Optional[str]:
+        if not counts:
+            return None
+        return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
     
     def _row_to_record(self, row: Dict) -> Dict[str, Any]:
         """转换数据库行为记录"""

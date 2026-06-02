@@ -40,6 +40,22 @@ export interface JournalListResponse {
     trial_message: string | null
 }
 
+export interface JournalReviewStats {
+    limit: number
+    sample_size: number
+    reviewed_count: number
+    pending_count: number
+    outcome_counts: {
+        supported: number
+        falsified: number
+        uncertain: number
+    }
+    support_rate: number | null
+    selected_candidate_counts: Record<string, number>
+    actual_path_counts: Record<string, number>
+    most_common_actual_path: string | null
+}
+
 export interface ReviewTrigger {
     check_id: string
     result: 'triggered' | 'passed' | 'skip'

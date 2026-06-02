@@ -36,3 +36,16 @@ def test_journal_detail_uses_saved_candidate_condition_not_hardcoded_direction()
     assert "C - 观望/不确定" not in detail_dialog
     assert "getSelectedCandidateDescription(record)" in list_view
     assert "B: '看跌'" not in list_view
+
+
+def test_journal_list_surfaces_review_stats_scorecard():
+    api_service = (REPO_ROOT / "frontend/src/services/api.ts").read_text(encoding="utf-8")
+    journal_types = (REPO_ROOT / "frontend/src/types/journal.ts").read_text(encoding="utf-8")
+    list_view = (REPO_ROOT / "frontend/src/components/Journal/JournalList.vue").read_text(encoding="utf-8")
+
+    assert "JournalReviewStats" in journal_types
+    assert "getJournalStats" in api_service
+    assert "/journal/stats" in api_service
+    assert "复盘统计" in list_view
+    assert "support_rate" in list_view
+    assert "loadReviewStats" in list_view

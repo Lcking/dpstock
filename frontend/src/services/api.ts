@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse, MarketOverviewItem } from '@/types';
-import type { JournalListResponse, JournalSystemEvaluation } from '@/types/journal';
+import type { JournalListResponse, JournalReviewStats, JournalSystemEvaluation } from '@/types/journal';
 import type { Watchlist, WatchlistSummary } from '@/types/watchlist';
 
 const API_PREFIX = '/api';
@@ -284,6 +284,18 @@ export const apiService = {
       return response.data;
     } catch (error) {
       console.error('获取日记列表时出错:', error);
+      throw error;
+    }
+  },
+
+  getJournalStats: async (limit: number = 30): Promise<JournalReviewStats> => {
+    try {
+      const response = await axiosInstance.get('/journal/stats', {
+        params: { limit }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('获取复盘统计时出错:', error);
       throw error;
     }
   },

@@ -57,6 +57,41 @@
       </n-alert>
     </div>
 
+    <!-- Review Stats -->
+    <div v-if="reviewStats" class="stats-panel">
+      <div class="stats-header">
+        <div>
+          <div class="stats-title">复盘统计</div>
+          <div class="stats-subtitle">最近 {{ reviewStats.sample_size }} 条判断</div>
+        </div>
+        <n-tag size="small" type="info">近 {{ reviewStats.limit }} 条</n-tag>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">已复盘</div>
+          <div class="stat-value">{{ reviewStats.reviewed_count }}</div>
+          <div class="stat-hint">待验证/复盘 {{ reviewStats.pending_count }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">支持率</div>
+          <div class="stat-value">{{ formatSupportRate(reviewStats.support_rate) }}</div>
+          <div class="stat-hint">supported / 已复盘</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">结果分布</div>
+          <div class="stat-value compact">
+            支持 {{ reviewStats.outcome_counts.supported }} / 证伪 {{ reviewStats.outcome_counts.falsified }} / 不确定 {{ reviewStats.outcome_counts.uncertain }}
+          </div>
+          <div class="stat-hint">系统判卷结果</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">最常触发路径</div>
+          <div class="stat-value">{{ reviewStats.most_common_actual_path || '—' }}</div>
+          <div class="stat-hint">A/B/C 实际路径</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Loading: Skeletons -->
     <div v-if="loading" class="records-list">
       <div v-for="i in 3" :key="i" class="record-card skeleton-card">
@@ -238,7 +273,7 @@ import JournalDetailDialog from './JournalDetailDialog.vue'
 import AnchorStatus from '../AnchorStatus.vue'
 import AnchorBindDialog from '../AnchorBindDialog.vue'
 import EmptyState from '../common/EmptyState.vue'
-import type { JournalRecord } from '@/types/journal'
+import type { JournalRecord, JournalReviewStats } from '@/types/journal'
 import { applyPageSeo } from '@/utils/seo'
 
 const message = useMessage()
@@ -248,6 +283,7 @@ const dialog = useDialog()
 const loading = ref(false)
 const records = ref<JournalRecord[]>([])
 const dueCount = ref(0)
+const reviewStats = ref<JournalReviewStats | null>(null)
 const errorMessage = ref('')
 const statusFilter = ref<string>('')
 const showReview = ref(false)
@@ -308,6 +344,15 @@ const loadDueCount = async () => {
   }
 }
 
+const loadReviewStats = async () => {
+  try {
+    reviewStats.value = await apiService.getJournalStats(30)
+  } catch (error) {
+    console.error('Load review stats error:', error)
+    reviewStats.value = null
+  }
+}
+
 // Record click - show detail dialog
 const handleRecordClick = (record: JournalRecord) => {
   selectedRecord.value = record
@@ -332,6 +377,7 @@ const handleReviewed = () => {
   showReview.value = false
   loadRecords()
   loadDueCount()
+  loadReviewStats()
 }
 
 const rowKey = (row: JournalRecord) => row.id
@@ -634,6 +680,11 @@ const formatDate = (dateStr: string) => {
   })
 }
 
+const formatSupportRate = (support_rate: number | null) => {
+  if (support_rate === null || support_rate === undefined) return '—'
+  return `${support_rate.toFixed(1)}%`
+}
+
 onMounted(() => {
   applyPageSeo({
     title: '判断日记 | Agu AI',
@@ -643,6 +694,7 @@ onMounted(() => {
   })
   loadRecords()
   loadDueCount()
+  loadReviewStats()
 })
 </script>
 
@@ -686,6 +738,68 @@ onMounted(() => {
 
 .due-notification {
   margin-bottom: 20px;
+}
+
+.stats-panel {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--n-border-color);
+  border-radius: 12px;
+}
+
+.stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.stats-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--n-text-color);
+}
+
+.stats-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  padding: 12px;
+  background: var(--n-color);
+  border-radius: 10px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.stat-value {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--n-text-color);
+}
+
+.stat-value.compact {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.stat-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--n-text-color-3);
 }
 
 .loading-container {
@@ -811,5 +925,17 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   min-height: 400px;
+}
+
+@media (max-width: 900px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -117,6 +117,19 @@ async def get_due_count(user: UserContext = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/stats")
+async def get_review_stats(
+    limit: int = Query(30, ge=1, le=200),
+    user: UserContext = Depends(get_current_user),
+):
+    try:
+        user_id = _resolve_journal_user(user)
+        return journal_service.get_review_stats(user_id=user_id, limit=limit)
+    except Exception as e:
+        logger.error(f"Get review stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{record_id}")
 async def get_record(
     record_id: str,
