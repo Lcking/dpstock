@@ -183,6 +183,13 @@
               复盘于 {{ formatDate(record.review.reviewed_at) }}
             </span>
           </div>
+
+          <div v-else-if="record.evaluation_preview && record.status === 'due'" class="evaluation-preview">
+            <n-tag :type="outcomeTagType(record.evaluation_preview.outcome || 'uncertain')" size="small">
+              系统初判：{{ outcomeLabel(record.evaluation_preview.outcome || 'uncertain') }}
+            </n-tag>
+            <span>{{ record.evaluation_preview.summary || '已生成系统预判，等待你复盘确认。' }}</span>
+          </div>
         </div>
 
         <!-- Footer Actions -->
@@ -430,6 +437,11 @@ const getJudgmentSummary = (record: JournalRecord) => {
   return '—'
 }
 
+const getEvaluationPreviewSummary = (record: JournalRecord) => {
+  if (!record.evaluation_preview || record.status !== 'due') return ''
+  return record.evaluation_preview.summary || '已生成系统预判，等待你复盘确认。'
+}
+
 const getProgressInfo = (record: JournalRecord) => {
   if (!record.created_at || !record.validation_date) {
     return null
@@ -542,7 +554,17 @@ const columns = computed<DataTableColumns<JournalRecord>>(() => [
           { type: candidateTagType(row.candidate), size: 'small' },
           { default: () => getCandidateLabel(row.candidate) }
         ),
-        h('div', { class: 'judgment-summary' }, getJudgmentSummary(row))
+        h('div', { class: 'judgment-summary' }, getJudgmentSummary(row)),
+        getEvaluationPreviewSummary(row)
+          ? h('div', { class: 'evaluation-preview compact' }, [
+              h(
+                NTag,
+                { type: outcomeTagType(row.evaluation_preview?.outcome || 'uncertain'), size: 'small' },
+                { default: () => `系统初判：${outcomeLabel(row.evaluation_preview?.outcome || 'uncertain')}` }
+              ),
+              h('span', getEvaluationPreviewSummary(row))
+            ])
+          : null
       ])
   },
   {
@@ -908,6 +930,20 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.evaluation-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--n-text-color-2);
+}
+
+.evaluation-preview.compact {
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .review-time {

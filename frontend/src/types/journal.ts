@@ -14,6 +14,7 @@ export interface JournalRecord {
     days_left: number | null
     status: 'active' | 'due' | 'reviewed' | 'archived'
     created_at: string
+    evaluation_preview?: JournalSystemEvaluation
     review?: JournalReview
 }
 

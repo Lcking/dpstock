@@ -99,7 +99,7 @@ const previewEvaluation = ref<JournalSystemEvaluation | null>(null)
 const notes = ref('')
 
 const effectiveEvaluation = computed(() => {
-  return props.record?.review?.system_evaluation || previewEvaluation.value
+  return props.record?.review?.system_evaluation || props.record?.evaluation_preview || previewEvaluation.value
 })
 
 // Watch show prop to reset notes
@@ -111,7 +111,7 @@ watch(() => props.show, (newShow) => {
 })
 
 const loadEvaluationPreview = async () => {
-  if (!props.record || props.record.review?.system_evaluation) {
+  if (!props.record || props.record.review?.system_evaluation || props.record.evaluation_preview) {
     previewEvaluation.value = null
     return
   }

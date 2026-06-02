@@ -49,3 +49,14 @@ def test_journal_list_surfaces_review_stats_scorecard():
     assert "复盘统计" in list_view
     assert "support_rate" in list_view
     assert "loadReviewStats" in list_view
+
+
+def test_journal_list_and_review_dialog_use_evaluation_preview():
+    journal_types = (REPO_ROOT / "frontend/src/types/journal.ts").read_text(encoding="utf-8")
+    list_view = (REPO_ROOT / "frontend/src/components/Journal/JournalList.vue").read_text(encoding="utf-8")
+    review_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalReviewDialog.vue").read_text(encoding="utf-8")
+
+    assert "evaluation_preview?: JournalSystemEvaluation" in journal_types
+    assert "record.evaluation_preview" in list_view
+    assert "系统初判" in list_view
+    assert "props.record?.evaluation_preview" in review_dialog

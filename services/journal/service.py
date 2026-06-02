@@ -390,6 +390,7 @@ class JournalService:
             "days_left": days_left,
             "status": row.get('status'),
             "created_at": row.get('created_at'),
+            "evaluation_preview": constraints.get("evaluation_preview") if isinstance(constraints, dict) else None,
             "review": review
         }
     
@@ -399,18 +400,41 @@ class JournalService:
         
         将已过验证期的 active 记录标记为 due
         """
-        now = datetime.utcnow().isoformat() + 'Z'
-        
+        now = datetime.utcnow()
+        now_iso = now.isoformat() + 'Z'
+
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE judgments
-                SET status = 'due', updated_at = ?
+            cursor.execute(
+                """
+                SELECT *
+                FROM judgments
                 WHERE status = 'active' AND validation_date < ?
-            """, (now, now))
-            
-            updated = cursor.rowcount
+                """,
+                (now_iso,),
+            )
+            rows = cursor.fetchall()
+
+            updated = 0
+            for row in rows:
+                record_id = row.get("id")
+                cursor.execute(
+                    """
+                    UPDATE judgments
+                    SET status = 'due', updated_at = ?
+                    WHERE id = ? AND status = 'active'
+                    """,
+                    (now_iso, record_id),
+                )
+                if cursor.rowcount > 0:
+                    updated += 1
             conn.commit()
+
+        for row in rows:
+            try:
+                self._ensure_evaluation_preview(row)
+            except Exception as e:
+                logger.warning(f"[Journal] Failed to pre-evaluate due record {row.get('id')}: {e}")
         
         if updated > 0:
             logger.info(f"[Journal] Marked {updated} records as due")
@@ -489,8 +513,14 @@ class JournalService:
         if not row:
             return {"error": "Record not found"}
         
-        # 自动评估
-        outcome, triggers, system_evaluation = self._auto_evaluate(row)
+        # 自动评估：优先使用到期时生成的系统预判卷，避免重复拉取行情。
+        preview = self._get_evaluation_preview(row)
+        if preview:
+            system_evaluation = preview
+            outcome = system_evaluation.get("outcome", "uncertain")
+            triggers = self._evaluation_to_triggers(system_evaluation)
+        else:
+            outcome, triggers, system_evaluation = self._auto_evaluate(row)
         
         review = {
             "reviewed_at": now.isoformat() + 'Z',
@@ -522,6 +552,10 @@ class JournalService:
         if not row:
             return {"error": "Record not found"}
 
+        preview = self._get_evaluation_preview(row)
+        if preview:
+            return preview
+
         _outcome, _triggers, system_evaluation = self._auto_evaluate(row)
         return system_evaluation
 
@@ -533,6 +567,52 @@ class JournalService:
                 WHERE id = ? AND user_id = ?
             """, (record_id, user_id))
             return cursor.fetchone()
+
+    def _ensure_evaluation_preview(self, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if self._get_evaluation_preview(row):
+            return self._get_evaluation_preview(row)
+
+        _outcome, _triggers, evaluation = self._auto_evaluate(row)
+        evaluation = dict(evaluation)
+        evaluation.setdefault("outcome", _outcome)
+        evaluation["evaluated_at"] = datetime.utcnow().isoformat() + 'Z'
+
+        constraints = self._parse_constraints(row.get("constraints"))
+        constraints["evaluation_preview"] = evaluation
+
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE judgments
+                SET constraints = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    json.dumps(constraints, ensure_ascii=False),
+                    datetime.utcnow().isoformat() + 'Z',
+                    row.get("id"),
+                ),
+            )
+            conn.commit()
+
+        return evaluation
+
+    def _get_evaluation_preview(self, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        constraints = self._parse_constraints(row.get("constraints"))
+        preview = constraints.get("evaluation_preview")
+        return preview if isinstance(preview, dict) else None
+
+    def _parse_constraints(self, raw_constraints: Any) -> Dict[str, Any]:
+        if isinstance(raw_constraints, dict):
+            return dict(raw_constraints)
+        if isinstance(raw_constraints, str) and raw_constraints.strip():
+            try:
+                parsed = json.loads(raw_constraints)
+                return parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                return {}
+        return {}
     
     def _auto_evaluate(self, row: Dict) -> tuple:
         """
@@ -543,16 +623,12 @@ class JournalService:
         import json
         from services.stock_data_provider import StockDataProvider
 
-        constraints = {}
-        try:
-            if row.get('constraints'):
-                constraints = json.loads(row['constraints']) if isinstance(row['constraints'], str) else row['constraints']
-        except Exception:
-            constraints = {}
+        constraints = self._parse_constraints(row.get('constraints'))
 
         candidate_descriptions = self._extract_candidate_descriptions(constraints)
         if not candidate_descriptions:
             system_evaluation = {
+                "outcome": "uncertain",
                 "summary": "缺少候选条件原文，无法自动判卷。之后保存的新判断会记录 A/B/C 条件用于验证。",
                 "actual_path": None,
                 "selected_condition": {"status": "missing_condition"},
