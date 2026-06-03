@@ -7,7 +7,7 @@ REFACTORED: Uses DatabaseFactory for unified database access
 import sqlite3
 import uuid
 from datetime import date, datetime
-from typing import Optional, Dict, Tuple
+from typing import Any, Optional, Dict, Tuple
 from utils.logger import get_logger
 from database.db_factory import DatabaseFactory
 from services.user_service import UserService
@@ -115,6 +115,66 @@ class InviteService:
         except Exception as e:
             logger.error(f"Failed to validate invite code: {str(e)}")
             return None
+
+    def record_invite_acceptance(self, invitee_id: str, invite_code: str) -> Dict[str, Any]:
+        """Persist that an invitee accepted a valid invite link."""
+        canonical_invitee_id = self._resolve_canonical_user_id(invitee_id)
+        inviter_id = self.validate_invite_code(invite_code)
+        canonical_inviter_id = self._resolve_canonical_user_id(inviter_id)
+
+        if not canonical_invitee_id or not canonical_inviter_id:
+            return {"accepted": False, "reason": "invalid_invite"}
+
+        if canonical_invitee_id == canonical_inviter_id:
+            return {"accepted": False, "reason": "self_invite"}
+
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT inviter_id, invitee_id, invite_code
+                    FROM invite_acceptances
+                    WHERE invitee_id = ?
+                    """,
+                    (canonical_invitee_id,),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    same_invite = (
+                        existing.get("inviter_id") == canonical_inviter_id
+                        and existing.get("invite_code") == invite_code
+                    )
+                    return {
+                        "accepted": bool(same_invite),
+                        "existing": True,
+                        "reason": None if same_invite else "already_accepted",
+                        "inviter_id": existing.get("inviter_id"),
+                        "invitee_id": existing.get("invitee_id"),
+                        "invite_code": existing.get("invite_code"),
+                    }
+
+                cursor.execute(
+                    """
+                    INSERT INTO invite_acceptances (inviter_id, invitee_id, invite_code)
+                    VALUES (?, ?, ?)
+                    """,
+                    (canonical_inviter_id, canonical_invitee_id, invite_code),
+                )
+                conn.commit()
+
+            logger.info(
+                f"Recorded invite acceptance: inviter={canonical_inviter_id}, invitee={canonical_invitee_id}, code={invite_code}"
+            )
+            return {
+                "accepted": True,
+                "inviter_id": canonical_inviter_id,
+                "invitee_id": canonical_invitee_id,
+                "invite_code": invite_code,
+            }
+        except Exception as e:
+            logger.error(f"Failed to record invite acceptance: {str(e)}")
+            return {"accepted": False, "reason": "error"}
     
     def record_invite_reward(
         self, 
@@ -198,7 +258,15 @@ class InviteService:
         canonical_invitee_id = self._resolve_canonical_user_id(invitee_id)
         canonical_referrer_id = self._resolve_canonical_user_id(referrer_id)
 
-        if not canonical_referrer_id or not canonical_invitee_id:
+        if not canonical_invitee_id:
+            return None
+
+        acceptance = None
+        if not canonical_referrer_id:
+            acceptance = self._get_acceptance_for_invitee(canonical_invitee_id)
+            canonical_referrer_id = acceptance.get("inviter_id") if acceptance else None
+
+        if not canonical_referrer_id:
             logger.debug(f"No referrer for invitee: {invitee_id}")
             return None
 
@@ -224,19 +292,21 @@ class InviteService:
                     logger.debug(f"Invitee {canonical_invitee_id} has {analysis_count} analyses, skipping reward")
                     return None
                 
-                # Get invite code used
-                cursor.execute("""
-                    SELECT invite_code FROM invite_codes
-                    WHERE inviter_id = ?
-                    LIMIT 1
-                """, (canonical_referrer_id,))
-                
-                code_result = cursor.fetchone()
-                if not code_result:
-                    logger.warning(f"No invite code found for inviter: {canonical_referrer_id}")
-                    return None
-                
-                invite_code = code_result.get('invite_code')
+                invite_code = acceptance.get("invite_code") if acceptance else None
+                if not invite_code:
+                    # Get invite code used
+                    cursor.execute("""
+                        SELECT invite_code FROM invite_codes
+                        WHERE inviter_id = ?
+                        LIMIT 1
+                    """, (canonical_referrer_id,))
+                    
+                    code_result = cursor.fetchone()
+                    if not code_result:
+                        logger.warning(f"No invite code found for inviter: {canonical_referrer_id}")
+                        return None
+                    
+                    invite_code = code_result.get('invite_code')
                 
                 # Record reward
                 success, message = self.record_invite_reward(
@@ -258,4 +328,22 @@ class InviteService:
                     
         except Exception as e:
             logger.error(f"Failed to check and reward inviter: {str(e)}")
+            return None
+
+    def _get_acceptance_for_invitee(self, invitee_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT inviter_id, invitee_id, invite_code
+                    FROM invite_acceptances
+                    WHERE invitee_id = ?
+                    """,
+                    (invitee_id,),
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Failed to load invite acceptance: {str(e)}")
             return None

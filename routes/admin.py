@@ -258,6 +258,8 @@ async def admin_invite_summary(_: dict = Depends(require_admin)):
         cur = conn.cursor()
         cur.execute("SELECT COUNT(*) AS c FROM invite_codes")
         codes = int(cur.fetchone()["c"])
+        cur.execute("SELECT COUNT(*) AS c FROM invite_acceptances")
+        acceptances = int(cur.fetchone()["c"])
         cur.execute("SELECT COUNT(*) AS c FROM invite_rewards")
         rewards = int(cur.fetchone()["c"])
         cur.execute(
@@ -270,7 +272,16 @@ async def admin_invite_summary(_: dict = Depends(require_admin)):
             """
         )
         top = [dict(r) for r in cur.fetchall()]
-    return {"invite_codes_total": codes, "invite_rewards_total": rewards, "top_inviters": top}
+    acceptance_rate = round(acceptances / codes * 100, 2) if codes else 0.0
+    reward_rate = round(rewards / acceptances * 100, 2) if acceptances else 0.0
+    return {
+        "invite_codes_total": codes,
+        "invite_acceptances_total": acceptances,
+        "invite_rewards_total": rewards,
+        "acceptance_rate": acceptance_rate,
+        "reward_rate": reward_rate,
+        "top_inviters": top,
+    }
 
 
 @router.get("/invites/rewards")

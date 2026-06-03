@@ -103,9 +103,15 @@
 
       <n-tab-pane name="invites" tab="邀请拉新">
         <n-descriptions v-if="inviteSummary" bordered size="small" style="max-width: 520px">
-          <n-descriptions-item label="邀请码总数">{{ inviteSummary.invite_codes_total }}</n-descriptions-item>
-          <n-descriptions-item label="奖励记录数">{{ inviteSummary.invite_rewards_total }}</n-descriptions-item>
+          <n-descriptions-item label="生成链接用户数">{{ inviteSummary.invite_codes_total }}</n-descriptions-item>
+          <n-descriptions-item label="接受邀请数">{{ inviteSummary.invite_acceptances_total }}</n-descriptions-item>
+          <n-descriptions-item label="奖励发放数">{{ inviteSummary.invite_rewards_total }}</n-descriptions-item>
+          <n-descriptions-item label="接受率">{{ formatRate(inviteSummary.acceptance_rate) }}</n-descriptions-item>
+          <n-descriptions-item label="奖励转化率">{{ formatRate(inviteSummary.reward_rate) }}</n-descriptions-item>
         </n-descriptions>
+        <n-p depth="3" style="max-width: 720px; margin-top: 8px">
+          生成链接只代表用户打开过邀请功能；接受邀请代表新用户访问过有效邀请链接；奖励发放代表被邀请者完成首次分析。
+        </n-p>
         <n-h3 prefix="bar" style="margin-top: 16px">Top 邀请人</n-h3>
         <n-data-table :columns="inviterCols" :data="inviteSummary?.top_inviters || []" :bordered="false" />
         <n-h3 prefix="bar" style="margin-top: 16px">最近奖励</n-h3>
@@ -452,6 +458,11 @@ const userCols: DataTableColumns<any> = [
 
 const inviteSummary = ref<any>(null);
 const rewardRows = ref<any[]>([]);
+
+function formatRate(value: number | null | undefined) {
+  if (typeof value !== 'number') return '—';
+  return `${value.toFixed(1)}%`;
+}
 const inviterCols: DataTableColumns<any> = [
   { title: 'inviter_id', key: 'inviter_id', ellipsis: { tooltip: true } },
   { title: '次数', key: 'invite_count', width: 80 },

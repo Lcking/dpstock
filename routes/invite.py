@@ -72,6 +72,27 @@ async def accept_invite(
                 message="邀请码无效或已过期",
             )
 
+        acceptance = invite_service.record_invite_acceptance(user.user_id, code)
+        if not acceptance.get("accepted"):
+            reason = acceptance.get("reason")
+            if reason == "self_invite":
+                return InviteAcceptResponse(
+                    success=False,
+                    error="self_invite",
+                    message="不能接受自己的邀请",
+                )
+            if reason == "already_accepted":
+                return InviteAcceptResponse(
+                    success=False,
+                    error="already_accepted",
+                    message="你已经接受过其他邀请",
+                )
+            return InviteAcceptResponse(
+                success=False,
+                error=reason or "accept_failed",
+                message="接受邀请失败，请稍后重试",
+            )
+
         response.set_cookie(
             key=REFERRER_COOKIE,
             value=inviter_id,

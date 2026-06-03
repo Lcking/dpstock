@@ -93,6 +93,7 @@ def test_full_migration_stack_creates_unified_user_tables(tmp_path, monkeypatch)
 
     assert "users" in tables
     assert "user_identities" in tables
+    assert "invite_acceptances" in tables
 
 
 def test_bind_email_merges_anonymous_cookie_and_anchor_to_same_user(tmp_path):
@@ -243,3 +244,82 @@ def test_invite_reward_uses_canonical_user_after_inviter_binding(tmp_path):
         conn.close()
 
     assert rows == [(canonical_inviter_id, invitee_user_id)]
+
+
+def test_generating_invite_code_does_not_grant_quota(tmp_path):
+    db_path = tmp_path / "users.db"
+    _run_all_migrations(db_path)
+    DatabaseFactory.initialize(str(db_path))
+
+    user_service = UserService(db_path=str(db_path))
+    invite_service = InviteService(db_path=str(db_path))
+    quota_service = QuotaService(db_path=str(db_path))
+
+    inviter_id = user_service.get_or_create_user_by_identity(
+        identity_type="anonymous",
+        identity_value="anon_inviter_no_reward",
+    )
+
+    generated = invite_service.generate_invite_code(inviter_id)
+
+    assert generated["invite_code"]
+    assert quota_service.get_quota_status(inviter_id)["invite_quota"] == 0
+
+    conn = sqlite3.connect(db_path)
+    try:
+        reward_count = conn.execute("SELECT COUNT(*) FROM invite_rewards").fetchone()[0]
+    finally:
+        conn.close()
+
+    assert reward_count == 0
+
+
+def test_accept_invite_records_pending_acceptance_and_rewards_after_first_analysis_without_cookie(tmp_path):
+    db_path = tmp_path / "users.db"
+    _run_all_migrations(db_path)
+    DatabaseFactory.initialize(str(db_path))
+
+    user_service = UserService(db_path=str(db_path))
+    invite_service = InviteService(db_path=str(db_path))
+    quota_service = QuotaService(db_path=str(db_path))
+
+    inviter_id = user_service.get_or_create_user_by_identity(
+        identity_type="anonymous",
+        identity_value="anon_inviter",
+    )
+    invitee_id = user_service.get_or_create_user_by_identity(
+        identity_type="anonymous",
+        identity_value="anon_invitee",
+    )
+    invite_code = invite_service.generate_invite_code(inviter_id)["invite_code"]
+
+    accepted = invite_service.record_invite_acceptance(invitee_id, invite_code)
+
+    assert accepted == {
+        "accepted": True,
+        "inviter_id": inviter_id,
+        "invitee_id": invitee_id,
+        "invite_code": invite_code,
+    }
+    assert quota_service.get_quota_status(inviter_id)["invite_quota"] == 0
+
+    quota_service.record_analysis(invitee_id, "600519.SH")
+    reward = invite_service.check_and_reward_inviter(invitee_id=invitee_id)
+
+    assert reward is not None
+    assert reward["inviter_id"] == inviter_id
+    assert quota_service.get_quota_status(inviter_id)["invite_quota"] == InviteService.REWARD_QUOTA
+
+    conn = sqlite3.connect(db_path)
+    try:
+        acceptance_rows = conn.execute(
+            "SELECT inviter_id, invitee_id, invite_code FROM invite_acceptances"
+        ).fetchall()
+        reward_rows = conn.execute(
+            "SELECT inviter_id, invitee_id, invite_code FROM invite_rewards"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    assert acceptance_rows == [(inviter_id, invitee_id, invite_code)]
+    assert reward_rows == [(inviter_id, invitee_id, invite_code)]
