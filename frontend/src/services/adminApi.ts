@@ -52,6 +52,8 @@ export const adminApi = {
   inviteSummary: () => adminAxios.get('/invites/summary'),
   inviteAcceptances: (params?: { limit?: number; offset?: number }) =>
     adminAxios.get('/invites/acceptances', { params }),
+  inviteDiagnose: (inviteeId: string) =>
+    adminAxios.get(`/invites/diagnose/${encodeURIComponent(inviteeId)}`),
   inviteRewards: (params?: { limit?: number; offset?: number }) =>
     adminAxios.get('/invites/rewards', { params }),
 

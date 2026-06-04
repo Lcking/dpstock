@@ -15,6 +15,10 @@ def test_admin_invite_tab_labels_generated_links_as_funnel_not_successful_invite
     assert "待转化邀请" in admin_view
     assert "最近接受邀请" in admin_view
     assert "pending_first_analysis" in admin_view
+    assert "排查" in admin_view
+    assert "inviteDiagnose" in admin_view
+    assert "邀请奖励排查" in admin_view
+    assert "建议动作" in admin_view
     assert "邀请码总数" not in admin_view
 
 

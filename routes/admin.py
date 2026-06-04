@@ -344,6 +344,89 @@ async def admin_invite_acceptances(limit: int = 100, offset: int = 0, _: dict = 
     }
 
 
+@router.get("/invites/diagnose/{invitee_id}")
+async def admin_invite_diagnosis(invitee_id: str, _: dict = Depends(require_admin)):
+    with DatabaseFactory.get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, inviter_id, invitee_id, invite_code, accepted_at
+            FROM invite_acceptances
+            WHERE invitee_id = ?
+            ORDER BY accepted_at DESC, id DESC
+            LIMIT 1
+            """,
+            (invitee_id,),
+        )
+        acceptance = cur.fetchone()
+
+        cur.execute(
+            """
+            SELECT COUNT(*) AS c, GROUP_CONCAT(stock_code) AS stocks
+            FROM analysis_records
+            WHERE user_id = ?
+            """,
+            (invitee_id,),
+        )
+        analysis_row = cur.fetchone()
+        analysis_count = int(analysis_row["c"]) if analysis_row else 0
+        analyzed_stocks = []
+        if analysis_row and analysis_row["stocks"]:
+            analyzed_stocks = str(analysis_row["stocks"]).split(",")
+
+        reward = None
+        if acceptance:
+            cur.execute(
+                """
+                SELECT id, inviter_id, invitee_id, invite_code, reward_quota, reward_date, created_at
+                FROM invite_rewards
+                WHERE inviter_id = ? AND invitee_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (acceptance["inviter_id"], invitee_id),
+            )
+            reward_row = cur.fetchone()
+            reward = dict(reward_row) if reward_row else None
+
+    if not acceptance:
+        return {
+            "invitee_id": invitee_id,
+            "status": "no_acceptance",
+            "acceptance": None,
+            "analysis_count": analysis_count,
+            "analyzed_stocks": analyzed_stocks,
+            "reward": None,
+            "reason": "没有找到接受邀请记录，可能不是通过有效邀请链接进入。",
+            "next_action": "确认用户是否使用了正确邀请链接，或让用户重新打开邀请链接。",
+        }
+
+    acceptance_dict = dict(acceptance)
+    if reward:
+        status = "rewarded"
+        reason = "奖励已经发放。"
+        next_action = "无需处理；如用户仍反馈异常，请核对邀请人与用户身份是否一致。"
+    elif analysis_count == 0:
+        status = "pending_first_analysis"
+        reason = "被邀请者还没有完成首次分析，所以奖励尚未发放。"
+        next_action = "引导被邀请者完成首次分析。"
+    else:
+        status = "analysis_without_reward"
+        reason = "被邀请者已有分析记录，但没有匹配到奖励记录。"
+        next_action = "检查分析是否发生在接受邀请之后，以及日志中是否有发奖失败。"
+
+    return {
+        "invitee_id": invitee_id,
+        "status": status,
+        "acceptance": acceptance_dict,
+        "analysis_count": analysis_count,
+        "analyzed_stocks": analyzed_stocks,
+        "reward": reward,
+        "reason": reason,
+        "next_action": next_action,
+    }
+
+
 @router.get("/invites/rewards")
 async def admin_invite_rewards(limit: int = 100, offset: int = 0, _: dict = Depends(require_admin)):
     limit = min(max(limit, 1), 500)

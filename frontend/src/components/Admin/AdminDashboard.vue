@@ -121,6 +121,27 @@
         <n-data-table :columns="rewardCols" :data="rewardRows" :bordered="false" />
       </n-tab-pane>
     </n-tabs>
+
+    <n-modal v-model:show="inviteDiagnosisModal" preset="card" style="width: 720px" title="邀请奖励排查">
+      <n-spin :show="inviteDiagnosisLoading">
+        <n-descriptions v-if="inviteDiagnosis" bordered size="small" :column="1">
+          <n-descriptions-item label="被邀请用户">{{ inviteDiagnosis.invitee_id }}</n-descriptions-item>
+          <n-descriptions-item label="当前状态">{{ formatAcceptanceStatus(inviteDiagnosis.status) }}</n-descriptions-item>
+          <n-descriptions-item label="首次分析数">{{ inviteDiagnosis.analysis_count }}</n-descriptions-item>
+          <n-descriptions-item label="已分析股票">
+            {{ inviteDiagnosis.analyzed_stocks?.length ? inviteDiagnosis.analyzed_stocks.join(', ') : '—' }}
+          </n-descriptions-item>
+          <n-descriptions-item label="原因">{{ inviteDiagnosis.reason }}</n-descriptions-item>
+          <n-descriptions-item label="建议动作">{{ inviteDiagnosis.next_action }}</n-descriptions-item>
+          <n-descriptions-item label="接受记录">
+            {{ inviteDiagnosis.acceptance ? `${inviteDiagnosis.acceptance.inviter_id} / ${inviteDiagnosis.acceptance.invite_code}` : '—' }}
+          </n-descriptions-item>
+          <n-descriptions-item label="奖励记录">
+            {{ inviteDiagnosis.reward ? `+${inviteDiagnosis.reward.reward_quota} / ${inviteDiagnosis.reward.reward_date}` : '—' }}
+          </n-descriptions-item>
+        </n-descriptions>
+      </n-spin>
+    </n-modal>
   </div>
 </template>
 
@@ -462,6 +483,9 @@ const userCols: DataTableColumns<any> = [
 const inviteSummary = ref<any>(null);
 const rewardRows = ref<any[]>([]);
 const acceptanceRows = ref<any[]>([]);
+const inviteDiagnosisModal = ref(false);
+const inviteDiagnosisLoading = ref(false);
+const inviteDiagnosis = ref<any>(null);
 
 function formatRate(value: number | null | undefined) {
   if (typeof value !== 'number') return '—';
@@ -483,6 +507,17 @@ const acceptanceCols: DataTableColumns<any> = [
     render: (row) => formatAcceptanceStatus(row.status),
   },
   { title: '接受时间', key: 'accepted_at', width: 170 },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 90,
+    render: (row) =>
+      h(
+        NButton,
+        { size: 'small', onClick: () => diagnoseInvite(row.invitee_id) },
+        () => '排查'
+      ),
+  },
 ];
 const rewardCols: DataTableColumns<any> = [
   { title: 'id', key: 'id', width: 60 },
@@ -514,6 +549,20 @@ async function loadInvites() {
     rewardRows.value = r.data.rewards || [];
   } catch {
     message.error('加载邀请数据失败');
+  }
+}
+
+async function diagnoseInvite(inviteeId: string) {
+  inviteDiagnosisModal.value = true;
+  inviteDiagnosisLoading.value = true;
+  inviteDiagnosis.value = null;
+  try {
+    const { data } = await adminApi.inviteDiagnose(inviteeId);
+    inviteDiagnosis.value = data;
+  } catch {
+    message.error('邀请奖励排查失败');
+  } finally {
+    inviteDiagnosisLoading.value = false;
   }
 }
 

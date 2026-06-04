@@ -1,7 +1,7 @@
 import pytest
 
 from database.db_factory import DatabaseFactory
-from routes.admin import admin_invite_acceptances, admin_invite_summary
+from routes.admin import admin_invite_acceptances, admin_invite_diagnosis, admin_invite_summary
 from scripts.run_migrations import run_migrations
 
 
@@ -97,3 +97,33 @@ async def test_admin_invite_acceptances_reports_pending_first_analysis(tmp_path,
     assert rows_by_invitee["invitee_pending"]["analysis_count"] == 0
     assert rows_by_invitee["invitee_rewarded"]["status"] == "rewarded"
     assert rows_by_invitee["invitee_rewarded"]["analysis_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_admin_invite_diagnosis_explains_missing_reward(tmp_path, monkeypatch):
+    db_path = tmp_path / "admin_invite_diagnosis.db"
+    _run_all_migrations(db_path, monkeypatch)
+    DatabaseFactory.initialize(str(db_path))
+
+    with DatabaseFactory.get_connection() as conn:
+        conn.execute(
+            "INSERT INTO invite_codes (invite_code, inviter_id) VALUES (?, ?)",
+            ("code001", "inviter_1"),
+        )
+        conn.execute(
+            """
+            INSERT INTO invite_acceptances (inviter_id, invitee_id, invite_code)
+            VALUES (?, ?, ?)
+            """,
+            ("inviter_1", "invitee_pending", "code001"),
+        )
+        conn.commit()
+
+    diagnosis = await admin_invite_diagnosis("invitee_pending", {})
+
+    assert diagnosis["invitee_id"] == "invitee_pending"
+    assert diagnosis["status"] == "pending_first_analysis"
+    assert diagnosis["analysis_count"] == 0
+    assert diagnosis["reward"] is None
+    assert "还没有完成首次分析" in diagnosis["reason"]
+    assert "引导被邀请者完成首次分析" in diagnosis["next_action"]
