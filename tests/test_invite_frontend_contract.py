@@ -24,3 +24,8 @@ def test_invited_landing_page_has_persistent_first_analysis_guidance():
     assert "inviteAcceptedBanner" in app_view
     assert "完成首次股票分析后" in app_view
     assert "立即分析一只股票" in app_view
+    assert app_view.index("AnnouncementBanner") < app_view.index("inviteAcceptedBanner") < app_view.index("n-layout")
+    assert 'ref="searchConfigRef"' in app_view
+    assert "scrollIntoView" in app_view
+    assert "stockSelectRef" in app_view
+    assert "analyzeStocks();" not in app_view[app_view.index("async function startInvitedFirstAnalysis"):app_view.index("// 市场选项")]

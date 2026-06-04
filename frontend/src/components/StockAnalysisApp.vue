@@ -8,6 +8,24 @@
       :auto-close-time="5"
       @close="handleAnnouncementClose"
     />
+
+    <n-alert
+      v-if="inviteAcceptedBanner"
+      type="success"
+      closable
+      class="invite-accepted-banner"
+      @close="inviteAcceptedBanner = false"
+    >
+      <template #header>
+        你已通过好友邀请进入
+      </template>
+      完成首次股票分析后，邀请奖励才会生效。现在输入一只股票并开始分析，就能完成这次邀请转化。
+      <div class="invite-accepted-action">
+        <n-button size="small" type="primary" @click="startInvitedFirstAnalysis">
+          立即分析一只股票
+        </n-button>
+      </div>
+    </n-alert>
     
     <n-layout class="main-layout">
       <n-layout-content class="main-content mobile-content-container">
@@ -16,24 +34,6 @@
         <!-- 核心价值闭环 -->
         <ValueLoop />
 
-        <n-alert
-          v-if="inviteAcceptedBanner"
-          type="success"
-          closable
-          class="invite-accepted-banner"
-          @close="inviteAcceptedBanner = false"
-        >
-          <template #header>
-            你已通过好友邀请进入
-          </template>
-          完成首次股票分析后，邀请奖励才会生效。现在分析一只股票，就能完成这次邀请转化。
-          <div class="invite-accepted-action">
-            <n-button size="small" type="primary" @click="startInvitedFirstAnalysis">
-              立即分析一只股票
-            </n-button>
-          </div>
-        </n-alert>
-
         <!-- 主要内容 -->
         <n-card class="analysis-container mobile-card mobile-card-spacing mobile-shadow">
           
@@ -41,7 +41,7 @@
             <!-- 左侧配置区域 -->
             <n-grid-item span="1 xl:8">
               <div class="config-section">
-                <div class="search-config-container">
+                <div ref="searchConfigRef" class="search-config-container">
                   <n-form-item label="智能搜索与选择">
                     <n-input-group>
                       <n-select
@@ -51,6 +51,7 @@
                         @update:value="handleMarketTypeChange"
                       />
                       <n-select
+                        ref="stockSelectRef"
                         v-model:value="selectedStockValues"
                         multiple
                         filterable
@@ -241,6 +242,8 @@ const showQuotaExceededModal = ref(false);
 const quotaExceededData = ref<any>(null);
 const showBindDialog = ref(false);
 const inviteAcceptedBanner = ref(false);
+const searchConfigRef = ref<HTMLElement | null>(null);
+const stockSelectRef = ref<any>(null);
 
 // 股票分析配置
 const marketType = ref('A');
@@ -298,12 +301,11 @@ async function handleInviteAcceptance() {
 }
 
 async function startInvitedFirstAnalysis() {
-  inviteAcceptedBanner.value = false;
-  marketType.value = 'A';
-  selectedStockValues.value = ['600519'];
-  searchOptions.value = [{ label: '600519', value: '600519' }];
   await nextTick();
-  analyzeStocks();
+  searchConfigRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  window.setTimeout(() => {
+    stockSelectRef.value?.focus?.();
+  }, 250);
 }
 
 // 市场选项
