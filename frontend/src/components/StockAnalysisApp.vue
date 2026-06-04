@@ -16,6 +16,24 @@
         <!-- 核心价值闭环 -->
         <ValueLoop />
 
+        <n-alert
+          v-if="inviteAcceptedBanner"
+          type="success"
+          closable
+          class="invite-accepted-banner"
+          @close="inviteAcceptedBanner = false"
+        >
+          <template #header>
+            你已通过好友邀请进入
+          </template>
+          完成首次股票分析后，邀请奖励才会生效。现在分析一只股票，就能完成这次邀请转化。
+          <div class="invite-accepted-action">
+            <n-button size="small" type="primary" @click="startInvitedFirstAnalysis">
+              立即分析一只股票
+            </n-button>
+          </div>
+        </n-alert>
+
         <!-- 主要内容 -->
         <n-card class="analysis-container mobile-card mobile-card-spacing mobile-shadow">
           
@@ -182,6 +200,7 @@ import {
   NButton,
   NInputGroup,
   NEmpty,
+  NAlert,
   useMessage,
   NSpace,
   NText,
@@ -221,6 +240,7 @@ const showAnnouncementBanner = ref(true);
 const showQuotaExceededModal = ref(false);
 const quotaExceededData = ref<any>(null);
 const showBindDialog = ref(false);
+const inviteAcceptedBanner = ref(false);
 
 // 股票分析配置
 const marketType = ref('A');
@@ -259,6 +279,7 @@ async function handleInviteAcceptance() {
   try {
     const result = await apiService.acceptInvite(inviteCode);
     if (result?.success) {
+      inviteAcceptedBanner.value = true;
       message.success(result.message || '邀请已接受');
     } else {
       message.warning(result?.message || '邀请码无效或已过期');
@@ -274,6 +295,15 @@ async function handleInviteAcceptance() {
   } finally {
     clearInviteQueryParam();
   }
+}
+
+async function startInvitedFirstAnalysis() {
+  inviteAcceptedBanner.value = false;
+  marketType.value = 'A';
+  selectedStockValues.value = ['600519'];
+  searchOptions.value = [{ label: '600519', value: '600519' }];
+  await nextTick();
+  analyzeStocks();
 }
 
 // 市场选项
@@ -1072,6 +1102,14 @@ function handleOpenBindFromQuota() {
   overflow-x: hidden;
   padding-bottom: 40px;
   box-sizing: border-box;
+}
+
+.invite-accepted-banner {
+  margin-bottom: 16px;
+}
+
+.invite-accepted-action {
+  margin-top: 10px;
 }
 
 .sr-only {

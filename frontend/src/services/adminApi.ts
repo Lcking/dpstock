@@ -50,6 +50,8 @@ export const adminApi = {
     adminAxios.patch(`/users/${userId}`, { status }),
 
   inviteSummary: () => adminAxios.get('/invites/summary'),
+  inviteAcceptances: (params?: { limit?: number; offset?: number }) =>
+    adminAxios.get('/invites/acceptances', { params }),
   inviteRewards: (params?: { limit?: number; offset?: number }) =>
     adminAxios.get('/invites/rewards', { params }),
 

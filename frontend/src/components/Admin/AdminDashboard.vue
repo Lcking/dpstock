@@ -106,6 +106,7 @@
           <n-descriptions-item label="生成链接用户数">{{ inviteSummary.invite_codes_total }}</n-descriptions-item>
           <n-descriptions-item label="接受邀请数">{{ inviteSummary.invite_acceptances_total }}</n-descriptions-item>
           <n-descriptions-item label="奖励发放数">{{ inviteSummary.invite_rewards_total }}</n-descriptions-item>
+          <n-descriptions-item label="待转化邀请">{{ inviteSummary.pending_acceptances_total }}</n-descriptions-item>
           <n-descriptions-item label="接受率">{{ formatRate(inviteSummary.acceptance_rate) }}</n-descriptions-item>
           <n-descriptions-item label="奖励转化率">{{ formatRate(inviteSummary.reward_rate) }}</n-descriptions-item>
         </n-descriptions>
@@ -114,6 +115,8 @@
         </n-p>
         <n-h3 prefix="bar" style="margin-top: 16px">Top 邀请人</n-h3>
         <n-data-table :columns="inviterCols" :data="inviteSummary?.top_inviters || []" :bordered="false" />
+        <n-h3 prefix="bar" style="margin-top: 16px">最近接受邀请</n-h3>
+        <n-data-table :columns="acceptanceCols" :data="acceptanceRows" :bordered="false" />
         <n-h3 prefix="bar" style="margin-top: 16px">最近奖励</n-h3>
         <n-data-table :columns="rewardCols" :data="rewardRows" :bordered="false" />
       </n-tab-pane>
@@ -458,6 +461,7 @@ const userCols: DataTableColumns<any> = [
 
 const inviteSummary = ref<any>(null);
 const rewardRows = ref<any[]>([]);
+const acceptanceRows = ref<any[]>([]);
 
 function formatRate(value: number | null | undefined) {
   if (typeof value !== 'number') return '—';
@@ -466,6 +470,19 @@ function formatRate(value: number | null | undefined) {
 const inviterCols: DataTableColumns<any> = [
   { title: 'inviter_id', key: 'inviter_id', ellipsis: { tooltip: true } },
   { title: '次数', key: 'invite_count', width: 80 },
+];
+const acceptanceCols: DataTableColumns<any> = [
+  { title: '邀请人', key: 'inviter_id', ellipsis: { tooltip: true } },
+  { title: '被邀请', key: 'invitee_id', ellipsis: { tooltip: true } },
+  { title: 'code', key: 'invite_code', width: 100 },
+  { title: '首次分析数', key: 'analysis_count', width: 100 },
+  {
+    title: '状态',
+    key: 'status',
+    width: 140,
+    render: (row) => formatAcceptanceStatus(row.status),
+  },
+  { title: '接受时间', key: 'accepted_at', width: 170 },
 ];
 const rewardCols: DataTableColumns<any> = [
   { title: 'id', key: 'id', width: 60 },
@@ -476,10 +493,24 @@ const rewardCols: DataTableColumns<any> = [
   { title: '日期', key: 'reward_date', width: 110 },
 ];
 
+function formatAcceptanceStatus(status: string) {
+  const map: Record<string, string> = {
+    pending_first_analysis: '待首次分析',
+    analysis_without_reward: '已分析未发奖',
+    rewarded: '已发奖',
+  };
+  return map[status] || status || '—';
+}
+
 async function loadInvites() {
   try {
-    const [s, r] = await Promise.all([adminApi.inviteSummary(), adminApi.inviteRewards({ limit: 50 })]);
+    const [s, a, r] = await Promise.all([
+      adminApi.inviteSummary(),
+      adminApi.inviteAcceptances({ limit: 50 }),
+      adminApi.inviteRewards({ limit: 50 })
+    ]);
     inviteSummary.value = s.data;
+    acceptanceRows.value = a.data.acceptances || [];
     rewardRows.value = r.data.rewards || [];
   } catch {
     message.error('加载邀请数据失败');

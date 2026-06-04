@@ -1,7 +1,7 @@
 import pytest
 
 from database.db_factory import DatabaseFactory
-from routes.admin import admin_invite_summary
+from routes.admin import admin_invite_acceptances, admin_invite_summary
 from scripts.run_migrations import run_migrations
 
 
@@ -42,5 +42,58 @@ async def test_admin_invite_summary_reports_funnel_counts(tmp_path, monkeypatch)
     assert summary["invite_codes_total"] == 1
     assert summary["invite_acceptances_total"] == 1
     assert summary["invite_rewards_total"] == 1
+    assert summary["pending_acceptances_total"] == 0
     assert summary["acceptance_rate"] == 100.0
     assert summary["reward_rate"] == 100.0
+
+
+@pytest.mark.asyncio
+async def test_admin_invite_acceptances_reports_pending_first_analysis(tmp_path, monkeypatch):
+    db_path = tmp_path / "admin_invite_acceptances.db"
+    _run_all_migrations(db_path, monkeypatch)
+    DatabaseFactory.initialize(str(db_path))
+
+    with DatabaseFactory.get_connection() as conn:
+        conn.execute(
+            "INSERT INTO invite_codes (invite_code, inviter_id) VALUES (?, ?)",
+            ("code001", "inviter_1"),
+        )
+        conn.execute(
+            """
+            INSERT INTO invite_acceptances (inviter_id, invitee_id, invite_code)
+            VALUES (?, ?, ?)
+            """,
+            ("inviter_1", "invitee_pending", "code001"),
+        )
+        conn.execute(
+            """
+            INSERT INTO invite_acceptances (inviter_id, invitee_id, invite_code)
+            VALUES (?, ?, ?)
+            """,
+            ("inviter_1", "invitee_rewarded", "code001"),
+        )
+        conn.execute(
+            """
+            INSERT INTO analysis_records (user_id, stock_code, analysis_date)
+            VALUES (?, ?, ?)
+            """,
+            ("invitee_rewarded", "600519.SH", "2026-06-04"),
+        )
+        conn.execute(
+            """
+            INSERT INTO invite_rewards (inviter_id, invitee_id, invite_code, reward_quota, reward_date)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            ("inviter_1", "invitee_rewarded", "code001", 5, "2026-06-04"),
+        )
+        conn.commit()
+
+    response = await admin_invite_acceptances(limit=20, offset=0, _={})
+
+    assert response["pending_count"] == 1
+    assert response["rewarded_count"] == 1
+    rows_by_invitee = {row["invitee_id"]: row for row in response["acceptances"]}
+    assert rows_by_invitee["invitee_pending"]["status"] == "pending_first_analysis"
+    assert rows_by_invitee["invitee_pending"]["analysis_count"] == 0
+    assert rows_by_invitee["invitee_rewarded"]["status"] == "rewarded"
+    assert rows_by_invitee["invitee_rewarded"]["analysis_count"] == 1

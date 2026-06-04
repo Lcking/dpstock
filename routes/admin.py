@@ -264,6 +264,16 @@ async def admin_invite_summary(_: dict = Depends(require_admin)):
         rewards = int(cur.fetchone()["c"])
         cur.execute(
             """
+            SELECT COUNT(*) AS c
+            FROM invite_acceptances a
+            LEFT JOIN invite_rewards r
+              ON r.inviter_id = a.inviter_id AND r.invitee_id = a.invitee_id
+            WHERE r.id IS NULL
+            """
+        )
+        pending_acceptances = int(cur.fetchone()["c"])
+        cur.execute(
+            """
             SELECT inviter_id, COUNT(*) AS invite_count
             FROM invite_rewards
             GROUP BY inviter_id
@@ -278,9 +288,59 @@ async def admin_invite_summary(_: dict = Depends(require_admin)):
         "invite_codes_total": codes,
         "invite_acceptances_total": acceptances,
         "invite_rewards_total": rewards,
+        "pending_acceptances_total": pending_acceptances,
         "acceptance_rate": acceptance_rate,
         "reward_rate": reward_rate,
         "top_inviters": top,
+    }
+
+
+@router.get("/invites/acceptances")
+async def admin_invite_acceptances(limit: int = 100, offset: int = 0, _: dict = Depends(require_admin)):
+    limit = min(max(limit, 1), 500)
+    offset = max(offset, 0)
+    with DatabaseFactory.get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                a.id,
+                a.inviter_id,
+                a.invitee_id,
+                a.invite_code,
+                a.accepted_at,
+                COALESCE(ar.analysis_count, 0) AS analysis_count,
+                CASE
+                    WHEN r.id IS NOT NULL THEN 'rewarded'
+                    WHEN COALESCE(ar.analysis_count, 0) > 0 THEN 'analysis_without_reward'
+                    ELSE 'pending_first_analysis'
+                END AS status,
+                r.reward_quota,
+                r.reward_date,
+                r.created_at AS rewarded_at
+            FROM invite_acceptances a
+            LEFT JOIN (
+                SELECT user_id, COUNT(*) AS analysis_count
+                FROM analysis_records
+                GROUP BY user_id
+            ) ar ON ar.user_id = a.invitee_id
+            LEFT JOIN invite_rewards r
+              ON r.inviter_id = a.inviter_id AND r.invitee_id = a.invitee_id
+            ORDER BY a.accepted_at DESC, a.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (limit, offset),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    pending_count = sum(1 for row in rows if row.get("status") == "pending_first_analysis")
+    rewarded_count = sum(1 for row in rows if row.get("status") == "rewarded")
+    return {
+        "acceptances": rows,
+        "pending_count": pending_count,
+        "rewarded_count": rewarded_count,
+        "limit": limit,
+        "offset": offset,
     }
 
 
