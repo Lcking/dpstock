@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from services.stock_page_service import StockPageService
 from web_server import app
 
 
@@ -23,7 +24,42 @@ def test_stock_landing_page_returns_server_rendered_html():
     assert "<style>" in html
     assert "linear-gradient" in html
     assert "最近 AI 诊断沉淀" in html
+    assert "nav-shell" in html
+    assert "分析专栏" in html
+    assert "我的观察" in html
+    assert "判断日记" in html
+    assert "关于我们" in html
     assert '<div id="app"></div>' not in html
+
+
+def test_stock_landing_page_supports_more_hot_stocks():
+    service = StockPageService()
+    stocks = service.list_hot_stocks()
+    codes = [stock.code for stock in stocks]
+
+    assert len(stocks) >= 100
+    assert len(codes) == len(set(codes))
+
+    cases = {
+        "000001": "平安银行",
+        "300750": "宁德时代",
+        "601318": "中国平安",
+        "600036": "招商银行",
+        "000858": "五粮液",
+        "002594": "比亚迪",
+        "601899": "紫金矿业",
+        "600900": "长江电力",
+        "688981": "中芯国际",
+        "601398": "工商银行",
+        "603501": "韦尔股份",
+    }
+
+    with TestClient(app) as client:
+        for code, name in cases.items():
+            response = client.get(f"/stock/{code}")
+            assert response.status_code == 200
+            assert name in response.text
+            assert code in response.text
 
 
 def test_stock_landing_page_lists_recent_articles(monkeypatch):

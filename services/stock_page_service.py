@@ -17,13 +17,136 @@ class StockPageInfo:
 class StockPageService:
     """Generate crawlable stock landing pages for SEO/GEO entry traffic."""
 
-    HOT_STOCKS: Dict[str, StockPageInfo] = {
-        "600519": StockPageInfo(code="600519", name="贵州茅台", market="A"),
-        "000001": StockPageInfo(code="000001", name="平安银行", market="A"),
-        "300750": StockPageInfo(code="300750", name="宁德时代", market="A"),
-        "601318": StockPageInfo(code="601318", name="中国平安", market="A"),
-        "600036": StockPageInfo(code="600036", name="招商银行", market="A"),
-    }
+    HOT_STOCK_LIST: List[StockPageInfo] = [
+        StockPageInfo(code="600519", name="贵州茅台", market="A"),
+        StockPageInfo(code="000001", name="平安银行", market="A"),
+        StockPageInfo(code="300750", name="宁德时代", market="A"),
+        StockPageInfo(code="601318", name="中国平安", market="A"),
+        StockPageInfo(code="600036", name="招商银行", market="A"),
+        StockPageInfo(code="000858", name="五粮液", market="A"),
+        StockPageInfo(code="002594", name="比亚迪", market="A"),
+        StockPageInfo(code="601899", name="紫金矿业", market="A"),
+        StockPageInfo(code="600900", name="长江电力", market="A"),
+        StockPageInfo(code="000333", name="美的集团", market="A"),
+        StockPageInfo(code="002475", name="立讯精密", market="A"),
+        StockPageInfo(code="600276", name="恒瑞医药", market="A"),
+        StockPageInfo(code="600030", name="中信证券", market="A"),
+        StockPageInfo(code="601088", name="中国神华", market="A"),
+        StockPageInfo(code="600887", name="伊利股份", market="A"),
+        StockPageInfo(code="601398", name="工商银行", market="A"),
+        StockPageInfo(code="601288", name="农业银行", market="A"),
+        StockPageInfo(code="601988", name="中国银行", market="A"),
+        StockPageInfo(code="601939", name="建设银行", market="A"),
+        StockPageInfo(code="600941", name="中国移动", market="A"),
+        StockPageInfo(code="601857", name="中国石油", market="A"),
+        StockPageInfo(code="600028", name="中国石化", market="A"),
+        StockPageInfo(code="601628", name="中国人寿", market="A"),
+        StockPageInfo(code="601166", name="兴业银行", market="A"),
+        StockPageInfo(code="600000", name="浦发银行", market="A"),
+        StockPageInfo(code="601328", name="交通银行", market="A"),
+        StockPageInfo(code="600309", name="万华化学", market="A"),
+        StockPageInfo(code="002415", name="海康威视", market="A"),
+        StockPageInfo(code="000651", name="格力电器", market="A"),
+        StockPageInfo(code="300760", name="迈瑞医疗", market="A"),
+        StockPageInfo(code="688981", name="中芯国际", market="A"),
+        StockPageInfo(code="688041", name="海光信息", market="A"),
+        StockPageInfo(code="688111", name="金山办公", market="A"),
+        StockPageInfo(code="688012", name="中微公司", market="A"),
+        StockPageInfo(code="688008", name="澜起科技", market="A"),
+        StockPageInfo(code="688256", name="寒武纪", market="A"),
+        StockPageInfo(code="600104", name="上汽集团", market="A"),
+        StockPageInfo(code="000725", name="京东方A", market="A"),
+        StockPageInfo(code="002352", name="顺丰控股", market="A"),
+        StockPageInfo(code="002714", name="牧原股份", market="A"),
+        StockPageInfo(code="600031", name="三一重工", market="A"),
+        StockPageInfo(code="601012", name="隆基绿能", market="A"),
+        StockPageInfo(code="600438", name="通威股份", market="A"),
+        StockPageInfo(code="002027", name="分众传媒", market="A"),
+        StockPageInfo(code="002230", name="科大讯飞", market="A"),
+        StockPageInfo(code="300059", name="东方财富", market="A"),
+        StockPageInfo(code="600050", name="中国联通", market="A"),
+        StockPageInfo(code="601985", name="中国核电", market="A"),
+        StockPageInfo(code="601668", name="中国建筑", market="A"),
+        StockPageInfo(code="601669", name="中国电建", market="A"),
+        StockPageInfo(code="601800", name="中国交建", market="A"),
+        StockPageInfo(code="601390", name="中国中铁", market="A"),
+        StockPageInfo(code="601186", name="中国铁建", market="A"),
+        StockPageInfo(code="601919", name="中远海控", market="A"),
+        StockPageInfo(code="600019", name="宝钢股份", market="A"),
+        StockPageInfo(code="600585", name="海螺水泥", market="A"),
+        StockPageInfo(code="601600", name="中国铝业", market="A"),
+        StockPageInfo(code="600111", name="北方稀土", market="A"),
+        StockPageInfo(code="600010", name="包钢股份", market="A"),
+        StockPageInfo(code="601225", name="陕西煤业", market="A"),
+        StockPageInfo(code="600188", name="兖矿能源", market="A"),
+        StockPageInfo(code="000063", name="中兴通讯", market="A"),
+        StockPageInfo(code="000100", name="TCL科技", market="A"),
+        StockPageInfo(code="000792", name="盐湖股份", market="A"),
+        StockPageInfo(code="000568", name="泸州老窖", market="A"),
+        StockPageInfo(code="000596", name="古井贡酒", market="A"),
+        StockPageInfo(code="002304", name="洋河股份", market="A"),
+        StockPageInfo(code="600809", name="山西汾酒", market="A"),
+        StockPageInfo(code="603288", name="海天味业", market="A"),
+        StockPageInfo(code="603259", name="药明康德", market="A"),
+        StockPageInfo(code="300015", name="爱尔眼科", market="A"),
+        StockPageInfo(code="300124", name="汇川技术", market="A"),
+        StockPageInfo(code="300274", name="阳光电源", market="A"),
+        StockPageInfo(code="300014", name="亿纬锂能", market="A"),
+        StockPageInfo(code="300122", name="智飞生物", market="A"),
+        StockPageInfo(code="300408", name="三环集团", market="A"),
+        StockPageInfo(code="300496", name="中科创达", market="A"),
+        StockPageInfo(code="002241", name="歌尔股份", market="A"),
+        StockPageInfo(code="002371", name="北方华创", market="A"),
+        StockPageInfo(code="002460", name="赣锋锂业", market="A"),
+        StockPageInfo(code="002466", name="天齐锂业", market="A"),
+        StockPageInfo(code="002812", name="恩捷股份", market="A"),
+        StockPageInfo(code="002129", name="TCL中环", market="A"),
+        StockPageInfo(code="002142", name="宁波银行", market="A"),
+        StockPageInfo(code="002271", name="东方雨虹", market="A"),
+        StockPageInfo(code="002410", name="广联达", market="A"),
+        StockPageInfo(code="002555", name="三七互娱", market="A"),
+        StockPageInfo(code="002603", name="以岭药业", market="A"),
+        StockPageInfo(code="002709", name="天赐材料", market="A"),
+        StockPageInfo(code="002920", name="德赛西威", market="A"),
+        StockPageInfo(code="600048", name="保利发展", market="A"),
+        StockPageInfo(code="600089", name="特变电工", market="A"),
+        StockPageInfo(code="600150", name="中国船舶", market="A"),
+        StockPageInfo(code="600176", name="中国巨石", market="A"),
+        StockPageInfo(code="600196", name="复星医药", market="A"),
+        StockPageInfo(code="600406", name="国电南瑞", market="A"),
+        StockPageInfo(code="600436", name="片仔癀", market="A"),
+        StockPageInfo(code="600570", name="恒生电子", market="A"),
+        StockPageInfo(code="600690", name="海尔智家", market="A"),
+        StockPageInfo(code="600745", name="闻泰科技", market="A"),
+        StockPageInfo(code="600760", name="中航沈飞", market="A"),
+        StockPageInfo(code="600837", name="海通证券", market="A"),
+        StockPageInfo(code="600958", name="东方证券", market="A"),
+        StockPageInfo(code="601006", name="大秦铁路", market="A"),
+        StockPageInfo(code="601066", name="中信建投", market="A"),
+        StockPageInfo(code="601100", name="恒立液压", market="A"),
+        StockPageInfo(code="601138", name="工业富联", market="A"),
+        StockPageInfo(code="601211", name="国泰君安", market="A"),
+        StockPageInfo(code="601229", name="上海银行", market="A"),
+        StockPageInfo(code="601658", name="邮储银行", market="A"),
+        StockPageInfo(code="601688", name="华泰证券", market="A"),
+        StockPageInfo(code="601816", name="京沪高铁", market="A"),
+        StockPageInfo(code="601888", name="中国中免", market="A"),
+        StockPageInfo(code="603501", name="韦尔股份", market="A"),
+        StockPageInfo(code="603799", name="华友钴业", market="A"),
+        StockPageInfo(code="603986", name="兆易创新", market="A"),
+        StockPageInfo(code="605499", name="东鹏饮料", market="A"),
+        StockPageInfo(code="000002", name="万科A", market="A"),
+        StockPageInfo(code="000338", name="潍柴动力", market="A"),
+        StockPageInfo(code="000776", name="广发证券", market="A"),
+        StockPageInfo(code="000977", name="浪潮信息", market="A"),
+        StockPageInfo(code="000983", name="山西焦煤", market="A"),
+        StockPageInfo(code="001979", name="招商蛇口", market="A"),
+        StockPageInfo(code="002007", name="华兰生物", market="A"),
+        StockPageInfo(code="002050", name="三花智控", market="A"),
+        StockPageInfo(code="002179", name="中航光电", market="A"),
+        StockPageInfo(code="002236", name="大华股份", market="A"),
+    ]
+    HOT_STOCKS: Dict[str, StockPageInfo] = {stock.code: stock for stock in HOT_STOCK_LIST}
 
     def __init__(self, base_url: str = "https://aguai.net"):
         self.base_url = base_url.rstrip("/")
@@ -100,7 +223,47 @@ class StockPageService:
     .page {{
       max-width: 1040px;
       margin: 0 auto;
-      padding: 32px 18px 56px;
+      padding: 18px 18px 56px;
+    }}
+    .nav-shell {{
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid rgba(61, 91, 204, 0.10);
+      background: rgba(255, 255, 255, 0.82);
+    }}
+    .nav-inner {{
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }}
+    .brand {{
+      font-weight: 800;
+      color: #172033;
+      letter-spacing: -0.02em;
+    }}
+    .nav-links {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }}
+    .nav-links a {{
+      color: #475467;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 14px;
+    }}
+    .nav-links a:hover {{
+      background: rgba(49, 87, 213, 0.08);
+      color: #3157d5;
+      text-decoration: none;
     }}
     .hero {{
       padding: 34px;
@@ -160,6 +323,17 @@ class StockPageService:
   </style>
 </head>
 <body>
+  <header class="nav-shell">
+    <div class="nav-inner">
+      <a class="brand" href="/">Agu AI</a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="/analysis">分析专栏</a>
+        <a href="/watchlist">我的观察</a>
+        <a href="/journal">判断日记</a>
+        <a href="/about">关于我们</a>
+      </nav>
+    </div>
+  </header>
   <main class="page">
     <nav aria-label="面包屑">
       <a href="/">Agu AI</a> / <span>{self._escape(stock.name)} AI诊股</span>

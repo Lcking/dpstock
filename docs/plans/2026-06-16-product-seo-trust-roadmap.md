@@ -410,6 +410,7 @@
 | 2026-06-16 | Task 1: sitemap 500 修复 | local_done | pending | pending |
 | 2026-06-16 | Task 2: 个股 SEO HTML MVP | local_done | pending | pending |
 | 2026-06-16 | Task 2 补丁: 样式/历史文章/CTA定位 | local_done | pending | pending |
+| 2026-06-16 | Task 2 补丁: 热门池扩展至 127 个/主站导航 | local_done | pending | pending |
 |  | Task 3: sitemap 加入个股 URL | pending |  |  |
 |  | Task 4: 站内内链入口 | pending |  |  |
 |  | Task 5: 诊股一句话结论 | pending |  |  |
