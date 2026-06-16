@@ -301,6 +301,10 @@ async function handleInviteAcceptance() {
 }
 
 async function startInvitedFirstAnalysis() {
+  await focusStockSearch();
+}
+
+async function focusStockSearch() {
   await nextTick();
   searchConfigRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   window.setTimeout(() => {
@@ -1061,12 +1065,17 @@ onMounted(async () => {
   // 从 query 参数自动触发分析（如从观察列表跳转过来）
   const queryCode = route.query.code as string | undefined
   const queryMarket = route.query.market as string | undefined
+  const focus = route.query.focus as string | undefined
   if (queryCode) {
     if (queryMarket) marketType.value = queryMarket
     selectedStockValues.value = [queryCode]
     searchOptions.value = [{ label: queryCode, value: queryCode }]
-    await nextTick()
-    analyzeStocks()
+    if (focus === 'search') {
+      await focusStockSearch()
+    } else {
+      await nextTick()
+      analyzeStocks()
+    }
     // 清理 URL 参数，避免刷新后重复触发
     window.history.replaceState({}, '', '/')
   }

@@ -674,7 +674,7 @@ async def get_article_detail(article_id: int):
 async def stock_landing_page(stock_code: str):
     from services.stock_page_service import StockPageService
 
-    html_content = StockPageService(base_url="https://aguai.net").render_stock_page(stock_code)
+    html_content = await StockPageService(base_url="https://aguai.net").render_stock_page(stock_code)
     if not html_content:
         raise HTTPException(status_code=404, detail="股票页面不存在")
     return Response(

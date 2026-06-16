@@ -33,3 +33,11 @@ def test_invited_landing_page_has_persistent_first_analysis_guidance():
     assert "scrollIntoView" in app_view
     assert "stockSelectRef" in app_view
     assert "analyzeStocks();" not in app_view[app_view.index("async function startInvitedFirstAnalysis"):app_view.index("// 市场选项")]
+
+
+def test_home_query_code_can_focus_stock_search_area():
+    app_view = (REPO_ROOT / "frontend/src/components/StockAnalysisApp.vue").read_text(encoding="utf-8")
+
+    assert "route.query.focus" in app_view
+    assert "focusStockSearch" in app_view
+    assert "focus === 'search'" in app_view
