@@ -16,6 +16,7 @@ def test_frontend_index_has_modern_seo_defaults():
     assert 'property="og:description"' in index_text
     assert 'property="og:url"' in index_text
     assert 'name="twitter:card"' in index_text
+    assert '<meta name="baidu-site-verification" content="codeva-m2d0KFsWXV" />' in index_text
     assert '智能股票分析' in index_text or 'AI分析' in index_text
 
 
