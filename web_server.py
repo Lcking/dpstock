@@ -700,6 +700,17 @@ async def stock_index_page():
     )
 
 
+@app.get("/baidu_verify_codeva-m2d0KFsWXV.html")
+async def baidu_site_verification():
+    return Response(
+        content="codeva-m2d0KFsWXV",
+        media_type="text/html",
+        headers={
+            "Cache-Control": "public, max-age=86400",
+        },
+    )
+
+
 # 检查是否需要登录
 @app.get("/api/need_login")
 async def need_login():

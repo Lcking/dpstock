@@ -100,6 +100,16 @@ def test_sitemap_and_robots_are_accessible_for_crawlers():
     assert "Sitemap: https://aguai.net/sitemap.xml" in robots.text
 
 
+def test_baidu_site_verification_file_is_served_directly():
+    with TestClient(app) as client:
+        response = client.get("/baidu_verify_codeva-m2d0KFsWXV.html")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "codeva-m2d0KFsWXV" in response.text
+    assert '<div id="app"></div>' not in response.text
+
+
 def test_sitemap_falls_back_when_archive_articles_fail(monkeypatch):
     async def fail_get_articles(*args, **kwargs):
         raise RuntimeError("archive unavailable")
