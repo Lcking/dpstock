@@ -62,6 +62,31 @@ def test_stock_landing_page_supports_more_hot_stocks():
             assert code in response.text
 
 
+def test_stock_index_page_lists_hot_stock_links():
+    with TestClient(app) as client:
+        response = client.get("/stocks")
+
+    assert response.status_code == 200
+    html = response.text
+    assert "热门个股 AI 诊股清单" in html
+    assert "/stock/600519" in html
+    assert "贵州茅台" in html
+    assert "/stock/002594" in html
+    assert "比亚迪" in html
+    assert "nav-shell" in html
+
+
+def test_sitemap_includes_stock_index_and_hot_stock_pages():
+    with TestClient(app) as client:
+        response = client.get("/sitemap.xml")
+
+    assert response.status_code == 200
+    assert "https://aguai.net/stocks" in response.text
+    assert "https://aguai.net/stock/600519" in response.text
+    assert "https://aguai.net/stock/002594" in response.text
+    assert "https://aguai.net/stock/688981" in response.text
+
+
 def test_stock_landing_page_lists_recent_articles(monkeypatch):
     async def fake_get_articles(self, limit=20, offset=0, keyword=None):
         assert limit == 5

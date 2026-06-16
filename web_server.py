@@ -686,6 +686,20 @@ async def stock_landing_page(stock_code: str):
     )
 
 
+@app.get("/stocks")
+async def stock_index_page():
+    from services.stock_page_service import StockPageService
+
+    html_content = StockPageService(base_url="https://aguai.net").render_stock_index_page()
+    return Response(
+        content=html_content,
+        media_type="text/html",
+        headers={
+            "Cache-Control": "public, max-age=600",
+        },
+    )
+
+
 # 检查是否需要登录
 @app.get("/api/need_login")
 async def need_login():

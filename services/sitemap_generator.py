@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any, List, Dict
 from services.archive_service import ArchiveService
+from services.stock_page_service import StockPageService
 from utils.logger import get_logger
 import xml.etree.ElementTree as ET
 
@@ -15,6 +16,7 @@ class SitemapGenerator:
     def __init__(self, base_url: str = "https://aguai.net"):
         self.base_url = base_url.rstrip('/')
         self.archive_service = ArchiveService()
+        self.stock_page_service = StockPageService(base_url=base_url)
     
     async def generate_sitemap(self) -> str:
         """
@@ -37,6 +39,17 @@ class SitemapGenerator:
             
             # 添加分析专栏页面
             self._add_url(urlset, '/analysis', priority='0.9', changefreq='daily')
+
+            # 添加个股 SEO 清单页和热门个股页
+            self._add_url(urlset, '/stocks', priority='0.85', changefreq='weekly')
+            hot_stocks = self.stock_page_service.list_hot_stocks()
+            for stock in hot_stocks:
+                self._add_url(
+                    urlset,
+                    f"/stock/{stock.code}",
+                    priority='0.7',
+                    changefreq='weekly',
+                )
             
             # 获取所有文章。文章归档不可用时，sitemap 仍应输出基础公开页面，
             # 否则搜索引擎会失去整个站点的发现入口。
@@ -73,7 +86,7 @@ class SitemapGenerator:
             xml_str = '<?xml version="1.0" encoding="UTF-8"?>\n'
             xml_str += ET.tostring(urlset, encoding='unicode')
             
-            logger.info(f"生成sitemap成功,包含 {len(articles) + 2} 个URL")
+            logger.info(f"生成sitemap成功,包含 {len(articles) + len(hot_stocks) + 3} 个URL")
             return xml_str
             
         except Exception as e:

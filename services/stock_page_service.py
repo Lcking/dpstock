@@ -378,6 +378,66 @@ class StockPageService:
 </body>
 </html>"""
 
+    def render_stock_index_page(self) -> str:
+        title = "热门个股 AI 诊股清单 - Agu AI"
+        description = "Agu AI 热门个股 AI 诊股清单，聚合 A 股核心资产的结构、趋势、相对强弱和风险线索分析入口。"
+        canonical_url = f"{self.base_url}/stocks"
+        stock_links = "\n".join(
+            f'<li class="article-card"><a href="/stock/{self._escape(stock.code)}">'
+            f'{self._escape(stock.name)}({self._escape(stock.code)}) AI诊股分析</a>'
+            f'<div class="article-meta">{self._escape(stock.market)}股 · 结构/趋势/风险入口</div></li>'
+            for stock in self.list_hot_stocks()
+        )
+        json_ld = {
+            "@context": "https://schema.org",
+            "@type": "CollectionPage",
+            "name": title,
+            "description": description,
+            "url": canonical_url,
+            "publisher": {
+                "@type": "Organization",
+                "name": "Agu AI",
+                "url": self.base_url,
+            },
+        }
+
+        return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{self._escape(title)}</title>
+  <meta name="description" content="{self._escape(description)}">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="{self._escape(canonical_url)}">
+  <meta property="og:title" content="{self._escape(title)}">
+  <meta property="og:description" content="{self._escape(description)}">
+  <meta property="og:url" content="{self._escape(canonical_url)}">
+  <meta property="og:type" content="website">
+  <script type="application/ld+json">{self._json(json_ld)}</script>
+  <style>{self._shared_css()}</style>
+</head>
+<body>
+  {self._render_nav()}
+  <main class="page">
+    <header class="hero">
+      <div class="eyebrow">A股 · 热门个股</div>
+      <h1>热门个股 AI 诊股清单</h1>
+      <p>这里聚合 Agu AI 当前开放的热门个股服务端落地页，方便搜索引擎和用户发现每只股票的 AI 诊股入口。</p>
+      <a class="cta" href="/">返回首页实时诊股</a>
+    </header>
+    <section>
+      <h2>热门股票列表</h2>
+      <ul class="article-list">{stock_links}</ul>
+    </section>
+    <section>
+      <h2>风险提示</h2>
+      <p class="disclaimer">本清单仅用于索引和研究入口，不构成投资建议。市场有风险，投资决策需结合自身情况独立判断。</p>
+    </section>
+  </main>
+</body>
+</html>"""
+
     async def _get_recent_articles(self, stock: StockPageInfo) -> List[Dict[str, Any]]:
         try:
             articles = await self.archive_service.get_articles(limit=5, offset=0, keyword=stock.code)
@@ -401,6 +461,129 @@ class StockPageService:
                 f'<div class="article-meta">{publish_date} · {score_text}</div></li>'
             )
         return f'<ul class="article-list">{"".join(items)}</ul>'
+
+    def _render_nav(self) -> str:
+        return """<header class="nav-shell">
+    <div class="nav-inner">
+      <a class="brand" href="/">Agu AI</a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="/analysis">分析专栏</a>
+        <a href="/watchlist">我的观察</a>
+        <a href="/journal">判断日记</a>
+        <a href="/about">关于我们</a>
+      </nav>
+    </div>
+  </header>"""
+
+    def _shared_css(self) -> str:
+        return """
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f6f8fc;
+      color: #172033;
+    }
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #f7f9ff 0%, #eef5ff 48%, #f8fbf5 100%);
+    }
+    a { color: #2f5bea; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .page {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 18px 18px 56px;
+    }
+    .nav-shell {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid rgba(61, 91, 204, 0.10);
+      background: rgba(255, 255, 255, 0.82);
+    }
+    .nav-inner {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      font-weight: 800;
+      color: #172033;
+      letter-spacing: -0.02em;
+    }
+    .nav-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .nav-links a {
+      color: #475467;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 14px;
+    }
+    .nav-links a:hover {
+      background: rgba(49, 87, 213, 0.08);
+      color: #3157d5;
+      text-decoration: none;
+    }
+    .hero {
+      padding: 34px;
+      border: 1px solid rgba(61, 91, 204, 0.12);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 18px 50px rgba(38, 64, 126, 0.10);
+    }
+    .eyebrow {
+      color: #5d6b86;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    h1 { margin: 0 0 14px; font-size: clamp(28px, 5vw, 44px); line-height: 1.15; }
+    h2 { margin: 0 0 14px; font-size: 22px; }
+    p { line-height: 1.75; }
+    .cta {
+      display: inline-flex;
+      margin-top: 18px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      color: #fff;
+      background: #3157d5;
+      font-weight: 700;
+    }
+    section {
+      margin-top: 20px;
+      padding: 24px;
+      border: 1px solid rgba(61, 91, 204, 0.10);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.78);
+    }
+    li { margin: 8px 0; line-height: 1.65; }
+    .article-list {
+      display: grid;
+      gap: 12px;
+      padding: 0;
+      list-style: none;
+    }
+    .article-card {
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: #f8faff;
+      border: 1px solid rgba(61, 91, 204, 0.10);
+    }
+    .article-meta { color: #667085; font-size: 13px; margin-top: 6px; }
+    .disclaimer {
+      color: #6b7280;
+      font-size: 14px;
+    }
+  """
 
     def normalize_code(self, stock_code: str) -> str:
         return str(stock_code or "").strip().upper().split(".")[0]
