@@ -57,6 +57,14 @@ def test_home_and_article_pages_apply_page_level_seo():
     assert '"@type": "BreadcrumbList"' in article_text
 
 
+def test_footer_links_to_stock_index_page():
+    repo_root = Path(__file__).resolve().parents[1]
+    footer_text = (repo_root / "frontend/src/components/Footer.vue").read_text(encoding="utf-8")
+
+    assert 'to="/stocks"' in footer_text
+    assert "个股列表" in footer_text
+
+
 def test_private_pages_expose_error_states_and_noindex_directives():
     repo_root = Path(__file__).resolve().parents[1]
     user_center_text = (repo_root / "frontend/src/components/UserCenter/UserCenterPage.vue").read_text(encoding="utf-8")
