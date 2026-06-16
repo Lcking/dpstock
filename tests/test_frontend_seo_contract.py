@@ -91,6 +91,24 @@ def test_sitemap_and_robots_are_accessible_for_crawlers():
     assert "Sitemap: https://aguai.net/sitemap.xml" in robots.text
 
 
+def test_sitemap_falls_back_when_archive_articles_fail(monkeypatch):
+    async def fail_get_articles(*args, **kwargs):
+        raise RuntimeError("archive unavailable")
+
+    monkeypatch.setattr(
+        "services.archive_service.ArchiveService.get_articles",
+        fail_get_articles,
+    )
+
+    with TestClient(app) as client:
+        sitemap = client.get("/sitemap.xml")
+
+    assert sitemap.status_code == 200
+    assert "<urlset" in sitemap.text
+    assert "https://aguai.net/" in sitemap.text
+    assert "https://aguai.net/analysis" in sitemap.text
+
+
 def test_market_overview_endpoint_exists():
     with TestClient(app) as client:
         response = client.get("/api/market-overview")

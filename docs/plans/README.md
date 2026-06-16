@@ -4,6 +4,7 @@
 
 当前存档：
 
+- `2026-06-16-product-seo-trust-roadmap.md`
 - `2026-03-09-user-system-information-architecture-design.md`
 - `2026-03-09-user-system-phase-1-implementation-plan.md`
 

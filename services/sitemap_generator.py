@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Dict
+from typing import Any, List, Dict
 from services.archive_service import ArchiveService
 from utils.logger import get_logger
 import xml.etree.ElementTree as ET
@@ -38,15 +38,20 @@ class SitemapGenerator:
             # 添加分析专栏页面
             self._add_url(urlset, '/analysis', priority='0.9', changefreq='daily')
             
-            # 获取所有文章
-            articles = await self.archive_service.get_articles(limit=1000, offset=0)
+            # 获取所有文章。文章归档不可用时，sitemap 仍应输出基础公开页面，
+            # 否则搜索引擎会失去整个站点的发现入口。
+            articles = await self._get_articles_safely()
             
             # 添加每篇文章
             for article in articles:
-                article_url = f"/analysis/{article['id']}"
+                article_id = article.get("id") if hasattr(article, "get") else None
+                if not article_id:
+                    continue
+                article_url = f"/analysis/{article_id}"
                 # 使用文章的发布日期或创建日期
                 lastmod = article.get('publish_date') or article.get('created_at', '')
                 if lastmod:
+                    lastmod = str(lastmod)
                     # 确保日期格式为 YYYY-MM-DD
                     if ' ' in lastmod:
                         lastmod = lastmod.split(' ')[0]
@@ -61,7 +66,8 @@ class SitemapGenerator:
             
             # 生成XML字符串
             tree = ET.ElementTree(urlset)
-            ET.indent(tree, space='  ')  # 格式化输出
+            if hasattr(ET, "indent"):
+                ET.indent(tree, space='  ')  # 格式化输出
             
             # 转换为字符串
             xml_str = '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -73,6 +79,14 @@ class SitemapGenerator:
         except Exception as e:
             logger.error(f"生成sitemap失败: {str(e)}")
             raise
+
+    async def _get_articles_safely(self) -> List[Dict[str, Any]]:
+        try:
+            articles = await self.archive_service.get_articles(limit=1000, offset=0)
+            return [dict(article) for article in articles if article]
+        except Exception as e:
+            logger.warning(f"获取文章列表失败，sitemap 降级为基础页面: {str(e)}")
+            return []
     
     def _add_url(self, parent: ET.Element, path: str, 
                  lastmod: str = None, priority: str = '0.5', 
