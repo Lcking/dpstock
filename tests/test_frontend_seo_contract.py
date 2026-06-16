@@ -61,8 +61,9 @@ def test_footer_links_to_stock_index_page():
     repo_root = Path(__file__).resolve().parents[1]
     footer_text = (repo_root / "frontend/src/components/Footer.vue").read_text(encoding="utf-8")
 
-    assert 'to="/stocks"' in footer_text
+    assert 'href="/stocks"' in footer_text
     assert "个股列表" in footer_text
+    assert '<router-link to="/stocks"' not in footer_text
 
 
 def test_private_pages_expose_error_states_and_noindex_directives():

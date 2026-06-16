@@ -383,9 +383,10 @@ class StockPageService:
         description = "Agu AI 热门个股 AI 诊股清单，聚合 A 股核心资产的结构、趋势、相对强弱和风险线索分析入口。"
         canonical_url = f"{self.base_url}/stocks"
         stock_links = "\n".join(
-            f'<li class="article-card"><a href="/stock/{self._escape(stock.code)}">'
-            f'{self._escape(stock.name)}({self._escape(stock.code)}) AI诊股分析</a>'
-            f'<div class="article-meta">{self._escape(stock.market)}股 · 结构/趋势/风险入口</div></li>'
+            f'<li class="stock-index-item"><a class="stock-index-link" href="/stock/{self._escape(stock.code)}">'
+            f'<span class="stock-index-name">{self._escape(stock.name)}</span>'
+            f'<span class="stock-index-code">{self._escape(stock.code)}</span>'
+            f'</a></li>'
             for stock in self.list_hot_stocks()
         )
         json_ld = {
@@ -428,7 +429,8 @@ class StockPageService:
     </header>
     <section>
       <h2>热门股票列表</h2>
-      <ul class="article-list">{stock_links}</ul>
+      <p class="section-hint">紧凑展示当前开放的热门个股入口；所有链接均为服务端 HTML 页面，便于用户浏览和搜索引擎抓取。</p>
+      <ul class="stock-index-grid">{stock_links}</ul>
     </section>
     <section>
       <h2>风险提示</h2>
@@ -579,6 +581,49 @@ class StockPageService:
       border: 1px solid rgba(61, 91, 204, 0.10);
     }
     .article-meta { color: #667085; font-size: 13px; margin-top: 6px; }
+    .section-hint {
+      color: #667085;
+      font-size: 14px;
+      margin-top: -4px;
+    }
+    .stock-index-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+      gap: 8px;
+      padding: 0;
+      margin: 14px 0 0;
+      list-style: none;
+    }
+    .stock-index-item {
+      margin: 0;
+      line-height: 1.2;
+    }
+    .stock-index-link {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 48px;
+      padding: 9px 10px;
+      border: 1px solid rgba(61, 91, 204, 0.10);
+      border-radius: 12px;
+      background: rgba(248, 250, 255, 0.86);
+    }
+    .stock-index-link:hover {
+      background: rgba(49, 87, 213, 0.08);
+      text-decoration: none;
+    }
+    .stock-index-name {
+      color: #172033;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .stock-index-code {
+      color: #667085;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
     .disclaimer {
       color: #6b7280;
       font-size: 14px;

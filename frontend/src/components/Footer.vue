@@ -6,7 +6,7 @@
         <span class="divider">|</span>
         <router-link to="/analysis" class="footer-link">分析专栏</router-link>
         <span class="divider">|</span>
-        <router-link to="/stocks" class="footer-link">个股列表</router-link>
+        <a href="/stocks" class="footer-link">个股列表</a>
         <span class="divider">|</span>
         <router-link to="/help/judgment-verification" class="footer-link">判断验证说明</router-link>
         <span class="divider">|</span>

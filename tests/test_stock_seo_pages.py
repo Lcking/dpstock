@@ -74,6 +74,9 @@ def test_stock_index_page_lists_hot_stock_links():
     assert "/stock/002594" in html
     assert "比亚迪" in html
     assert "nav-shell" in html
+    assert "stock-index-grid" in html
+    assert "stock-index-item" in html
+    assert "article-card" not in html[html.index("热门股票列表"):]
 
 
 def test_sitemap_includes_stock_index_and_hot_stock_pages():
