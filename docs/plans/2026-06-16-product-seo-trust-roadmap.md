@@ -408,7 +408,7 @@
 | --- | --- | --- | --- | --- |
 | 2026-06-16 | 路线图创建 | done | pending | n/a |
 | 2026-06-16 | Task 1: sitemap 500 修复 | local_done | pending | pending |
-|  | Task 2: 个股 SEO HTML MVP | pending |  |  |
+| 2026-06-16 | Task 2: 个股 SEO HTML MVP | local_done | pending | pending |
 |  | Task 3: sitemap 加入个股 URL | pending |  |  |
 |  | Task 4: 站内内链入口 | pending |  |  |
 |  | Task 5: 诊股一句话结论 | pending |  |  |
