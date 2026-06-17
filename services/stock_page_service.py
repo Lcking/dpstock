@@ -161,8 +161,11 @@ class StockPageService:
 
     async def render_stock_page(self, stock_code: str) -> Optional[str]:
         stock = self.get_stock(stock_code)
+        recent_articles = None
         if not stock:
-            return None
+            stock = await self._get_stock_from_archived_articles(stock_code)
+            if not stock:
+                return None
 
         canonical_url = f"{self.base_url}/stock/{stock.code}"
         title = f"{stock.name}({stock.code}) AI诊股分析_结构趋势风险解读 - Agu AI"
@@ -172,7 +175,8 @@ class StockPageService:
         )
         updated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
         realtime_url = f"/?code={stock.code}&market={stock.market}&focus=search"
-        recent_articles = await self._get_recent_articles(stock)
+        if recent_articles is None:
+            recent_articles = await self._get_recent_articles(stock)
 
         json_ld = {
             "@context": "https://schema.org",
@@ -446,6 +450,24 @@ class StockPageService:
             return [dict(article) for article in articles if article]
         except Exception:
             return []
+
+    async def _get_stock_from_archived_articles(self, stock_code: str) -> Optional[StockPageInfo]:
+        normalized = self.normalize_code(stock_code)
+        try:
+            articles = await self.archive_service.get_articles(limit=1, offset=0, keyword=normalized)
+        except Exception:
+            return None
+        if not articles:
+            return None
+        article = dict(articles[0])
+        article_code = self.normalize_code(article.get("stock_code") or normalized)
+        if article_code != normalized:
+            return None
+        stock_name = str(article.get("stock_name") or "").strip()
+        if not stock_name:
+            return None
+        market_type = str(article.get("market_type") or "A").strip() or "A"
+        return StockPageInfo(code=normalized, name=stock_name, market=market_type)
 
     def _render_recent_articles(self, articles: List[Dict[str, Any]]) -> str:
         if not articles:

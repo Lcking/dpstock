@@ -125,6 +125,35 @@ def test_stock_landing_page_lists_recent_articles(monkeypatch):
     assert "评分 78" in html
 
 
+def test_stock_landing_page_supports_stocks_with_archived_articles(monkeypatch):
+    async def fake_get_articles(self, limit=20, offset=0, keyword=None):
+        assert keyword == "300735"
+        return [
+            {
+                "id": 1586,
+                "title": "光弘科技 300735 股票行情走势异动分析",
+                "stock_code": "300735",
+                "stock_name": "光弘科技",
+                "market_type": "A",
+                "publish_date": "2026-06-17",
+                "score": 64,
+            }
+        ]
+
+    monkeypatch.setattr(
+        "services.archive_service.ArchiveService.get_articles",
+        fake_get_articles,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/stock/300735")
+
+    assert response.status_code == 200
+    assert "光弘科技" in response.text
+    assert "300735" in response.text
+    assert "/analysis/1586" in response.text
+
+
 def test_stock_landing_page_returns_404_for_unknown_stock():
     with TestClient(app) as client:
         response = client.get("/stock/not-a-stock")
