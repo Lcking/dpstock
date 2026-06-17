@@ -1,5 +1,11 @@
 <template>
   <div class="analysis-v1-display">
+    <div class="analysis-section plain-language-summary">
+      <div class="plain-language-eyebrow">AI 一句话结论</div>
+      <div class="plain-language-title">一句话结论</div>
+      <p>{{ plainLanguageSummary }}</p>
+    </div>
+
     <!-- Section 1: 结构快照 -->
     <div class="analysis-section structure-snapshot">
       <h3 class="section-title">📊 结构快照</h3>
@@ -302,6 +308,30 @@ const turnoverActivityLabel = computed(() => {
   return '热度参考';
 });
 
+const plainLanguageSummary = computed(() => buildPlainLanguageSummary());
+
+function buildPlainLanguageSummary(): string {
+  const structure = props.data?.structure_snapshot || {};
+  const risk = props.data?.risk_of_misreading || {};
+  const indicators = props.data?.indicator_translate?.indicators || [];
+
+  const phaseText = getPhaseName(structure.phase || 'unclear');
+  const structureText = getStructureTypeName(structure.structure_type || 'consolidation');
+  const ma200Text = getMA200PositionName(structure.ma200_position || 'no_data');
+  const riskText = getRiskLevelName(risk.risk_level || 'medium');
+  const firstRisk = Array.isArray(risk.risk_factors) && risk.risk_factors.length > 0
+    ? `重点观察${risk.risk_factors[0]}。`
+    : '重点观察关键价位、量能和结构变化。';
+  const activeSignal = Array.isArray(indicators)
+    ? indicators.find((item: any) => item?.signal === 'strengthening' || item?.signal === 'weakening')
+    : null;
+  const indicatorText = activeSignal?.name
+    ? `${activeSignal.name}显示${getSignalName(activeSignal.signal)}，`
+    : '';
+
+  return `${phaseText}${structureText}结构，价格位于 MA200 ${ma200Text}，${indicatorText}当前误读风险为${riskText}，${firstRisk}`;
+}
+
 // 辅助函数：结构类型
 function getStructureTypeName(type: string): string {
   const map: Record<string, string> = {
@@ -529,6 +559,31 @@ function handleBindSuccess(data: any) {
   background: var(--n-color);
   border-radius: 8px;
   border: 1px solid var(--n-border-color);
+}
+
+.plain-language-summary {
+  border-color: rgba(85, 96, 214, 0.22);
+  background: linear-gradient(135deg, rgba(85, 96, 214, 0.08), rgba(124, 84, 217, 0.06));
+}
+
+.plain-language-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5560d6;
+  margin-bottom: 4px;
+}
+
+.plain-language-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--n-text-color);
+  margin-bottom: 8px;
+}
+
+.plain-language-summary p {
+  margin: 0;
+  line-height: 1.7;
+  color: var(--n-text-color-2);
 }
 
 .section-title {

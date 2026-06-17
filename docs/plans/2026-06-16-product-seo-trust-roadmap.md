@@ -413,7 +413,7 @@
 | 2026-06-16 | Task 2 补丁: 热门池扩展至 127 个/主站导航 | local_done | pending | pending |
 | 2026-06-16 | Task 3: sitemap 加入个股 URL + /stocks 清单页 | local_done | pending | pending |
 | 2026-06-17 | Task 4: 站内内链入口 | local_done | pending | pending |
-|  | Task 5: 诊股一句话结论 | pending |  |  |
+| 2026-06-17 | Task 5: 诊股一句话结论 | local_done | pending | pending |
 |  | Task 6: 为什么这么判 | pending |  |  |
 |  | Task 7: 判断详情显示系统初判 | pending |  |  |
 |  | Task 8: 复盘学习总结 | pending |  |  |
