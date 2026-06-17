@@ -10,6 +10,12 @@ def test_analysis_v1_display_surfaces_plain_language_summary_without_advice_word
     assert "一句话结论" in component_text
     assert "plainLanguageSummary" in component_text
     assert "buildPlainLanguageSummary" in component_text
+    assert "为什么这么判" in component_text
+    assert "evidenceItems" in component_text
+    assert "buildEvidenceItems" in component_text
+    assert "结构依据" in component_text
+    assert "指标依据" in component_text
+    assert "风险依据" in component_text
     assert "结构" in component_text
     assert "风险" in component_text
 

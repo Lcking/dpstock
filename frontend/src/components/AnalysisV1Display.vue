@@ -4,6 +4,15 @@
       <div class="plain-language-eyebrow">AI 一句话结论</div>
       <div class="plain-language-title">一句话结论</div>
       <p>{{ plainLanguageSummary }}</p>
+      <div class="evidence-summary">
+        <div class="evidence-summary-title">为什么这么判</div>
+        <div class="evidence-grid">
+          <div v-for="item in evidenceItems" :key="item.label" class="evidence-item">
+            <div class="evidence-label">{{ item.label }}</div>
+            <div class="evidence-text">{{ item.text }}</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Section 1: 结构快照 -->
@@ -309,6 +318,7 @@ const turnoverActivityLabel = computed(() => {
 });
 
 const plainLanguageSummary = computed(() => buildPlainLanguageSummary());
+const evidenceItems = computed(() => buildEvidenceItems());
 
 function buildPlainLanguageSummary(): string {
   const structure = props.data?.structure_snapshot || {};
@@ -330,6 +340,37 @@ function buildPlainLanguageSummary(): string {
     : '';
 
   return `${phaseText}${structureText}结构，价格位于 MA200 ${ma200Text}，${indicatorText}当前误读风险为${riskText}，${firstRisk}`;
+}
+
+function buildEvidenceItems(): Array<{ label: string; text: string }> {
+  const structure = props.data?.structure_snapshot || {};
+  const indicators = props.data?.indicator_translate || {};
+  const risk = props.data?.risk_of_misreading || {};
+  const keyLevels = Array.isArray(structure.key_levels) ? structure.key_levels : [];
+  const displayKeyLevels = keyLevels.slice(0, 2)
+    .map((level: any) => `${level.label || '关键位'} ${Number(level.price).toFixed(2)}`)
+    .join('，');
+  const indicatorList = Array.isArray(indicators.indicators) ? indicators.indicators : [];
+  const firstIndicator = indicatorList.find((item: any) => item?.name !== '换手率') || indicatorList[0];
+  const riskFactors = Array.isArray(risk.risk_factors) ? risk.risk_factors : [];
+  const riskFlags = Array.isArray(risk.risk_flags) ? risk.risk_flags : [];
+
+  return [
+    {
+      label: '结构依据',
+      text: `${extractPlainText(structure.trend_description || '结构描述暂缺')}${displayKeyLevels ? `；关键位：${displayKeyLevels}` : ''}`,
+    },
+    {
+      label: '指标依据',
+      text: firstIndicator
+        ? `${firstIndicator.name}为${firstIndicator.value}，信号${getSignalName(firstIndicator.signal)}；${extractPlainText(firstIndicator.interpretation || indicators.global_note || '')}`
+        : extractPlainText(indicators.global_note || '指标说明暂缺'),
+    },
+    {
+      label: '风险依据',
+      text: `${riskFactors[0] || extractPlainText(risk.caution_note || '风险因素暂缺')}${riskFlags.length ? `；风险标记：${riskFlags.join('、')}` : ''}`,
+    },
+  ];
 }
 
 // 辅助函数：结构类型
@@ -583,6 +624,45 @@ function handleBindSuccess(data: any) {
 .plain-language-summary p {
   margin: 0;
   line-height: 1.7;
+  color: var(--n-text-color-2);
+}
+
+.evidence-summary {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(85, 96, 214, 0.16);
+}
+
+.evidence-summary-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--n-text-color);
+  margin-bottom: 10px;
+}
+
+.evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.evidence-item {
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(85, 96, 214, 0.10);
+}
+
+.evidence-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5560d6;
+  margin-bottom: 6px;
+}
+
+.evidence-text {
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--n-text-color-2);
 }
 
