@@ -64,3 +64,18 @@ def test_journal_list_and_review_dialog_use_evaluation_preview():
     assert "effectiveSystemEvaluation" in detail_dialog
     assert "record.evaluation_preview" in detail_dialog
     assert "系统初判" in detail_dialog
+
+
+def test_journal_review_captures_lesson_summary():
+    journal_types = (REPO_ROOT / "frontend/src/types/journal.ts").read_text(encoding="utf-8")
+    review_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalReviewDialog.vue").read_text(encoding="utf-8")
+    detail_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalDetailDialog.vue").read_text(encoding="utf-8")
+    api_service = (REPO_ROOT / "frontend/src/services/api.ts").read_text(encoding="utf-8")
+
+    assert "lesson?: string" in journal_types
+    assert "lesson" in review_dialog
+    assert "这次学到了什么" in review_dialog
+    assert "reviewRecord(props.record.id, notes.value, lesson.value)" in review_dialog
+    assert "review.lesson" in detail_dialog
+    assert "学习总结" in detail_dialog
+    assert "lesson?: string" in api_service

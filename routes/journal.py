@@ -55,6 +55,7 @@ class CreateRecordRequest(BaseModel):
 
 class ReviewRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=500)
+    lesson: Optional[str] = Field(None, max_length=300)
 
 
 @router.post("")
@@ -179,6 +180,7 @@ async def review_record(
             record_id=record_id,
             user_id=user_id,
             notes=request.notes,
+            lesson=request.lesson,
         )
         if "error" in result:
             raise HTTPException(status_code=404, detail=result["error"])

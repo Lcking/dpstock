@@ -24,6 +24,7 @@ export interface JournalReview {
     triggers: ReviewTrigger[]
     system_evaluation?: JournalSystemEvaluation
     notes?: string
+    lesson?: string
 }
 
 export interface JournalSystemEvaluation {
@@ -74,4 +75,5 @@ export interface CreateRecordRequest {
 
 export interface ReviewRequest {
     notes?: string
+    lesson?: string
 }

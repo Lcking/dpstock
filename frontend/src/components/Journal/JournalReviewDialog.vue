@@ -55,6 +55,19 @@
         />
       </div>
 
+      <!-- Lesson Input -->
+      <div class="notes-section">
+        <div class="section-title">这次学到了什么</div>
+        <n-input
+          v-model:value="lesson"
+          type="textarea"
+          placeholder="用一句话总结这次判断给你的启发（选填，不超过120字）"
+          :rows="3"
+          :maxlength="120"
+          show-count
+        />
+      </div>
+
       <!-- Hint -->
       <n-alert type="info" size="small" style="margin-top: 16px">
         系统将自动评估判断前提的验证结果，你可以添加自己的复盘笔记作为补充。
@@ -97,6 +110,7 @@ const reviewing = ref(false)
 const evaluationLoading = ref(false)
 const previewEvaluation = ref<JournalSystemEvaluation | null>(null)
 const notes = ref('')
+const lesson = ref('')
 
 const effectiveEvaluation = computed(() => {
   return props.record?.review?.system_evaluation || props.record?.evaluation_preview || previewEvaluation.value
@@ -106,6 +120,7 @@ const effectiveEvaluation = computed(() => {
 watch(() => props.show, (newShow) => {
   if (newShow) {
     notes.value = ''
+    lesson.value = ''
     loadEvaluationPreview()
   }
 })
@@ -133,7 +148,7 @@ const handleReview = async () => {
 
   reviewing.value = true
   try {
-    await apiService.reviewRecord(props.record.id, notes.value)
+    await apiService.reviewRecord(props.record.id, notes.value, lesson.value)
 
     message.success('复盘完成')
     emit('reviewed')

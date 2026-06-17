@@ -300,9 +300,9 @@ export const apiService = {
     }
   },
 
-  reviewRecord: async (recordId: string, notes: string | null) => {
+  reviewRecord: async (recordId: string, notes: string | null, lesson?: string | null) => {
     try {
-      const response = await axiosInstance.post(`/journal/${recordId}/review`, { notes });
+      const response = await axiosInstance.post(`/journal/${recordId}/review`, { notes, lesson });
       return response.data;
     } catch (error) {
       console.error('复盘保存时出错:', error);

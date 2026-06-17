@@ -118,6 +118,10 @@
             <div class="notes-label">复盘笔记:</div>
             <div class="notes-content">{{ record.review.notes }}</div>
           </div>
+          <div class="review-notes" v-if="record.review.lesson">
+            <div class="notes-label">学习总结:</div>
+            <div class="notes-content">{{ record.review.lesson }}</div>
+          </div>
         </div>
       </div>
 

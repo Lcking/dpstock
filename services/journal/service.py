@@ -495,7 +495,8 @@ class JournalService:
         self,
         record_id: str,
         user_id: str,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        lesson: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         复盘判断记录
@@ -527,7 +528,8 @@ class JournalService:
             "outcome": outcome,
             "triggers": triggers,
             "system_evaluation": system_evaluation,
-            "notes": notes
+            "notes": notes,
+            "lesson": lesson
         }
         
         # 更新记录

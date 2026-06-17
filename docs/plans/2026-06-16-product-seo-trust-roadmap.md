@@ -416,7 +416,7 @@
 | 2026-06-17 | Task 5: 诊股一句话结论 | local_done | pending | pending |
 | 2026-06-17 | Task 6: 为什么这么判 | local_done | pending | pending |
 | 2026-06-17 | Task 7: 判断详情显示系统初判 | local_done | pending | pending |
-|  | Task 8: 复盘学习总结 | pending |  |  |
+| 2026-06-17 | Task 8: 复盘学习总结 | local_done | pending | pending |
 |  | Task 9: 自选股健康度总览 | pending |  |  |
 |  | Task 10: 风险触发提醒 | pending |  |  |
 |  | Task 11: GEO 问答块 | pending |  |  |
