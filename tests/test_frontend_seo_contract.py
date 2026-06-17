@@ -33,6 +33,9 @@ def test_analysis_list_uses_real_links_and_seo_excerpt_helper():
     analysis_list_text = (repo_root / "frontend/src/components/AnalysisList.vue").read_text(encoding="utf-8")
 
     assert "<router-link" in analysis_list_text
+    assert 'href="/stocks"' in analysis_list_text
+    assert "`/stock/${article.stock_code}`" in analysis_list_text
+    assert "查看个股页" in analysis_list_text
     assert "@/utils/seo" in analysis_list_text
     assert "getArticlePreview(" in analysis_list_text
     assert "article.content.substring(0, 100)" not in analysis_list_text
@@ -48,6 +51,8 @@ def test_home_and_article_pages_apply_page_level_seo():
     assert "applyPageSeo({" in home_text
     assert "<h1" in home_text
     assert "免费AI在线股票分析平台系统 - 智能诊股助手_软件" in home_text
+    assert 'href="/stocks"' in home_text
+    assert "热门个股 AI 诊股清单" in home_text
     assert "MarketOverviewPanel" in home_text
     assert home_text.index("MarketOverviewPanel") < home_text.index("ValueLoop")
     assert home_text.index("ValueLoop") < home_text.index("analysis-container")
@@ -55,6 +60,8 @@ def test_home_and_article_pages_apply_page_level_seo():
     assert "setCanonicalUrl(" in article_text
     assert "twitter:card" in article_text
     assert "og:url" in article_text
+    assert "`/stock/${article.stock_code}`" in article_text
+    assert "查看个股 AI 诊股页" in article_text
     assert '"@type": "BreadcrumbList"' in article_text
 
 

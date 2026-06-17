@@ -34,6 +34,15 @@
         <!-- 核心价值闭环 -->
         <ValueLoop />
 
+        <section class="stock-index-entry">
+          <div>
+            <div class="stock-index-eyebrow">热门个股入口</div>
+            <h2>热门个股 AI 诊股清单</h2>
+            <p>浏览已开放的服务端个股页面，从长期入口进入单股结构、趋势和风险线索。</p>
+          </div>
+          <a href="/stocks" class="stock-index-entry-link">查看个股列表</a>
+        </section>
+
         <!-- 主要内容 -->
         <n-card class="analysis-container mobile-card mobile-card-spacing mobile-shadow">
           
@@ -1121,6 +1130,52 @@ function handleOpenBindFromQuota() {
 
 .invite-accepted-action {
   margin-top: 10px;
+}
+
+.stock-index-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  border: 1px solid rgba(91, 103, 241, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 28px rgba(79, 93, 160, 0.08);
+}
+
+.stock-index-entry h2 {
+  margin: 2px 0 6px;
+  font-size: 18px;
+  color: #172033;
+}
+
+.stock-index-entry p {
+  margin: 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.stock-index-eyebrow {
+  font-size: 12px;
+  color: #5560d6;
+  font-weight: 700;
+}
+
+.stock-index-entry-link {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #5560d6;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.stock-index-entry-link:hover {
+  opacity: 0.92;
 }
 
 .sr-only {

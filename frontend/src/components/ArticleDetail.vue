@@ -26,6 +26,9 @@
           <div class="stock-basic">
             <p class="stock-name">{{ article.stock_name }}</p>
             <span class="stock-code">{{ article.stock_code }}</span>
+            <a class="stock-page-link" :href="`/stock/${article.stock_code}`">
+              查看个股 AI 诊股页
+            </a>
           </div>
           <AiScorePanel
             v-if="aiScoreForArticle"
@@ -423,6 +426,18 @@ onMounted(fetchArticle);
   color: #64748b;
   font-family: 'JetBrains Mono', monospace;
   font-size: 1.1rem;
+}
+
+.stock-page-link {
+  width: fit-content;
+  color: #5560d6;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.stock-page-link:hover {
+  text-decoration: underline;
 }
 
 .score-badge {

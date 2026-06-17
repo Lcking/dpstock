@@ -3,6 +3,7 @@
     <div class="page-header">
       <h1 class="page-title">分析专栏</h1>
       <p class="page-subtitle">沉淀每日 AI 深度分析，见证市场异动轨迹</p>
+      <a href="/stocks" class="stock-index-link">浏览热门个股 AI 诊股清单</a>
     </div>
 
     <div class="search-bar">
@@ -33,10 +34,9 @@
     </div>
 
     <div v-else class="articles-grid">
-      <router-link
+      <div
         v-for="article in articles"
         :key="article.id"
-        :to="`/analysis/${article.id}`"
         class="article-card-link"
       >
         <n-card class="article-card">
@@ -46,13 +46,15 @@
             </n-tag>
             <span class="publish-date">{{ article.publish_date }}</span>
           </div>
-          <h2 class="article-title">{{ article.title }}</h2>
+          <router-link :to="`/analysis/${article.id}`" class="article-title-link">
+            <h2 class="article-title">{{ article.title }}</h2>
+          </router-link>
           <div class="article-preview">
             {{ getArticlePreview(article.content) }}
           </div>
           <div class="article-footer">
             <div class="stock-info">
-              <span class="stock-name">{{ article.stock_name }}</span>
+              <a :href="`/stock/${article.stock_code}`" class="stock-page-link">查看个股页：{{ article.stock_name }}</a>
               <span class="stock-code">{{ article.stock_code }}</span>
             </div>
             <div class="score-tag" :class="getScoreClass(article.score)">
@@ -60,7 +62,7 @@
             </div>
           </div>
         </n-card>
-      </router-link>
+      </div>
     </div>
     
     <!-- 加载更多状态 -->
@@ -188,6 +190,21 @@ onBeforeUnmount(() => {
   font-size: 1.1rem;
 }
 
+.stock-index-link {
+  display: inline-flex;
+  margin-top: 14px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: rgba(85, 96, 214, 0.10);
+  color: #5560d6;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.stock-index-link:hover {
+  background: rgba(85, 96, 214, 0.16);
+}
+
 .search-bar {
   max-width: 600px;
   margin: 0 auto 40px;
@@ -207,6 +224,11 @@ onBeforeUnmount(() => {
 
 .article-card-link {
   display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.article-title-link {
   color: inherit;
   text-decoration: none;
 }
@@ -272,12 +294,18 @@ onBeforeUnmount(() => {
 
 .stock-info {
   display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
-.stock-name {
+.stock-page-link {
   font-weight: 600;
-  color: #475569;
+  color: #5560d6;
+  text-decoration: none;
+}
+
+.stock-page-link:hover {
+  text-decoration: underline;
 }
 
 .stock-code {
