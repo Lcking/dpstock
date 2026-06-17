@@ -55,8 +55,12 @@ def test_journal_list_and_review_dialog_use_evaluation_preview():
     journal_types = (REPO_ROOT / "frontend/src/types/journal.ts").read_text(encoding="utf-8")
     list_view = (REPO_ROOT / "frontend/src/components/Journal/JournalList.vue").read_text(encoding="utf-8")
     review_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalReviewDialog.vue").read_text(encoding="utf-8")
+    detail_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalDetailDialog.vue").read_text(encoding="utf-8")
 
     assert "evaluation_preview?: JournalSystemEvaluation" in journal_types
     assert "record.evaluation_preview" in list_view
     assert "系统初判" in list_view
     assert "props.record?.evaluation_preview" in review_dialog
+    assert "effectiveSystemEvaluation" in detail_dialog
+    assert "record.evaluation_preview" in detail_dialog
+    assert "系统初判" in detail_dialog

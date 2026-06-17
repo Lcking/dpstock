@@ -84,6 +84,24 @@
         </div>
       </div>
 
+      <!-- System Evaluation Preview / Final -->
+      <div class="detail-section" v-if="effectiveSystemEvaluation(record)">
+        <div class="section-title">
+          {{ record.status === 'reviewed' ? '🧾 系统判卷' : '🔎 系统初判' }}
+        </div>
+        <div class="system-evaluation-card">
+          <n-tag :type="outcomeTagType(effectiveSystemEvaluation(record)?.outcome || 'uncertain')" size="large">
+            {{ outcomeLabel(effectiveSystemEvaluation(record)?.outcome || 'uncertain') }}
+          </n-tag>
+          <div class="evaluation-summary">
+            {{ effectiveSystemEvaluation(record)?.summary || '系统暂未给出明确摘要。' }}
+          </div>
+          <div class="evaluation-path" v-if="effectiveSystemEvaluation(record)?.actual_path">
+            实际路径：{{ effectiveSystemEvaluation(record)?.actual_path }}
+          </div>
+        </div>
+      </div>
+
       <!-- Review Result (if reviewed) -->
       <div class="detail-section" v-if="record.review && record.status === 'reviewed'">
         <div class="section-title">✅ 复盘结果</div>
@@ -99,13 +117,6 @@
           <div class="review-notes" v-if="record.review.notes">
             <div class="notes-label">复盘笔记:</div>
             <div class="notes-content">{{ record.review.notes }}</div>
-          </div>
-          <div class="system-evaluation" v-if="record.review.system_evaluation">
-            <div class="notes-label">系统判卷:</div>
-            <div class="notes-content">{{ record.review.system_evaluation.summary }}</div>
-            <div class="notes-content" v-if="record.review.system_evaluation.actual_path">
-              实际路径：{{ record.review.system_evaluation.actual_path }}
-            </div>
           </div>
         </div>
       </div>
@@ -238,6 +249,10 @@ const selectedCandidateDescription = (record: JournalRecord) => {
 const candidateDescription = (record: JournalRecord) => {
   const description = selectedCandidateDescription(record)
   return description ? `候选 ${record.candidate}` : `候选 ${record.candidate}`
+}
+
+const effectiveSystemEvaluation = (record: JournalRecord) => {
+  return record.review?.system_evaluation || record.evaluation_preview || null
 }
 
 const statusTagType = (status: string) => {
@@ -406,6 +421,27 @@ const formatDate = (dateStr: string) => {
 .highlight-text {
   color: #18a058;
   font-weight: 600;
+}
+
+.system-evaluation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--n-color);
+  border-radius: 10px;
+  border: 1px solid rgba(102, 126, 234, 0.18);
+}
+
+.evaluation-summary {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--n-text-color);
+}
+
+.evaluation-path {
+  font-size: 13px;
+  color: var(--n-text-color-2);
 }
 
 .review-info {
