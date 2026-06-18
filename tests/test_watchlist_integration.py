@@ -18,6 +18,7 @@ from database.db_factory import DatabaseFactory
 from services.user_service import UserService
 from services.watchlist import watchlist_service
 from schemas.watchlist import WatchlistCreate
+from auth.dependencies import UserContext
 
 
 # ============================================================================
@@ -104,6 +105,39 @@ def test_bound_watchlist_is_not_marked_temporary(tmp_path):
     assert result.user_id == bound_user_id
     assert result.is_temporary is False
     assert result.trial_message is None
+
+
+def test_watchlist_route_falls_back_to_single_bound_user_with_assets(tmp_path):
+    db_path = tmp_path / "watchlist_bound_fallback.db"
+    _setup_watchlist_db(db_path)
+    DatabaseFactory.initialize(str(db_path))
+
+    user_service = UserService(db_path=str(db_path))
+    bound_user_id = user_service.bind_email_identity(
+        anonymous_id="anon_bound_watch",
+        cookie_uid="cookie_bound_watch",
+        anchor_id="anchor_bound_watch",
+        email="bound-watch@example.com",
+    )
+    watchlist_service.create_watchlist(
+        user_id=bound_user_id,
+        data=WatchlistCreate(name="正式观察"),
+    )
+
+    from routes.watchlists import _resolve_watchlist_user
+
+    resolved_user_id = _resolve_watchlist_user(
+        UserContext(
+            user_id="new_anonymous_without_assets",
+            identity_type="anonymous",
+            is_authenticated=False,
+        )
+    )
+
+    assert resolved_user_id == bound_user_id
+    lists = watchlist_service.get_user_watchlists(resolved_user_id)
+    assert lists[0].is_temporary is False
+    assert lists[0].trial_message is None
 
 
 # ============================================================================

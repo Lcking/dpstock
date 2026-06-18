@@ -178,7 +178,6 @@ import EmptyState from '../common/EmptyState.vue'
 import AnchorBindDialog from '../AnchorBindDialog.vue'
 import { apiService } from '@/services/api'
 import type { WatchlistSummary, Watchlist, WatchlistItemSummary } from '@/types/watchlist'
-import { hasAnchorToken } from '@/utils/anchorToken'
 import { applyPageSeo } from '@/utils/seo'
 
 const router = useRouter()
@@ -456,7 +455,7 @@ const handleAdd = async () => {
 }
 
 const checkAndTriggerBindAfterAdd = (addedCount: number) => {
-  if (!watchlistState.value.isTemporary || hasAnchorToken() || addedCount <= 0) return
+  if (!watchlistState.value.isTemporary || addedCount <= 0) return
 
   const count = parseInt(localStorage.getItem(WATCHLIST_ADD_COUNT_KEY) || '0', 10) + 1
   localStorage.setItem(WATCHLIST_ADD_COUNT_KEY, count.toString())

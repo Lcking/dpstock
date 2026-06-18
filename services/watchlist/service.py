@@ -48,6 +48,44 @@ class WatchlistService:
             )
             row = cursor.fetchone()
         return row.get("user_id") if row else None
+
+    def get_watchlists_count(self, user_id: str) -> int:
+        if not user_id:
+            return 0
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) AS c FROM watchlists WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+        if not row:
+            return 0
+        try:
+            return int(row["c"])
+        except Exception:
+            return int(row[0])
+
+    def get_single_bound_user_id_with_watchlists(self) -> Optional[str]:
+        """Return the only email-bound user with watchlists, if exactly one exists."""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT DISTINCT u.user_id
+                FROM users u
+                JOIN watchlists w ON w.user_id = u.user_id
+                WHERE (u.email_verified = 1 OR u.primary_email IS NOT NULL)
+                  AND u.status = 'active'
+                ORDER BY u.created_at DESC
+                LIMIT 2
+                """
+            )
+            rows = cursor.fetchall()
+        if not rows or len(rows) != 1:
+            return None
+        row = rows[0]
+        try:
+            return row["user_id"]
+        except Exception:
+            return row[0]
     
     # ========== CRUD ==========
     

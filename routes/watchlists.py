@@ -18,10 +18,29 @@ logger = get_logger()
 router = APIRouter(prefix="/api/watchlists", tags=["watchlists"])
 
 
+def _resolve_watchlist_user(user: UserContext) -> str:
+    """Resolve canonical watchlist user, with single-bound-user fallback for legacy sessions."""
+    if user.is_authenticated:
+        return user.user_id
+
+    try:
+        fallback_user_id = watchlist_service.get_single_bound_user_id_with_watchlists()
+        if fallback_user_id:
+            anon_count = watchlist_service.get_watchlists_count(user.user_id)
+            bound_count = watchlist_service.get_watchlists_count(fallback_user_id)
+            if anon_count == 0 and bound_count > 0:
+                logger.info("[Watchlist] Fallback to single bound user for anonymous session")
+                return fallback_user_id
+    except Exception as e:
+        logger.warning(f"[Watchlist] Bound user fallback skipped: {e}")
+
+    return user.user_id
+
+
 @router.get("", response_model=List[Watchlist])
 async def list_watchlists(user: UserContext = Depends(get_current_user)):
     try:
-        return watchlist_service.get_user_watchlists(user.user_id)
+        return watchlist_service.get_user_watchlists(_resolve_watchlist_user(user))
     except Exception as e:
         logger.error(f"Error listing watchlists: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -33,7 +52,7 @@ async def create_watchlist(
     user: UserContext = Depends(get_current_user),
 ):
     try:
-        return watchlist_service.create_watchlist(user.user_id, data)
+        return watchlist_service.create_watchlist(_resolve_watchlist_user(user), data)
     except Exception as e:
         logger.error(f"Error creating watchlist: {e}")
         raise HTTPException(status_code=500, detail=str(e))
