@@ -1,8 +1,10 @@
 import os
 import sqlite3
+import asyncio
 from pathlib import Path
 
 from database.db_factory import DatabaseFactory
+from auth.dependencies import UserContext
 from scripts.run_migrations import run_migrations
 from services.invite_service import InviteService
 from services.quota_service import QuotaService
@@ -191,6 +193,55 @@ def test_resolve_request_user_prefers_bound_unified_user(tmp_path):
     assert service.resolve_request_user(cookie_uid="cookie_2")["user_id"] == bound_user_id
     assert service.resolve_request_user(anonymous_id="anon_2")["user_id"] == bound_user_id
     assert service.resolve_request_user(anchor_id="anchor_2")["user_id"] == bound_user_id
+
+
+def test_email_anchor_identity_marks_user_non_temporary_without_primary_email(tmp_path):
+    db_path = tmp_path / "users.db"
+    _run_all_migrations(db_path)
+    DatabaseFactory.initialize(str(db_path))
+
+    service = UserService(db_path=str(db_path))
+    user_id = service.create_user()
+    service.attach_identity(
+        user_id=user_id,
+        identity_type="email_anchor",
+        identity_value="anchor_without_email_column",
+        is_primary=True,
+        verified_at="2026-06-18T00:00:00Z",
+    )
+
+    assert service.is_temporary_user(user_id) is False
+
+
+def test_anchor_status_uses_unified_email_anchor_context(tmp_path):
+    db_path = tmp_path / "users.db"
+    _run_all_migrations(db_path)
+    DatabaseFactory.initialize(str(db_path))
+
+    user_service = UserService(db_path=str(db_path))
+    user_id = user_service.create_user()
+    user_service.attach_identity(
+        user_id=user_id,
+        identity_type="email_anchor",
+        identity_value="anchor_status_id",
+        is_primary=True,
+        verified_at="2026-06-18T00:00:00Z",
+    )
+
+    from routes.anchor import get_anchor_status
+
+    response = asyncio.run(
+        get_anchor_status(
+            UserContext(
+                user_id=user_id,
+                identity_type="email_anchor",
+                is_authenticated=True,
+                anchor_id="anchor_status_id",
+            )
+        )
+    )
+
+    assert response.mode == "anchor"
 
 
 def test_invite_reward_uses_canonical_user_after_inviter_binding(tmp_path):

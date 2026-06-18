@@ -90,7 +90,26 @@ class UserService:
         user = self.get_user(user_id)
         if not user:
             return True
-        return not bool(user.get("email_verified") or user.get("primary_email"))
+        if user.get("email_verified") or user.get("primary_email"):
+            return False
+
+        db = self._get_db()
+        cursor = db.cursor()
+        try:
+            row = cursor.execute(
+                """
+                SELECT 1
+                FROM user_identities
+                WHERE user_id = ?
+                  AND identity_type = 'email_anchor'
+                  AND (verified_at IS NOT NULL OR is_primary = 1)
+                LIMIT 1
+                """,
+                (user_id,),
+            ).fetchone()
+            return row is None
+        finally:
+            db.close()
 
     def resolve_identity(self, identity_type: str, identity_value: str) -> Optional[str]:
         identity_type, identity_value = self._normalize_identity(identity_type, identity_value)

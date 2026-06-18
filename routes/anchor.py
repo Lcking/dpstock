@@ -5,7 +5,7 @@ After successful email binding, returns a **unified JWT** (same format
 as the login token) so the frontend only needs to store one token.
 """
 
-from fastapi import APIRouter, Request, Header, HTTPException, Cookie
+from fastapi import APIRouter, Request, Header, HTTPException, Cookie, Depends
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import os
@@ -180,17 +180,17 @@ async def verify_and_bind(
 
 
 @router.get("/api/anchor/status", response_model=AnchorStatusResponse)
-async def get_anchor_status(request: Request):
-    actor = _get_actor_from_request(request)
-
-    if actor["type"] == "anchor":
-        anchor = anchor_service.get_anchor_by_id(actor["id"])
-        if anchor:
-            return AnchorStatusResponse(
-                mode="anchor",
-                masked_email=anchor.get("anchor_value_masked"),
-            )
-
+async def get_anchor_status(user: UserContext = Depends(get_current_user)):
+    if user.is_authenticated and (user.identity_type == "email_anchor" or user.anchor_id):
+        masked_email = None
+        user_record = user_service.get_user(user.user_id) or {}
+        primary_email = user_record.get("primary_email")
+        if primary_email:
+            masked_email = anchor_service.mask_email(primary_email)
+        if not masked_email and user.anchor_id:
+            anchor = anchor_service.get_anchor_by_id(user.anchor_id)
+            masked_email = anchor.get("anchor_value_masked") if anchor else None
+        return AnchorStatusResponse(mode="anchor", masked_email=masked_email)
     return AnchorStatusResponse(mode="anonymous")
 
 
