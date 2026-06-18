@@ -2,6 +2,7 @@ import axios from 'axios';
 import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse, MarketOverviewItem } from '@/types';
 import type { JournalListResponse, JournalReviewStats, JournalSystemEvaluation } from '@/types/journal';
 import type { Watchlist, WatchlistSummary } from '@/types/watchlist';
+import type { RiskStockListResponse } from '@/types/riskStock';
 
 const API_PREFIX = '/api';
 
@@ -221,6 +222,16 @@ export const apiService = {
     } catch (error) {
       console.error('获取文章列表时出错:', error);
       return [];
+    }
+  },
+
+  getRiskStocks: async (params: { trade_date?: string; tag?: string } = {}): Promise<RiskStockListResponse> => {
+    try {
+      const response = await axiosInstance.get('/risk-stocks', { params });
+      return response.data;
+    } catch (error) {
+      console.error('获取风险股清单时出错:', error);
+      return { trade_date: params.trade_date || null, count: 0, items: [] };
     }
   },
 

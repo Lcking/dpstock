@@ -1,0 +1,232 @@
+<template>
+  <div class="risk-stock-page">
+    <div class="page-header">
+      <div>
+        <h1>风险股清单</h1>
+        <p>每日收盘后更新，聚焦 ST 股与三连板及以上高波动标的。</p>
+      </div>
+      <n-tag type="warning" size="small" :bordered="false">
+        {{ data?.trade_date || '暂无日期' }}
+      </n-tag>
+    </div>
+
+    <n-alert type="warning" :bordered="false" class="risk-note">
+      风险股清单仅用于风险识别与研究观察，不构成投资建议。高风险标签不代表方向判断。
+    </n-alert>
+
+    <div class="filters">
+      <n-button
+        v-for="option in tagOptions"
+        :key="option.value"
+        size="small"
+        :type="selectedTag === option.value ? 'primary' : 'default'"
+        secondary
+        @click="selectTag(option.value)"
+      >
+        {{ option.label }}
+      </n-button>
+    </div>
+
+    <div v-if="loading" class="loading-state">
+      <n-spin size="large" />
+      <span>正在加载风险股清单...</span>
+    </div>
+
+    <n-empty v-else-if="items.length === 0" description="暂无风险股数据" class="empty-state" />
+
+    <n-data-table
+      v-else
+      :columns="columns"
+      :data="items"
+      :row-key="(row: RiskStockItem) => row.ts_code"
+      :bordered="false"
+      :single-line="false"
+      size="small"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, h, onMounted, ref } from 'vue'
+import { NAlert, NButton, NDataTable, NEmpty, NSpin, NTag, type DataTableColumns } from 'naive-ui'
+import { apiService } from '@/services/api'
+import { applyPageSeo } from '@/utils/seo'
+import type { RiskStockItem, RiskStockListResponse } from '@/types/riskStock'
+
+const loading = ref(false)
+const data = ref<RiskStockListResponse | null>(null)
+const selectedTag = ref('')
+
+const tagOptions = [
+  { label: '全部', value: '' },
+  { label: 'ST股', value: 'ST股' },
+  { label: '三连板', value: '三连板' },
+  { label: '高度板', value: '高度板' },
+  { label: '四连板+', value: '四连板+' },
+]
+
+const items = computed(() => data.value?.items || [])
+
+const columns: DataTableColumns<RiskStockItem> = [
+  {
+    title: '股票',
+    key: 'name',
+    render: (row) => h('div', { class: 'stock-cell' }, [
+      h('a', { href: `/stock/${row.ts_code.slice(0, 6)}`, class: 'stock-name-link' }, row.name),
+      h('span', { class: 'stock-code' }, row.ts_code),
+    ])
+  },
+  {
+    title: '风险标签',
+    key: 'tags',
+    render: (row) => h('div', { class: 'tag-list' }, row.tags.map(tag =>
+      h(NTag, { type: tagType(tag), size: 'small', bordered: false }, () => tag)
+    ))
+  },
+  {
+    title: '连板天数',
+    key: 'limit_up_days',
+    width: 90,
+    render: (row) => row.limit_up_days ? `${row.limit_up_days} 天` : '-'
+  },
+  {
+    title: '风险等级',
+    key: 'risk_level',
+    width: 90,
+    render: (row) => h(NTag, { type: riskLevelType(row.risk_level), size: 'small', bordered: false }, () => levelLabel(row.risk_level))
+  },
+  {
+    title: '原因',
+    key: 'reason',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 120,
+    render: (row) => h('a', { href: `/?code=${row.ts_code.slice(0, 6)}&market=A&focus=search`, class: 'action-link' }, '实时诊股')
+  }
+]
+
+function tagType(tag: string): 'error' | 'warning' | 'info' {
+  if (tag.includes('ST')) return 'error'
+  if (tag.includes('连板') || tag.includes('高度')) return 'warning'
+  return 'info'
+}
+
+function riskLevelType(level: string): 'error' | 'warning' | 'success' {
+  if (level === 'high') return 'error'
+  if (level === 'medium') return 'warning'
+  return 'success'
+}
+
+function levelLabel(level: string) {
+  if (level === 'high') return '高风险'
+  if (level === 'medium') return '中风险'
+  return '低风险'
+}
+
+async function loadRiskStocks() {
+  loading.value = true
+  try {
+    data.value = await apiService.getRiskStocks({ tag: selectedTag.value || undefined })
+  } finally {
+    loading.value = false
+  }
+}
+
+function selectTag(tag: string) {
+  selectedTag.value = tag
+  loadRiskStocks()
+}
+
+onMounted(() => {
+  applyPageSeo({
+    title: '风险股清单 | Agu AI',
+    description: '查看每日收盘后更新的 ST 股、三连板及以上风险股清单。',
+    canonicalPath: '/risk-stocks',
+    keywords: '风险股清单,ST股,三连板,高度板,A股风险提示',
+  })
+  loadRiskStocks()
+})
+</script>
+
+<style scoped>
+.risk-stock-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.page-header h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+
+.page-header p {
+  margin: 0;
+  color: var(--n-text-color-3);
+}
+
+.risk-note,
+.filters {
+  margin-bottom: 16px;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.loading-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 80px 0;
+  color: var(--n-text-color-3);
+}
+
+.empty-state {
+  padding: 80px 0;
+}
+
+.stock-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stock-name-link,
+.action-link {
+  color: #5560d6;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.stock-name-link:hover,
+.action-link:hover {
+  text-decoration: underline;
+}
+
+.stock-code {
+  color: var(--n-text-color-3);
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.tag-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+</style>

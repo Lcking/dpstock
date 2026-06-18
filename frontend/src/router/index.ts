@@ -39,6 +39,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/risk-stocks',
+    name: 'RiskStockList',
+    component: () => import('@/components/RiskStockList.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
     path: '/compare',
     name: 'Compare',
     component: () => import('@/components/Compare/CompareView.vue'),
