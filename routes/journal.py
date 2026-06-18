@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 
 from auth.dependencies import get_current_user, UserContext
 from services.journal import journal_service
+from services.journal.failure_reasons import normalize_failure_reason
 from services.user_service import UserService
 from utils.logger import get_logger
 
@@ -56,6 +57,7 @@ class CreateRecordRequest(BaseModel):
 class ReviewRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=500)
     lesson: Optional[str] = Field(None, max_length=300)
+    failure_reason: Optional[str] = Field(None, max_length=50)
 
 
 @router.post("")
@@ -176,11 +178,14 @@ async def review_record(
 ):
     try:
         user_id = _resolve_journal_user(user)
+        if request.failure_reason and not normalize_failure_reason(request.failure_reason):
+            raise HTTPException(status_code=422, detail="无效的失败原因分类")
         result = journal_service.review_record(
             record_id=record_id,
             user_id=user_id,
             notes=request.notes,
             lesson=request.lesson,
+            failure_reason=request.failure_reason,
         )
         if "error" in result:
             raise HTTPException(status_code=404, detail=result["error"])

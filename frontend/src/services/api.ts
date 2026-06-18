@@ -342,9 +342,13 @@ export const apiService = {
     }
   },
 
-  reviewRecord: async (recordId: string, notes: string | null, lesson?: string | null) => {
+  reviewRecord: async (recordId: string, notes: string | null, lesson?: string | null, failureReason?: string | null) => {
     try {
-      const response = await axiosInstance.post(`/journal/${recordId}/review`, { notes, lesson });
+      const response = await axiosInstance.post(`/journal/${recordId}/review`, {
+        notes,
+        lesson,
+        failure_reason: failureReason || undefined,
+      });
       return response.data;
     } catch (error) {
       console.error('复盘保存时出错:', error);

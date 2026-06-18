@@ -114,6 +114,10 @@
               复盘于 {{ formatDate(record.review.reviewed_at) }}
             </span>
           </div>
+          <div class="review-notes" v-if="record.review.failure_reason">
+            <div class="notes-label">失败原因:</div>
+            <div class="notes-content">{{ failureReasonLabel(record.review.failure_reason) }}</div>
+          </div>
           <div class="review-notes" v-if="record.review.notes">
             <div class="notes-label">复盘笔记:</div>
             <div class="notes-content">{{ record.review.notes }}</div>
@@ -295,6 +299,18 @@ const outcomeLabel = (outcome: string) => {
     uncertain: '结果不确定'
   }
   return map[outcome] || outcome
+}
+
+const failureReasonLabel = (reason: string) => {
+  const map: Record<string, string> = {
+    direction_wrong: '方向判断错误',
+    timing_wrong: '时机判断错误',
+    volume_unconfirmed: '价格到了但量能未确认',
+    reverse_path: '市场走了反向路径',
+    logic_broken: '关键逻辑被破坏',
+    other: '其他原因',
+  }
+  return map[reason] || reason
 }
 
 const formatDate = (dateStr: string) => {

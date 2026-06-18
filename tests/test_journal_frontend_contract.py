@@ -48,6 +48,8 @@ def test_journal_list_surfaces_review_stats_scorecard():
     assert "/journal/stats" in api_service
     assert "复盘统计" in list_view
     assert "support_rate" in list_view
+    assert "most_common_failure_reason_label" in list_view
+    assert "最常失败原因" in list_view
     assert "loadReviewStats" in list_view
 
 
@@ -75,7 +77,23 @@ def test_journal_review_captures_lesson_summary():
     assert "lesson?: string" in journal_types
     assert "lesson" in review_dialog
     assert "这次学到了什么" in review_dialog
-    assert "reviewRecord(props.record.id, notes.value, lesson.value)" in review_dialog
+    assert "apiService.reviewRecord" in review_dialog
+    assert "lesson.value" in review_dialog
+    assert "failureReason.value" in review_dialog
     assert "review.lesson" in detail_dialog
     assert "学习总结" in detail_dialog
-    assert "lesson?: string" in api_service
+    assert "lesson" in api_service
+
+
+def test_journal_review_captures_failure_reason():
+    journal_types = (REPO_ROOT / "frontend/src/types/journal.ts").read_text(encoding="utf-8")
+    review_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalReviewDialog.vue").read_text(encoding="utf-8")
+    detail_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalDetailDialog.vue").read_text(encoding="utf-8")
+    api_service = (REPO_ROOT / "frontend/src/services/api.ts").read_text(encoding="utf-8")
+
+    assert "failure_reason?: JournalFailureReason" in journal_types
+    assert "失败原因分类" in review_dialog
+    assert "failureReason" in review_dialog
+    assert "failure_reason" in api_service
+    assert "failureReasonLabel" in detail_dialog
+    assert "失败原因" in detail_dialog

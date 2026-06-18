@@ -40,8 +40,9 @@ class SitemapGenerator:
             # 添加分析专栏页面
             self._add_url(urlset, '/analysis', priority='0.9', changefreq='daily')
 
-            # 添加个股 SEO 清单页和热门个股页
+            # 添加个股 SEO 清单页、风险股清单页和热门个股页
             self._add_url(urlset, '/stocks', priority='0.85', changefreq='weekly')
+            self._add_url(urlset, '/risk-stocks', priority='0.8', changefreq='daily')
             hot_stocks = self.stock_page_service.list_hot_stocks()
             for stock in hot_stocks:
                 self._add_url(
@@ -86,7 +87,7 @@ class SitemapGenerator:
             xml_str = '<?xml version="1.0" encoding="UTF-8"?>\n'
             xml_str += ET.tostring(urlset, encoding='unicode')
             
-            logger.info(f"生成sitemap成功,包含 {len(articles) + len(hot_stocks) + 3} 个URL")
+            logger.info(f"生成sitemap成功,包含 {len(articles) + len(hot_stocks) + 4} 个URL")
             return xml_str
             
         except Exception as e:

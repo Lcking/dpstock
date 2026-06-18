@@ -76,6 +76,8 @@ def test_stock_index_page_lists_hot_stock_links():
     assert "nav-shell" in html
     assert "stock-index-grid" in html
     assert "stock-index-item" in html
+    assert "/risk-stocks" in html
+    assert "风险股清单" in html
     assert "article-card" not in html[html.index("热门股票列表"):]
 
 
@@ -85,6 +87,7 @@ def test_sitemap_includes_stock_index_and_hot_stock_pages():
 
     assert response.status_code == 200
     assert "https://aguai.net/stocks" in response.text
+    assert "https://aguai.net/risk-stocks" in response.text
     assert "https://aguai.net/stock/600519" in response.text
     assert "https://aguai.net/stock/002594" in response.text
     assert "https://aguai.net/stock/688981" in response.text

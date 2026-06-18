@@ -332,6 +332,8 @@ class StockPageService:
       <a class="brand" href="/">Agu AI</a>
       <nav class="nav-links" aria-label="主导航">
         <a href="/analysis">分析专栏</a>
+        <a href="/stocks">个股列表</a>
+        <a href="/risk-stocks">风险股清单</a>
         <a href="/watchlist">我的观察</a>
         <a href="/journal">判断日记</a>
         <a href="/about">关于我们</a>
@@ -429,6 +431,7 @@ class StockPageService:
       <div class="eyebrow">A股 · 热门个股</div>
       <h1>热门个股 AI 诊股清单</h1>
       <p>这里聚合 Agu AI 当前开放的热门个股服务端落地页，方便搜索引擎和用户发现每只股票的 AI 诊股入口。</p>
+      <p>也可查看 <a href="/risk-stocks">每日风险股清单</a>，聚焦 ST 股与三连板及以上高波动标的。</p>
       <a class="cta" href="/">返回首页实时诊股</a>
     </header>
     <section>
@@ -492,6 +495,8 @@ class StockPageService:
       <a class="brand" href="/">Agu AI</a>
       <nav class="nav-links" aria-label="主导航">
         <a href="/analysis">分析专栏</a>
+        <a href="/stocks">个股列表</a>
+        <a href="/risk-stocks">风险股清单</a>
         <a href="/watchlist">我的观察</a>
         <a href="/journal">判断日记</a>
         <a href="/about">关于我们</a>

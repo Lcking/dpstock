@@ -146,6 +146,66 @@ def test_get_review_stats_summarizes_recent_judgment_outcomes():
             db_path.unlink()
 
 
+def test_get_review_stats_summarizes_failure_reasons():
+    db_path = Path("data") / f"test_journal_stats_failure_{uuid.uuid4().hex}.db"
+    db_path.parent.mkdir(exist_ok=True)
+    user_id = "user_stats_failure"
+    try:
+        DatabaseFactory.initialize(str(db_path))
+        _create_judgments_table(db_path)
+        _insert_judgment(
+            db_path,
+            record_id="jr_failure_1",
+            user_id=user_id,
+            candidate="A",
+            status="reviewed",
+            review={
+                "outcome": "falsified",
+                "failure_reason": "volume_unconfirmed",
+                "system_evaluation": {"actual_path": "C"},
+            },
+            days_ago=1,
+        )
+        _insert_judgment(
+            db_path,
+            record_id="jr_failure_2",
+            user_id=user_id,
+            candidate="A",
+            status="reviewed",
+            review={
+                "outcome": "falsified",
+                "failure_reason": "volume_unconfirmed",
+                "system_evaluation": {"actual_path": "C"},
+            },
+            days_ago=2,
+        )
+        _insert_judgment(
+            db_path,
+            record_id="jr_failure_3",
+            user_id=user_id,
+            candidate="B",
+            status="reviewed",
+            review={
+                "outcome": "uncertain",
+                "failure_reason": "timing_wrong",
+                "system_evaluation": {"actual_path": None},
+            },
+            days_ago=3,
+        )
+
+        stats = JournalService().get_review_stats(user_id=user_id, limit=30)
+
+        assert stats["failure_reason_counts"] == {
+            "volume_unconfirmed": 2,
+            "timing_wrong": 1,
+        }
+        assert stats["most_common_failure_reason"] == "volume_unconfirmed"
+        assert stats["most_common_failure_reason_label"] == "价格到了但量能未确认"
+    finally:
+        if db_path.exists():
+            db_path.unlink()
+
+
 def test_get_review_stats_handles_empty_user():
     db_path = Path("data") / f"test_journal_stats_empty_{uuid.uuid4().hex}.db"
     db_path.parent.mkdir(exist_ok=True)

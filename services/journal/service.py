@@ -9,6 +9,10 @@ from typing import List, Optional, Dict, Any
 from database.db_factory import DatabaseFactory
 from schemas.watchlist import WatchlistItemSummary
 from services.journal.evaluator import evaluate_journal_conditions
+from services.journal.failure_reasons import (
+    failure_reason_label,
+    normalize_failure_reason,
+)
 from services.watchlist import watchlist_service
 from services.user_service import UserService
 from utils.logger import get_logger
@@ -236,6 +240,7 @@ class JournalService:
         outcome_counts = {"supported": 0, "falsified": 0, "uncertain": 0}
         selected_candidate_counts: Dict[str, int] = {}
         actual_path_counts: Dict[str, int] = {}
+        failure_reason_counts: Dict[str, int] = {}
         reviewed_count = 0
         pending_count = 0
 
@@ -279,6 +284,10 @@ class JournalService:
                 actual_key = str(actual_path).upper()
                 actual_path_counts[actual_key] = actual_path_counts.get(actual_key, 0) + 1
 
+            failure_reason = normalize_failure_reason(review.get("failure_reason"))
+            if failure_reason:
+                failure_reason_counts[failure_reason] = failure_reason_counts.get(failure_reason, 0) + 1
+
         support_rate = None
         if reviewed_count > 0:
             support_rate = round(outcome_counts["supported"] / reviewed_count * 100, 2)
@@ -293,6 +302,11 @@ class JournalService:
             "selected_candidate_counts": selected_candidate_counts,
             "actual_path_counts": actual_path_counts,
             "most_common_actual_path": self._most_common_key(actual_path_counts),
+            "failure_reason_counts": failure_reason_counts,
+            "most_common_failure_reason": self._most_common_key(failure_reason_counts),
+            "most_common_failure_reason_label": failure_reason_label(
+                self._most_common_key(failure_reason_counts)
+            ),
         }
 
     def _parse_review(self, raw_review: Any) -> Optional[Dict[str, Any]]:
@@ -496,7 +510,8 @@ class JournalService:
         record_id: str,
         user_id: str,
         notes: Optional[str] = None,
-        lesson: Optional[str] = None
+        lesson: Optional[str] = None,
+        failure_reason: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         复盘判断记录
@@ -529,7 +544,8 @@ class JournalService:
             "triggers": triggers,
             "system_evaluation": system_evaluation,
             "notes": notes,
-            "lesson": lesson
+            "lesson": lesson,
+            "failure_reason": normalize_failure_reason(failure_reason),
         }
         
         # 更新记录

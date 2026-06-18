@@ -25,7 +25,16 @@ export interface JournalReview {
     system_evaluation?: JournalSystemEvaluation
     notes?: string
     lesson?: string
+    failure_reason?: JournalFailureReason
 }
+
+export type JournalFailureReason =
+    | 'direction_wrong'
+    | 'timing_wrong'
+    | 'volume_unconfirmed'
+    | 'reverse_path'
+    | 'logic_broken'
+    | 'other'
 
 export interface JournalSystemEvaluation {
     outcome?: 'supported' | 'falsified' | 'uncertain'
@@ -56,6 +65,9 @@ export interface JournalReviewStats {
     selected_candidate_counts: Record<string, number>
     actual_path_counts: Record<string, number>
     most_common_actual_path: string | null
+    failure_reason_counts: Record<string, number>
+    most_common_failure_reason: string | null
+    most_common_failure_reason_label: string | null
 }
 
 export interface ReviewTrigger {
@@ -76,4 +88,5 @@ export interface CreateRecordRequest {
 export interface ReviewRequest {
     notes?: string
     lesson?: string
+    failure_reason?: JournalFailureReason
 }

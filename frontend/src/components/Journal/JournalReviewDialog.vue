@@ -42,6 +42,17 @@
         </n-alert>
       </div>
 
+      <!-- Failure Reason -->
+      <div v-if="showFailureReasonPicker" class="notes-section">
+        <div class="section-title">失败原因分类</div>
+        <n-select
+          v-model:value="failureReason"
+          :options="failureReasonOptions"
+          placeholder="选择这次判断的主要问题（选填）"
+          clearable
+        />
+      </div>
+
       <!-- Notes Input -->
       <div class="notes-section">
         <div class="section-title">复盘笔记</div>
@@ -87,9 +98,9 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { NModal, NInput, NTag, NButton, NSpace, NAlert, useMessage } from 'naive-ui'
+import { NModal, NInput, NTag, NButton, NSpace, NAlert, NSelect, useMessage } from 'naive-ui'
 import { apiService } from '@/services/api'
-import type { JournalRecord, JournalSystemEvaluation } from '@/types/journal'
+import type { JournalRecord, JournalSystemEvaluation, JournalFailureReason } from '@/types/journal'
 
 interface Props {
   show: boolean
@@ -111,6 +122,21 @@ const evaluationLoading = ref(false)
 const previewEvaluation = ref<JournalSystemEvaluation | null>(null)
 const notes = ref('')
 const lesson = ref('')
+const failureReason = ref<JournalFailureReason | null>(null)
+
+const failureReasonOptions = [
+  { label: '方向判断错误', value: 'direction_wrong' },
+  { label: '时机判断错误', value: 'timing_wrong' },
+  { label: '价格到了但量能未确认', value: 'volume_unconfirmed' },
+  { label: '市场走了反向路径', value: 'reverse_path' },
+  { label: '关键逻辑被破坏', value: 'logic_broken' },
+  { label: '其他原因', value: 'other' },
+]
+
+const showFailureReasonPicker = computed(() => {
+  const outcome = effectiveEvaluation.value?.outcome
+  return outcome === 'falsified' || outcome === 'uncertain'
+})
 
 const effectiveEvaluation = computed(() => {
   return props.record?.review?.system_evaluation || props.record?.evaluation_preview || previewEvaluation.value
@@ -121,6 +147,7 @@ watch(() => props.show, (newShow) => {
   if (newShow) {
     notes.value = ''
     lesson.value = ''
+    failureReason.value = null
     loadEvaluationPreview()
   }
 })
@@ -148,7 +175,12 @@ const handleReview = async () => {
 
   reviewing.value = true
   try {
-    await apiService.reviewRecord(props.record.id, notes.value, lesson.value)
+    await apiService.reviewRecord(
+      props.record.id,
+      notes.value,
+      lesson.value,
+      failureReason.value,
+    )
 
     message.success('复盘完成')
     emit('reviewed')

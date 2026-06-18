@@ -513,3 +513,78 @@ def test_review_record_persists_lesson_summary():
     finally:
         if db_path.exists():
             db_path.unlink()
+
+
+def test_review_record_persists_failure_reason():
+    db_path = Path("data") / f"test_journal_review_failure_{uuid.uuid4().hex}.db"
+    db_path.parent.mkdir(exist_ok=True)
+    user_id = "user_review_failure"
+    record_id = "jr_review_failure"
+    preview = {
+        "evaluated_at": "2026-05-29T00:00:00Z",
+        "outcome": "falsified",
+        "actual_path": "C",
+        "summary": "市场走出了反向路径。",
+        "selected_condition": {"status": "not_triggered"},
+        "candidate_results": {},
+    }
+
+    try:
+        DatabaseFactory.initialize(str(db_path))
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE judgments (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    stock_code TEXT NOT NULL,
+                    candidate TEXT,
+                    selected_premises TEXT,
+                    selected_risk_checks TEXT,
+                    constraints TEXT,
+                    snapshot TEXT,
+                    validation_date TEXT,
+                    status TEXT DEFAULT 'active',
+                    review TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO judgments (
+                    id, user_id, stock_code, candidate, selected_premises,
+                    selected_risk_checks, constraints, snapshot, validation_date,
+                    status, review, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record_id,
+                    user_id,
+                    "600726",
+                    "A",
+                    "[]",
+                    "[]",
+                    json.dumps({"evaluation_preview": preview}, ensure_ascii=False),
+                    "{}",
+                    "2026-05-29T00:00:00Z",
+                    "due",
+                    None,
+                    "2026-05-20T00:00:00Z",
+                    "2026-05-20T00:00:00Z",
+                ),
+            )
+            conn.commit()
+
+        result = JournalService().review_record(
+            record_id,
+            user_id,
+            notes="复盘备注",
+            failure_reason="reverse_path",
+        )
+
+        assert result["review"]["failure_reason"] == "reverse_path"
+    finally:
+        if db_path.exists():
+            db_path.unlink()

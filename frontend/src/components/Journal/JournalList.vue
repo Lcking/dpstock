@@ -89,6 +89,13 @@
           <div class="stat-value">{{ reviewStats.most_common_actual_path || '—' }}</div>
           <div class="stat-hint">A/B/C 实际路径</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-label">最常失败原因</div>
+          <div class="stat-value compact">
+            {{ reviewStats.most_common_failure_reason_label || '—' }}
+          </div>
+          <div class="stat-hint">证伪/不确定时的归因</div>
+        </div>
       </div>
     </div>
 
@@ -791,7 +798,7 @@ onMounted(() => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
 
