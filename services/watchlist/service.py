@@ -599,7 +599,6 @@ class WatchlistService:
         weak_count = 0
         high_risk_count = 0
         active_judgment_count = 0
-        classified_codes = set()
         scores = []
 
         for item in items:
@@ -610,19 +609,16 @@ class WatchlistService:
             is_strong = (item.trend.direction == "up" and item.risk.level != "high") or item.relative_strength.label_20d == "strong"
             is_weak = item.trend.direction == "down" or item.relative_strength.label_20d == "weak"
 
-            if is_strong:
-                strong_count += 1
-                classified_codes.add(item.ts_code)
-            if is_weak:
-                weak_count += 1
-                classified_codes.add(item.ts_code)
             if is_high_risk:
                 high_risk_count += 1
-                classified_codes.add(item.ts_code)
+            elif is_weak:
+                weak_count += 1
+            elif is_strong:
+                strong_count += 1
             if item.judgement.has_active:
                 active_judgment_count += 1
 
-        watch_count = max(0, total - len(classified_codes))
+        watch_count = max(0, total - strong_count - weak_count - high_risk_count)
         health_score = round(sum(scores) / total)
         if high_risk_count / total >= 0.3:
             label = "风险偏高"

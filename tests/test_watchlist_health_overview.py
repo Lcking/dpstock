@@ -52,3 +52,26 @@ def test_watchlist_health_overview_counts_strength_risk_and_watch_items():
     assert overview.active_judgment_count == 1
     assert 0 <= overview.health_score <= 100
     assert overview.label in {"偏强", "均衡", "偏弱", "风险偏高"}
+
+
+def test_watchlist_health_overview_assigns_each_stock_to_one_bucket():
+    service = WatchlistService()
+    items = [
+        _item("up_but_rs_weak", "up", 80, "weak", "low"),
+        _item("down_but_rs_strong", "down", 30, "strong", "medium"),
+        _item("plain_strong", "up", 75, "strong", "low"),
+    ]
+
+    overview = service._build_health_overview(items)
+
+    assert overview.total_count == 3
+    assert overview.strong_count == 1
+    assert overview.weak_count == 2
+    assert overview.high_risk_count == 0
+    assert overview.watch_count == 0
+    assert (
+        overview.strong_count
+        + overview.weak_count
+        + overview.high_risk_count
+        + overview.watch_count
+    ) == overview.total_count
