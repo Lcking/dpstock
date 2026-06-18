@@ -11,9 +11,14 @@ from schemas.watchlist import (
     WatchlistAddSymbols, WatchlistSummaryResponse,
 )
 from services.watchlist import watchlist_service
+from services.watchlist_risk_alert_service import WatchlistRiskAlertService
 from utils.logger import get_logger
 
 logger = get_logger()
+
+
+def _watchlist_risk_alert_service() -> WatchlistRiskAlertService:
+    return WatchlistRiskAlertService()
 
 router = APIRouter(prefix="/api/watchlists", tags=["watchlists"])
 
@@ -55,6 +60,44 @@ async def create_watchlist(
         return watchlist_service.create_watchlist(_resolve_watchlist_user(user), data)
     except Exception as e:
         logger.error(f"Error creating watchlist: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-alerts/unread-count")
+async def get_risk_alert_unread_count(user: UserContext = Depends(get_current_user)):
+    try:
+        user_id = _resolve_watchlist_user(user)
+        return {"count": _watchlist_risk_alert_service().get_unread_count(user_id)}
+    except Exception as e:
+        logger.error(f"Error getting risk alert unread count: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-alerts")
+async def list_risk_alerts(
+    limit: int = Query(20, ge=1, le=100),
+    unread_only: bool = Query(False),
+    user: UserContext = Depends(get_current_user),
+):
+    try:
+        user_id = _resolve_watchlist_user(user)
+        return _watchlist_risk_alert_service().list_alerts(
+            user_id=user_id,
+            limit=limit,
+            unread_only=unread_only,
+        )
+    except Exception as e:
+        logger.error(f"Error listing risk alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/risk-alerts/mark-read")
+async def mark_risk_alerts_read(user: UserContext = Depends(get_current_user)):
+    try:
+        user_id = _resolve_watchlist_user(user)
+        return _watchlist_risk_alert_service().mark_all_read(user_id)
+    except Exception as e:
+        logger.error(f"Error marking risk alerts read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

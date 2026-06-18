@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse, MarketOverviewItem } from '@/types';
 import type { JournalListResponse, JournalReviewStats, JournalSystemEvaluation } from '@/types/journal';
-import type { Watchlist, WatchlistSummary } from '@/types/watchlist';
+import type { Watchlist, WatchlistSummary, WatchlistRiskAlertsResponse } from '@/types/watchlist';
 import type { RiskStockListResponse } from '@/types/riskStock';
 
 const API_PREFIX = '/api';
@@ -426,6 +426,30 @@ export const apiService = {
   removeWatchlistSymbol: async (watchlistId: string, tsCode: string) => {
     const response = await axiosInstance.delete(`/watchlists/${watchlistId}/symbols/${tsCode}`);
     return response.data;
+  },
+
+  getWatchlistRiskAlertUnreadCount: async (): Promise<number> => {
+    try {
+      const response = await axiosInstance.get('/watchlists/risk-alerts/unread-count');
+      return response.data.count || 0;
+    } catch (error) {
+      console.error('获取自选风险提醒数量时出错:', error);
+      return 0;
+    }
+  },
+
+  getWatchlistRiskAlerts: async (params: { limit?: number; unread_only?: boolean } = {}): Promise<WatchlistRiskAlertsResponse> => {
+    try {
+      const response = await axiosInstance.get('/watchlists/risk-alerts', { params });
+      return response.data;
+    } catch (error) {
+      console.error('获取自选风险提醒时出错:', error);
+      return { unread_count: 0, items: [] };
+    }
+  },
+
+  markWatchlistRiskAlertsRead: async (): Promise<void> => {
+    await axiosInstance.post('/watchlists/risk-alerts/mark-read');
   },
 
   // ========== Quota API ==========

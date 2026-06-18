@@ -87,3 +87,21 @@ export interface Watchlist {
     is_temporary: boolean
     trial_message: string | null
 }
+
+export interface WatchlistRiskAlert {
+    id: string
+    user_id: string
+    ts_code: string
+    stock_name: string
+    trade_date: string
+    tags: string[]
+    risk_level: string
+    reason: string
+    created_at: string
+    read_at?: string | null
+}
+
+export interface WatchlistRiskAlertsResponse {
+    unread_count: number
+    items: WatchlistRiskAlert[]
+}

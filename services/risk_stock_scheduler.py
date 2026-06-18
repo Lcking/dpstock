@@ -69,7 +69,8 @@ class RiskStockScheduler:
             logger.info("[RiskStockScheduler] Running scheduled risk stock refresh...")
             result = RiskStockService().refresh_daily(source="scheduler")
             logger.info(
-                f"[RiskStockScheduler] Completed trade_date={result.get('trade_date')} count={result.get('count')}"
+                f"[RiskStockScheduler] Completed trade_date={result.get('trade_date')} "
+                f"count={result.get('count')} alerts_created={result.get('alerts_created', 0)}"
             )
         except Exception as exc:
             logger.error(f"[RiskStockScheduler] Refresh failed: {exc}")

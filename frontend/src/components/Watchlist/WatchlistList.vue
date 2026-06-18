@@ -14,6 +14,43 @@
     </div>
 
     <n-alert
+      v-if="riskAlerts.length > 0"
+      type="warning"
+      :bordered="false"
+      class="risk-alert-panel"
+    >
+      <template #header>
+        自选风险提醒（{{ riskAlerts.length }}）
+      </template>
+      <div class="risk-alert-list">
+        <div v-for="alert in riskAlerts" :key="alert.id" class="risk-alert-item">
+          <div class="risk-alert-main">
+            <a :href="`/stock/${alert.ts_code.slice(0, 6)}`" class="risk-alert-name">{{ alert.stock_name }}</a>
+            <span class="risk-alert-code">{{ alert.ts_code }}</span>
+          </div>
+          <div class="risk-alert-tags">
+            <n-tag
+              v-for="tag in alert.tags"
+              :key="`${alert.id}-${tag}`"
+              size="small"
+              :bordered="false"
+              type="warning"
+            >
+              {{ tag }}
+            </n-tag>
+          </div>
+          <div class="risk-alert-reason">{{ alert.reason }}</div>
+        </div>
+      </div>
+      <div class="risk-alert-actions">
+        <n-space>
+          <n-button size="small" @click="goRiskStocks">查看风险股清单</n-button>
+          <n-button size="small" type="primary" secondary @click="markRiskAlertsRead">标记已读</n-button>
+        </n-space>
+      </div>
+    </n-alert>
+
+    <n-alert
       v-if="watchlistState.isTemporary && watchlistState.trialMessage"
       type="warning"
       :bordered="false"
@@ -177,12 +214,14 @@ import WatchlistFilters from './WatchlistFilters.vue'
 import EmptyState from '../common/EmptyState.vue'
 import AnchorBindDialog from '../AnchorBindDialog.vue'
 import { apiService } from '@/services/api'
-import type { WatchlistSummary, Watchlist, WatchlistItemSummary } from '@/types/watchlist'
+import type { WatchlistSummary, Watchlist, WatchlistItemSummary, WatchlistRiskAlert } from '@/types/watchlist'
 import { applyPageSeo } from '@/utils/seo'
+import { useNotificationStore } from '@/stores/notification'
 
 const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
+const notificationStore = useNotificationStore()
 
 // State
 const loading = ref(false)
@@ -200,6 +239,7 @@ const watchlistState = ref({
   isTemporary: false,
   trialMessage: null as string | null
 })
+const riskAlerts = ref<WatchlistRiskAlert[]>([])
 
 const applyWatchlistState = (source?: Partial<WatchlistSummary & Watchlist> | null) => {
   watchlistState.value = {
@@ -502,6 +542,27 @@ const handleBindSuccess = async () => {
   await initWatchlist()
 }
 
+async function loadRiskAlerts() {
+  const response = await apiService.getWatchlistRiskAlerts({ unread_only: true, limit: 10 })
+  riskAlerts.value = response.items
+}
+
+function goRiskStocks() {
+  window.location.href = '/risk-stocks'
+}
+
+async function markRiskAlertsRead() {
+  try {
+    await apiService.markWatchlistRiskAlertsRead()
+    riskAlerts.value = []
+    await notificationStore.checkReviews()
+    message.success('风险提醒已标记为已读')
+  } catch (error) {
+    console.error('Mark risk alerts read failed:', error)
+    message.error('标记已读失败')
+  }
+}
+
 onMounted(() => {
   applyPageSeo({
     title: '我的观察 | Agu AI',
@@ -510,6 +571,7 @@ onMounted(() => {
     robots: 'noindex, nofollow',
   })
   initWatchlist()
+  loadRiskAlerts()
 })
 </script>
 
@@ -535,6 +597,62 @@ onMounted(() => {
 
 .trial-alert {
   margin-bottom: 16px;
+}
+
+.risk-alert-panel {
+  margin-bottom: 16px;
+}
+
+.risk-alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.risk-alert-item {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.risk-alert-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.risk-alert-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.risk-alert-name {
+  color: #5560d6;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.risk-alert-code {
+  color: var(--n-text-color-3);
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.risk-alert-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.risk-alert-reason {
+  color: var(--n-text-color-3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.risk-alert-actions {
+  margin-top: 12px;
 }
 
 .bind-value-alert {

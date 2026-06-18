@@ -33,7 +33,7 @@
 
         <n-dropdown trigger="click" :options="myMenuOptions" @select="handleMyMenuSelect">
           <button class="nav-btn nav-btn-button" type="button">
-            <n-badge :value="notificationStore.pendingReviewCount" :max="99" :offset="[0, 4]">
+            <n-badge :value="notificationStore.totalNotificationCount" :max="99" :offset="[0, 4]">
               <span class="btn-text">我的</span>
             </n-badge>
             <n-icon size="14" class="dropdown-icon">

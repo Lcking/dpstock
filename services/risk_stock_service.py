@@ -81,6 +81,16 @@ class RiskStockService:
         effective_date, rows = self.collector.collect_rows(trade_date=trade_date)
         result = self.refresh_from_rows(effective_date, rows, source=source)
         result["source_rows"] = len(rows)
+        try:
+            from services.watchlist_risk_alert_service import WatchlistRiskAlertService
+
+            alert_result = WatchlistRiskAlertService().sync_alerts_for_trade_date(
+                trade_date=result.get("trade_date")
+            )
+            result["alerts_created"] = alert_result.get("created", 0)
+        except Exception as exc:
+            logger.warning(f"[RiskStockService] watchlist alert sync failed: {exc}")
+            result["alerts_created"] = 0
         logger.info(
             f"[RiskStockService] refreshed trade_date={result.get('trade_date')} "
             f"classified={result.get('count')} source_rows={len(rows)}"
