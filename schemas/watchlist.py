@@ -72,6 +72,18 @@ class WatchlistItemSummary(BaseModel):
     judgement: JudgementSummary
 
 
+class WatchlistHealthOverview(BaseModel):
+    """自选股整体健康度概览"""
+    total_count: int = 0
+    strong_count: int = 0
+    weak_count: int = 0
+    high_risk_count: int = 0
+    watch_count: int = 0
+    active_judgment_count: int = 0
+    health_score: int = Field(0, ge=0, le=100)
+    label: Literal["偏强", "均衡", "偏弱", "风险偏高"] = "均衡"
+
+
 class Watchlist(BaseModel):
     """自选股列表"""
     id: str
@@ -113,5 +125,6 @@ class WatchlistSummaryResponse(BaseModel):
     items: List[WatchlistItemSummary]
     total_count: int
     filtered_count: int
+    health_overview: WatchlistHealthOverview = Field(default_factory=WatchlistHealthOverview)
     is_temporary: bool = False
     trial_message: Optional[str] = None

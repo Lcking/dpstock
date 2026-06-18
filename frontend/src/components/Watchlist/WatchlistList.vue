@@ -60,6 +60,38 @@
         </n-text>
       </div>
 
+      <div v-if="healthOverview" class="health-overview-panel">
+        <div class="health-overview-main">
+          <div class="health-label">自选健康度</div>
+          <div class="health-score">{{ healthOverview.health_score }}</div>
+          <n-tag :type="healthLabelType(healthOverview.label)" size="small" :bordered="false">
+            {{ healthOverview.label }}
+          </n-tag>
+        </div>
+        <div class="health-metrics">
+          <div class="health-metric">
+            <span class="metric-value strong">{{ healthOverview.strong_count }}</span>
+            <span class="metric-label">强势</span>
+          </div>
+          <div class="health-metric">
+            <span class="metric-value weak">{{ healthOverview.weak_count }}</span>
+            <span class="metric-label">弱势</span>
+          </div>
+          <div class="health-metric">
+            <span class="metric-value risk">{{ healthOverview.high_risk_count }}</span>
+            <span class="metric-label">高风险</span>
+          </div>
+          <div class="health-metric">
+            <span class="metric-value watch">{{ healthOverview.watch_count }}</span>
+            <span class="metric-label">待观察</span>
+          </div>
+          <div class="health-metric">
+            <span class="metric-value judgement">{{ healthOverview.active_judgment_count }}</span>
+            <span class="metric-label">追踪中</span>
+          </div>
+        </div>
+      </div>
+
       <n-data-table
         :columns="tableColumns"
         :data="tableData"
@@ -180,6 +212,7 @@ const applyWatchlistState = (source?: Partial<WatchlistSummary & Watchlist> | nu
 // ── 表格相关 ──
 
 const tableData = computed(() => summaryData.value?.items ?? [])
+const healthOverview = computed(() => summaryData.value?.health_overview ?? null)
 
 const formatPercent = (value: number | null) => {
   if (value === null || value === undefined) return '--'
@@ -193,6 +226,13 @@ const rsMap: Record<string, string> = { strong: '强势', neutral: '中性', wea
 const rsTypeMap: Record<string, 'success' | 'default' | 'warning'> = { strong: 'success', neutral: 'default', weak: 'warning' }
 const riskMap: Record<string, string> = { low: '低', medium: '中', high: '高' }
 const riskTypeMap: Record<string, 'success' | 'warning' | 'error'> = { low: 'success', medium: 'warning', high: 'error' }
+
+function healthLabelType(label: string): 'success' | 'warning' | 'error' | 'info' {
+  if (label === '偏强') return 'success'
+  if (label === '偏弱') return 'warning'
+  if (label === '风险偏高') return 'error'
+  return 'info'
+}
 
 function flowTagType(label: string) {
   if (label === '承接放量') return 'success'
@@ -519,6 +559,70 @@ onMounted(() => {
   font-size: 14px;
 }
 
+.health-overview-panel {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(91, 103, 241, 0.12);
+  box-shadow: 0 8px 22px rgba(79, 93, 160, 0.08);
+}
+
+.health-overview-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 180px;
+}
+
+.health-label {
+  color: var(--n-text-color-3);
+  font-size: 13px;
+}
+
+.health-score {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--n-text-color);
+}
+
+.health-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(64px, 1fr));
+  gap: 10px;
+  flex: 1;
+}
+
+.health-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--n-color);
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.metric-value.strong { color: #18a058; }
+.metric-value.weak { color: #d97706; }
+.metric-value.risk { color: #d03050; }
+.metric-value.watch { color: #5560d6; }
+.metric-value.judgement { color: #2080f0; }
+
+.metric-label {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
 .batch-actions {
   position: fixed;
   bottom: 30px;
@@ -612,6 +716,14 @@ onMounted(() => {
 
   .watchlist-header h1 {
     font-size: 20px;
+  }
+
+  .health-overview-panel {
+    flex-direction: column;
+  }
+
+  .health-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

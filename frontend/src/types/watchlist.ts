@@ -55,12 +55,24 @@ export interface WatchlistItemSummary {
     judgement: JudgementSummary
 }
 
+export interface WatchlistHealthOverview {
+    total_count: number
+    strong_count: number
+    weak_count: number
+    high_risk_count: number
+    watch_count: number
+    active_judgment_count: number
+    health_score: number
+    label: '偏强' | '均衡' | '偏弱' | '风险偏高'
+}
+
 export interface WatchlistSummary {
     watchlist_id: string
     asof: string
     items: WatchlistItemSummary[]
     total_count: number
     filtered_count: number
+    health_overview: WatchlistHealthOverview
     is_temporary: boolean
     trial_message: string | null
 }

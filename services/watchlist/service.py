@@ -9,7 +9,8 @@ from database.db_factory import DatabaseFactory
 from schemas.watchlist import (
     Watchlist, WatchlistCreate, WatchlistItemSummary,
     RelativeStrengthSummary, CapitalFlowSummary, RiskSummary,
-    EventSummary, JudgementSummary, WatchlistSummaryResponse
+    EventSummary, JudgementSummary, WatchlistSummaryResponse,
+    WatchlistHealthOverview
 )
 from services.user_service import UserService
 from services.trend import trend_calculator, TrendInput, TrendResult
@@ -210,6 +211,7 @@ class WatchlistService:
                 items=[],
                 total_count=0,
                 filtered_count=0,
+                health_overview=WatchlistHealthOverview(),
                 is_temporary=is_temporary,
                 trial_message=trial_message,
             )
@@ -229,6 +231,7 @@ class WatchlistService:
             items=sorted_items,
             total_count=len(ts_codes),
             filtered_count=len(sorted_items),
+            health_overview=self._build_health_overview(sorted_items),
             is_temporary=is_temporary,
             trial_message=trial_message,
         )
@@ -585,6 +588,60 @@ class WatchlistService:
             risk=RiskSummary(level="medium"),
             events=EventSummary(flag="unavailable", available=False),
             judgement=JudgementSummary()
+        )
+
+    def _build_health_overview(self, items: List[WatchlistItemSummary]) -> WatchlistHealthOverview:
+        total = len(items)
+        if total == 0:
+            return WatchlistHealthOverview()
+
+        strong_count = 0
+        weak_count = 0
+        high_risk_count = 0
+        active_judgment_count = 0
+        classified_codes = set()
+        scores = []
+
+        for item in items:
+            score = self._calc_structure_score(item)
+            scores.append(score)
+
+            is_high_risk = item.risk.level == "high" or item.events.flag == "major"
+            is_strong = (item.trend.direction == "up" and item.risk.level != "high") or item.relative_strength.label_20d == "strong"
+            is_weak = item.trend.direction == "down" or item.relative_strength.label_20d == "weak"
+
+            if is_strong:
+                strong_count += 1
+                classified_codes.add(item.ts_code)
+            if is_weak:
+                weak_count += 1
+                classified_codes.add(item.ts_code)
+            if is_high_risk:
+                high_risk_count += 1
+                classified_codes.add(item.ts_code)
+            if item.judgement.has_active:
+                active_judgment_count += 1
+
+        watch_count = max(0, total - len(classified_codes))
+        health_score = round(sum(scores) / total)
+        if high_risk_count / total >= 0.3:
+            label = "风险偏高"
+        elif weak_count > strong_count:
+            label = "偏弱"
+        elif strong_count > weak_count:
+            label = "偏强"
+        else:
+            label = "均衡"
+
+        return WatchlistHealthOverview(
+            total_count=total,
+            strong_count=strong_count,
+            weak_count=weak_count,
+            high_risk_count=high_risk_count,
+            watch_count=watch_count,
+            active_judgment_count=active_judgment_count,
+            health_score=max(0, min(100, health_score)),
+            label=label,
         )
     
     def _apply_filters(
