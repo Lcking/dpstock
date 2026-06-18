@@ -3,15 +3,24 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from database.db_factory import DatabaseFactory
+from services.risk_stock_collector import RiskStockCollector
+from utils.logger import get_logger
+
+logger = get_logger()
 
 
 class RiskStockService:
     """Daily risk stock list service."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(
+        self,
+        db_path: Optional[str] = None,
+        collector: Optional[RiskStockCollector] = None,
+    ):
         if db_path:
             DatabaseFactory.initialize(db_path)
         self.db = DatabaseFactory
+        self.collector = collector or RiskStockCollector()
 
     def refresh_from_rows(self, trade_date: str, rows: List[Dict[str, Any]], source: str = "manual") -> Dict[str, Any]:
         items = []
@@ -60,6 +69,23 @@ class RiskStockService:
             conn.commit()
 
         return {"trade_date": trade_date, "count": len(items)}
+
+    def get_latest_trade_date(self) -> Optional[str]:
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(trade_date) AS trade_date FROM risk_stock_items")
+            row = cursor.fetchone()
+            return row.get("trade_date") if row else None
+
+    def refresh_daily(self, trade_date: Optional[str] = None, source: str = "auto") -> Dict[str, Any]:
+        effective_date, rows = self.collector.collect_rows(trade_date=trade_date)
+        result = self.refresh_from_rows(effective_date, rows, source=source)
+        result["source_rows"] = len(rows)
+        logger.info(
+            f"[RiskStockService] refreshed trade_date={result.get('trade_date')} "
+            f"classified={result.get('count')} source_rows={len(rows)}"
+        )
+        return result
 
     def get_items(self, trade_date: Optional[str] = None, tag: Optional[str] = None) -> List[Dict[str, Any]]:
         with self.db.get_connection() as conn:

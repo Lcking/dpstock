@@ -19,3 +19,4 @@ def test_risk_stock_page_has_route_api_and_footer_entry():
     assert "ST股" in page_text
     assert "三连板" in page_text
     assert "高风险" in page_text
+    assert "重新加载" in page_text

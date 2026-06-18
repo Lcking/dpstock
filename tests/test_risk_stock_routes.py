@@ -32,5 +32,6 @@ def test_public_risk_stock_list_returns_latest_items(tmp_path, monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["trade_date"] == "20260618"
+    assert data["data_status"] == "ready"
     assert data["items"][0]["ts_code"] == "600001.SH"
     assert "ST股" in data["items"][0]["tags"]

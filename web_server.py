@@ -20,6 +20,7 @@ from services.quota_service import QuotaService
 from services.invite_service import InviteService
 from services.user_service import UserService
 from services.verification_scheduler import start_verification_scheduler
+from services.risk_stock_scheduler import RiskStockScheduler, start_risk_stock_scheduler
 from services.analyze_slo_tracker import analyze_slo_tracker
 from auth.dependencies import (
     require_login,
@@ -96,8 +97,17 @@ async def startup_event():
         logger.error(f"[Startup] Failed to run migrations: {e}")
         
     start_verification_scheduler()
+    start_risk_stock_scheduler()
 
     asyncio.create_task(_refresh_search_snapshot_background())
+    asyncio.create_task(_refresh_risk_stocks_background())
+
+
+async def _refresh_risk_stocks_background():
+    try:
+        await asyncio.to_thread(RiskStockScheduler.refresh_if_missing)
+    except Exception as e:
+        logger.warning(f"[Startup] Failed to refresh risk stock list: {e}")
 
 
 async def _refresh_search_snapshot_background():

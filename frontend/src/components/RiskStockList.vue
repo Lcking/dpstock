@@ -32,7 +32,20 @@
       <span>正在加载风险股清单...</span>
     </div>
 
-    <n-empty v-else-if="items.length === 0" description="暂无风险股数据" class="empty-state" />
+    <n-empty v-else-if="items.length === 0" class="empty-state">
+      <template #default>
+        <div class="empty-copy">
+          <p class="empty-title">暂无风险股数据</p>
+          <p class="empty-desc">{{ emptyMessage }}</p>
+        </div>
+      </template>
+      <template #extra>
+        <n-space>
+          <n-button type="primary" secondary @click="loadRiskStocks">重新加载</n-button>
+          <n-button @click="goStocks">浏览个股列表</n-button>
+        </n-space>
+      </template>
+    </n-empty>
 
     <n-data-table
       v-else
@@ -48,7 +61,7 @@
 
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from 'vue'
-import { NAlert, NButton, NDataTable, NEmpty, NSpin, NTag, type DataTableColumns } from 'naive-ui'
+import { NAlert, NButton, NDataTable, NEmpty, NSpace, NSpin, NTag, type DataTableColumns } from 'naive-ui'
 import { apiService } from '@/services/api'
 import { applyPageSeo } from '@/utils/seo'
 import type { RiskStockItem, RiskStockListResponse } from '@/types/riskStock'
@@ -66,6 +79,18 @@ const tagOptions = [
 ]
 
 const items = computed(() => data.value?.items || [])
+
+const emptyMessage = computed(() => {
+  if (data.value?.message) return data.value.message
+  if (data.value?.data_status === 'pending') {
+    return '清单尚未生成，系统会在每个交易日收盘后自动刷新。你也可以稍后回来查看。'
+  }
+  return '当前筛选条件下暂无符合条件的标的，可切换标签或稍后再试。'
+})
+
+function goStocks() {
+  window.location.href = '/stocks'
+}
 
 const columns: DataTableColumns<RiskStockItem> = [
   {
@@ -198,6 +223,24 @@ onMounted(() => {
 
 .empty-state {
   padding: 80px 0;
+}
+
+.empty-copy {
+  text-align: center;
+}
+
+.empty-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--n-text-color);
+}
+
+.empty-desc {
+  margin: 0;
+  max-width: 420px;
+  color: var(--n-text-color-3);
+  line-height: 1.6;
 }
 
 .stock-cell {

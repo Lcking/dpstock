@@ -18,5 +18,7 @@ export interface RiskStockItem {
 export interface RiskStockListResponse {
   trade_date: string | null
   count: number
+  data_status?: 'ready' | 'pending' | 'empty'
+  message?: string
   items: RiskStockItem[]
 }
