@@ -5,9 +5,32 @@
         <h1>风险股清单</h1>
         <p>每日收盘后更新，聚焦 ST 股与三连板及以上高波动标的。</p>
       </div>
-      <n-tag type="warning" size="small" :bordered="false">
-        {{ data?.trade_date || '暂无日期' }}
-      </n-tag>
+      <div class="header-actions">
+        <n-tag type="warning" size="small" :bordered="false">
+          {{ data?.trade_date || '暂无日期' }}
+        </n-tag>
+        <n-space>
+          <n-button
+            size="small"
+            secondary
+            :disabled="!canExport"
+            :loading="exportingFormat === 'csv'"
+            @click="exportRiskStocks('csv')"
+          >
+            导出 CSV
+          </n-button>
+          <n-button
+            size="small"
+            type="primary"
+            secondary
+            :disabled="!canExport"
+            :loading="exportingFormat === 'xlsx'"
+            @click="exportRiskStocks('xlsx')"
+          >
+            导出 Excel
+          </n-button>
+        </n-space>
+      </div>
     </div>
 
     <n-alert type="warning" :bordered="false" class="risk-note">
@@ -61,14 +84,16 @@
 
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from 'vue'
-import { NAlert, NButton, NDataTable, NEmpty, NSpace, NSpin, NTag, type DataTableColumns } from 'naive-ui'
+import { NAlert, NButton, NDataTable, NEmpty, NSpace, NSpin, NTag, useMessage, type DataTableColumns } from 'naive-ui'
 import { apiService } from '@/services/api'
 import { applyPageSeo } from '@/utils/seo'
 import type { RiskStockItem, RiskStockListResponse } from '@/types/riskStock'
 
 const loading = ref(false)
+const exportingFormat = ref<'csv' | 'xlsx' | ''>('')
 const data = ref<RiskStockListResponse | null>(null)
 const selectedTag = ref('')
+const message = useMessage()
 
 const tagOptions = [
   { label: '全部', value: '' },
@@ -79,6 +104,7 @@ const tagOptions = [
 ]
 
 const items = computed(() => data.value?.items || [])
+const canExport = computed(() => !loading.value && items.value.length > 0)
 
 const emptyMessage = computed(() => {
   if (data.value?.message) return data.value.message
@@ -165,6 +191,27 @@ function selectTag(tag: string) {
   loadRiskStocks()
 }
 
+async function exportRiskStocks(format: 'csv' | 'xlsx') {
+  if (!canExport.value) {
+    message.warning('当前没有可导出的风险股数据')
+    return
+  }
+
+  exportingFormat.value = format
+  try {
+    await apiService.downloadRiskStocks(format, {
+      trade_date: data.value?.trade_date || undefined,
+      tag: selectedTag.value || undefined,
+    })
+    message.success(format === 'csv' ? 'CSV 导出成功' : 'Excel 导出成功')
+  } catch (error) {
+    console.error('导出风险股清单失败:', error)
+    message.error('导出失败，请稍后重试')
+  } finally {
+    exportingFormat.value = ''
+  }
+}
+
 onMounted(() => {
   applyPageSeo({
     title: '风险股清单 | Agu AI',
@@ -189,6 +236,13 @@ onMounted(() => {
   gap: 16px;
   align-items: flex-start;
   margin-bottom: 18px;
+}
+
+.header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
 }
 
 .page-header h1 {

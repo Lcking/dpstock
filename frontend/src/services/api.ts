@@ -235,6 +235,37 @@ export const apiService = {
     }
   },
 
+  downloadRiskStocks: async (
+    format: 'csv' | 'xlsx',
+    params: { trade_date?: string; tag?: string } = {},
+  ): Promise<void> => {
+    const response = await axiosInstance.get(`/risk-stocks/export/${format}`, {
+      params,
+      responseType: 'blob',
+    });
+
+    const disposition = response.headers['content-disposition'] || '';
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="([^"]+)"/i);
+    const filename = decodeURIComponent(
+      utf8Match?.[1] || plainMatch?.[1] || `risk-stocks.${format}`,
+    );
+
+    const blob = new Blob([response.data], {
+      type: format === 'csv'
+        ? 'text/csv;charset=utf-8'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
   getArticleDetail: async (articleId: number) => {
     try {
       const response = await axiosInstance.get(`/articles/${articleId}`);

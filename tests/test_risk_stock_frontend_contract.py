@@ -20,3 +20,6 @@ def test_risk_stock_page_has_route_api_and_footer_entry():
     assert "三连板" in page_text
     assert "高风险" in page_text
     assert "重新加载" in page_text
+    assert "导出 CSV" in page_text
+    assert "导出 Excel" in page_text
+    assert "downloadRiskStocks" in api_text
