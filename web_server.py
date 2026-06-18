@@ -28,7 +28,7 @@ from auth.dependencies import (
     REQUIRE_LOGIN,
     LOGIN_PASSWORD,
 )
-from routes import admin, captcha, auth, judgments, quota, invite, anchor, enhancements, watchlists, compare, journal, user_center
+from routes import admin, captcha, auth, judgments, quota, invite, anchor, enhancements, watchlists, compare, journal, user_center, risk_stocks
 
 from utils.logger import get_logger
 import uvicorn
@@ -57,6 +57,8 @@ app.include_router(watchlists.router)    # Watchlists module
 app.include_router(compare.router)       # Compare bucketing
 app.include_router(journal.router)       # Journal records
 app.include_router(user_center.router)   # User center
+app.include_router(risk_stocks.router)   # Risk stock list
+app.include_router(risk_stocks.admin_router)  # Admin risk stock refresh
 app.include_router(admin.router)         # Admin (JWT separate from users)
 
 # 添加CORS中间件
