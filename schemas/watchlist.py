@@ -16,6 +16,16 @@ class IndustryExposureItem(BaseModel):
     weight_pct: float = Field(ge=0, le=100)
 
 
+class RiskListHitItem(BaseModel):
+    """自选标的命中当日风险股清单"""
+    ts_code: str
+    name: str
+    trade_date: str
+    tags: List[str] = Field(default_factory=list)
+    risk_level: str = "high"
+    reason: str = ""
+
+
 class RelativeStrengthSummary(BaseModel):
     """相对强弱摘要 (RS)"""
     excess_20d_vs_000300: Optional[float] = Field(None, description="20日超额收益 vs 沪深300")
@@ -78,6 +88,9 @@ class WatchlistItemSummary(BaseModel):
     events: EventSummary
     judgement: JudgementSummary
     weight_pct: Optional[float] = Field(None, ge=0, le=100, description="用户设定持仓权重%")
+    is_skeleton: bool = False
+    on_risk_list: bool = False
+    risk_list_tags: List[str] = Field(default_factory=list)
 
 
 class WatchlistHealthOverview(BaseModel):
@@ -96,6 +109,8 @@ class WatchlistHealthOverview(BaseModel):
     concentration_level: Literal["分散", "中等", "偏高"] = "分散"
     concentration_note: str = ""
     uses_position_weights: bool = False
+    risk_list_hits: List[RiskListHitItem] = Field(default_factory=list)
+    risk_list_trade_date: Optional[str] = None
 
 
 class Watchlist(BaseModel):

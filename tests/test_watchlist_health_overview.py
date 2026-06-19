@@ -5,6 +5,7 @@ from schemas.watchlist import (
     EventSummary,
     JudgementSummary,
     RelativeStrengthSummary,
+    RiskListHitItem,
     RiskSummary,
     WatchlistItemSummary,
 )
@@ -167,3 +168,100 @@ def test_watchlist_health_overview_uses_position_weights_for_concentration(monke
     assert overview.top_industries[0].weight_pct == 80.0
     assert overview.concentration_level == "偏高"
     assert "持仓权重" in overview.concentration_note
+
+
+def test_watchlist_health_overview_includes_risk_list_hits(monkeypatch):
+    service = WatchlistService()
+    items = [
+        _item("600519.SH", "up", 80, "strong", "low"),
+        _item("000001.SZ", "sideways", 50, "neutral", "medium"),
+    ]
+    risk_hits = [
+        RiskListHitItem(
+            ts_code="600519.SH",
+            name="贵州茅台",
+            trade_date="2026-06-18",
+            tags=["ST", "连板"],
+            risk_level="high",
+            reason="测试原因",
+        )
+    ]
+
+    overview = service._build_health_overview(
+        items,
+        risk_hits=risk_hits,
+        risk_trade_date="2026-06-18",
+    )
+
+    assert len(overview.risk_list_hits) == 1
+    assert overview.risk_list_trade_date == "2026-06-18"
+    assert "风险股清单" in overview.summary_line
+
+
+def test_get_risk_list_hits_matches_watchlist_codes(monkeypatch):
+    service = WatchlistService()
+
+    class FakeRiskStockService:
+        def get_latest_trade_date(self):
+            return "2026-06-18"
+
+        def get_items(self, trade_date):
+            assert trade_date == "2026-06-18"
+            return [
+                {
+                    "ts_code": "600519",
+                    "name": "贵州茅台",
+                    "tags_json": '["ST"]',
+                    "risk_level": "high",
+                    "reason": "测试",
+                }
+            ]
+
+    monkeypatch.setattr(
+        "services.risk_stock_service.RiskStockService",
+        FakeRiskStockService,
+    )
+
+    hits, trade_date = service._get_risk_list_hits(["600519.SH", "000001.SZ"])
+
+    assert trade_date == "2026-06-18"
+    assert len(hits) == 1
+    assert hits[0].ts_code == "600519.SH"
+    assert hits[0].tags == ["ST"]
+
+
+def test_batch_generate_summaries_fast_returns_skeleton_for_cache_miss(monkeypatch):
+    from services.watchlist.cache import watchlist_summary_cache
+
+    service = WatchlistService()
+    watchlist_summary_cache.clear()
+
+    summaries = service._batch_generate_summaries_fast(
+        ["600519.SH"],
+        "2026-06-18",
+        {"600519.SH": "贵州茅台"},
+    )
+
+    assert len(summaries) == 1
+    assert summaries[0].is_skeleton is True
+    assert summaries[0].name == "贵州茅台"
+
+
+def test_apply_risk_list_flags_marks_matching_items():
+    service = WatchlistService()
+    summary = _item("600519.SH", "up", 80, "strong", "low")
+    hits = [
+        RiskListHitItem(
+            ts_code="600519.SH",
+            name="贵州茅台",
+            trade_date="2026-06-18",
+            tags=["ST"],
+            risk_level="high",
+            reason="测试",
+        )
+    ]
+
+    service._apply_risk_list_flags(summary, hits)
+
+    assert summary.on_risk_list is True
+    assert summary.risk_list_tags == ["ST"]

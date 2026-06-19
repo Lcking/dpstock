@@ -38,6 +38,12 @@
           <n-text depth="3">我的观察</n-text>
           <n-text class="metric">{{ overview.watchlist_count }}</n-text>
           <n-text depth="3">共跟踪 {{ overview.watchlist_items_count }} 只标的</n-text>
+          <n-text
+            v-if="overview.risk_alert_unread_count > 0"
+            class="risk-unread"
+          >
+            {{ overview.risk_alert_unread_count }} 条风险提醒未读
+          </n-text>
           <n-button size="small" @click="$emit('go-watchlist')">查看观察列表</n-button>
         </n-space>
       </n-card>
@@ -54,12 +60,26 @@
       </n-card>
     </n-grid-item>
   </n-grid>
+
+  <n-card v-if="trustSummary || topConditionLabel" size="small" class="trust-card">
+    <n-space vertical :size="8">
+      <n-text depth="3">历史验证与条件质量</n-text>
+      <n-text v-if="trustSummary">{{ trustSummary }}</n-text>
+      <n-text v-if="topConditionLabel" depth="3">{{ topConditionLabel }}</n-text>
+      <n-text v-if="!trustSummary && !topConditionLabel" depth="3">
+        完成判断复盘后，这里会展示系统支持率与条件质量参考。
+      </n-text>
+      <n-button size="small" @click="$emit('go-journal')">查看判断日记</n-button>
+    </n-space>
+  </n-card>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NButton, NCard, NGrid, NGridItem, NSpace, NTag, NText } from 'naive-ui'
+import { buildTrustSummary, topConditionQualityItem } from '@/utils/trustStats'
 
-defineProps<{
+const props = defineProps<{
   overview: any
 }>()
 
@@ -69,6 +89,14 @@ defineEmits<{
   (e: 'go-watchlist'): void
   (e: 'go-journal'): void
 }>()
+
+const trustSummary = computed(() => buildTrustSummary(props.overview?.trust_stats))
+
+const topConditionLabel = computed(() => {
+  const top = topConditionQualityItem(props.overview?.trust_stats?.condition_quality_leaderboard)
+  if (!top || top.support_rate == null) return ''
+  return `样本最多条件：${top.label}（${top.reviewed_count} 条复盘，支持率 ${top.support_rate}%）`
+})
 </script>
 
 <style scoped>
@@ -79,5 +107,14 @@ defineEmits<{
 .metric {
   font-size: 28px;
   font-weight: 700;
+}
+
+.risk-unread {
+  color: #b45309;
+  font-size: 13px;
+}
+
+.trust-card {
+  margin-top: 16px;
 }
 </style>

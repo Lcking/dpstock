@@ -238,6 +238,7 @@ import AnchorBindDialog from './AnchorBindDialog.vue';
 
 import { apiService } from '@/services/api';
 import { applyPageSeo } from '@/utils/seo';
+import { buildTrustSummary } from '@/utils/trustStats';
 import type { StockInfo, StreamInitMessage, StreamAnalysisUpdate } from '@/types';
 import { validateMultipleStockCodes, MarketType } from '@/utils/stockValidator';
 
@@ -1084,9 +1085,7 @@ onMounted(async () => {
     }
 
     const stats = await apiService.getJudgmentAccuracyStats(90);
-    if (stats?.reviewed_count > 0 && stats.support_rate != null) {
-      accuracySummary.value = `近 ${stats.window_days} 天历史验证：已复盘 ${stats.reviewed_count} 条，系统支持率 ${stats.support_rate}%（仅供参考，不构成投资建议）`;
-    }
+    accuracySummary.value = buildTrustSummary(stats);
   } catch (error) {
     console.error('获取配置时出错:', error);
   }

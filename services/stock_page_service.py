@@ -261,6 +261,17 @@ class StockPageService:
                 f"已复盘 {accuracy_stats['reviewed_count']} 条，"
                 f"系统支持率 {accuracy_stats['support_rate']}%（仅供参考）"
             )
+        condition_line = ""
+        leaderboard = accuracy_stats.get("condition_quality_leaderboard") or []
+        top_condition = next(
+            (item for item in leaderboard if int(item.get("reviewed_count") or 0) >= 3),
+            None,
+        )
+        if top_condition and top_condition.get("support_rate") is not None:
+            condition_line = (
+                f"条件质量参考：{top_condition['label']} "
+                f"支持率 {top_condition['support_rate']}%（仅供参考）"
+            )
         realtime_url = f"/?code={stock.code}&market={stock.market}&focus=search"
         if recent_articles is None:
             recent_articles = await self._get_recent_articles(stock)
@@ -466,6 +477,7 @@ class StockPageService:
       </p>
       <p class="disclaimer">{self._escape(data_provenance_label)}</p>
       {f'<p class="disclaimer">{self._escape(accuracy_line)}</p>' if accuracy_line else ''}
+      {f'<p class="disclaimer">{self._escape(condition_line)}</p>' if condition_line else ''}
       <a class="cta" href="{self._escape(realtime_url)}">实时 AI 诊断这只股票</a>
     </header>
     <section>

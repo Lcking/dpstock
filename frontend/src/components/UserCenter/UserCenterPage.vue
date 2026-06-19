@@ -17,7 +17,16 @@
     </n-alert>
 
     <div v-if="loading" class="loading-area">
-      <n-spin size="large" />
+      <n-grid cols="1 s:2 xl:4" :x-gap="16" :y-gap="16" responsive="screen">
+        <n-grid-item v-for="idx in 4" :key="idx">
+          <n-card size="small">
+            <n-skeleton text :repeat="4" />
+          </n-card>
+        </n-grid-item>
+      </n-grid>
+      <n-card size="small" class="trust-skeleton-card">
+        <n-skeleton text :repeat="3" />
+      </n-card>
     </div>
 
     <n-alert v-else-if="errorMessage" type="error" :bordered="false" class="top-alert">
@@ -100,8 +109,8 @@ import {
   NEmpty,
   NGrid,
   NGridItem,
+  NSkeleton,
   NSpace,
-  NSpin,
   NTag,
   useMessage,
 } from 'naive-ui'
@@ -200,8 +209,13 @@ onMounted(() => {
 
 .loading-area {
   display: flex;
-  justify-content: center;
-  padding: 80px 0;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0 40px;
+}
+
+.trust-skeleton-card {
+  margin-top: 4px;
 }
 
 .content-grid {

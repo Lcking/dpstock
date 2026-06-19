@@ -39,6 +39,15 @@ export interface JudgementSummary {
     days_left: number | null
 }
 
+export interface RiskListHitItem {
+    ts_code: string
+    name: string
+    trade_date: string
+    tags: string[]
+    risk_level: string
+    reason: string
+}
+
 export interface WatchlistItemSummary {
     ts_code: string
     name: string
@@ -54,6 +63,9 @@ export interface WatchlistItemSummary {
     events: EventSummary
     judgement: JudgementSummary
     weight_pct?: number | null
+    is_skeleton?: boolean
+    on_risk_list?: boolean
+    risk_list_tags?: string[]
 }
 
 export interface IndustryExposureItem {
@@ -77,6 +89,8 @@ export interface WatchlistHealthOverview {
     concentration_level: '分散' | '中等' | '偏高'
     concentration_note: string
     uses_position_weights: boolean
+    risk_list_hits: RiskListHitItem[]
+    risk_list_trade_date: string | null
 }
 
 export interface WatchlistSummary {

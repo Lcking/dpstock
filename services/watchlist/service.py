@@ -11,7 +11,7 @@ from schemas.watchlist import (
     Watchlist, WatchlistCreate, WatchlistItemSummary,
     RelativeStrengthSummary, CapitalFlowSummary, RiskSummary,
     EventSummary, JudgementSummary, WatchlistSummaryResponse,
-    WatchlistHealthOverview, IndustryExposureItem,
+    WatchlistHealthOverview, IndustryExposureItem, RiskListHitItem,
 )
 from services.user_service import UserService
 from services.trend import trend_calculator, TrendInput, TrendResult
@@ -280,18 +280,21 @@ class WatchlistService:
         watchlist_id: str,
         asof: Optional[str] = None,
         sort: str = "SCORE_DESC",
-        filters: Optional[List[str]] = None
+        filters: Optional[List[str]] = None,
+        phase: str = "full",
     ) -> WatchlistSummaryResponse:
         """
         获取批量摘要 (核心接口)
         
         PRD 强制: 必须批量返回，避免逐只触发 analysis 风暴
+        phase=fast: 仅返回缓存命中 + 骨架行，用于首屏快速展示
         """
         if asof is None:
             asof = datetime.now().strftime('%Y-%m-%d')
         
         # 获取标的列表
-        ts_codes = self.get_watchlist_items(watchlist_id)
+        item_records = self.get_watchlist_item_records(watchlist_id)
+        ts_codes = [record["ts_code"] for record in item_records]
         owner_id = self._get_watchlist_owner_id(watchlist_id)
         is_temporary, trial_message = self._get_watchlist_trial_state(owner_id) if owner_id else (False, None)
         
@@ -307,13 +310,21 @@ class WatchlistService:
                 trial_message=trial_message,
             )
         
-        # 批量生成摘要
-        weights_by_code = self.get_watchlist_item_weights(watchlist_id)
-        summaries = self._batch_generate_summaries(ts_codes, asof)
+        weights_by_code = {
+            record["ts_code"]: record.get("weight_pct") for record in item_records
+        }
+        names_by_code = {
+            record["ts_code"]: record.get("name") for record in item_records
+        }
+        risk_hits, risk_trade_date = self._get_risk_list_hits(ts_codes)
+
+        if phase == "fast":
+            summaries = self._batch_generate_summaries_fast(ts_codes, asof, names_by_code)
+        else:
+            summaries = self._batch_generate_summaries(ts_codes, asof)
         for summary in summaries:
             summary.weight_pct = weights_by_code.get(summary.ts_code)
-        
-        # 应用过滤
+            self._apply_risk_list_flags(summary, risk_hits)
         filtered = self._apply_filters(summaries, filters or [])
         
         # 应用排序
@@ -325,10 +336,49 @@ class WatchlistService:
             items=sorted_items,
             total_count=len(ts_codes),
             filtered_count=len(sorted_items),
-            health_overview=self._build_health_overview(sorted_items, weights_by_code),
+            health_overview=self._build_health_overview(
+                sorted_items,
+                weights_by_code,
+                risk_hits=risk_hits,
+                risk_trade_date=risk_trade_date,
+            ),
             is_temporary=is_temporary,
             trial_message=trial_message,
         )
+
+    def get_watchlist_item_records(self, watchlist_id: str) -> List[Dict[str, Any]]:
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT ts_code, name, weight_pct
+                FROM watchlist_items
+                WHERE watchlist_id = ?
+                ORDER BY added_at DESC
+                """,
+                (watchlist_id,),
+            )
+            rows = cursor.fetchall()
+        records = []
+        for row in rows:
+            ts_code = self._normalize_ts_code(str(row.get("ts_code") or ""))
+            if not ts_code:
+                continue
+            raw_weight = row.get("weight_pct")
+            weight_pct = None
+            if raw_weight is not None:
+                try:
+                    weight_pct = float(raw_weight)
+                except (TypeError, ValueError):
+                    weight_pct = None
+            records.append(
+                {
+                    "ts_code": ts_code,
+                    "name": str(row.get("name") or "").strip() or None,
+                    "weight_pct": weight_pct,
+                }
+            )
+        return records
     
     def _batch_generate_summaries(
         self, 
@@ -358,7 +408,133 @@ class WatchlistService:
                     results_by_code[ts_code] = self._degraded_summary(ts_code, asof)
 
         return [results_by_code[code] for code in ts_codes if code in results_by_code]
-    
+
+    def _batch_generate_summaries_fast(
+        self,
+        ts_codes: List[str],
+        asof: str,
+        names_by_code: Optional[Dict[str, Optional[str]]] = None,
+    ) -> List[WatchlistItemSummary]:
+        from .cache import watchlist_summary_cache
+
+        summaries: List[WatchlistItemSummary] = []
+        names_by_code = names_by_code or {}
+        for ts_code in ts_codes:
+            normalized = self._normalize_ts_code(ts_code)
+            cached = watchlist_summary_cache.get(normalized, asof)
+            if cached is not None:
+                summaries.append(cached)
+            else:
+                summaries.append(
+                    self._skeleton_summary(
+                        normalized,
+                        asof,
+                        name=names_by_code.get(normalized),
+                    )
+                )
+        return summaries
+
+    def _skeleton_summary(
+        self,
+        ts_code: str,
+        asof: str,
+        name: Optional[str] = None,
+    ) -> WatchlistItemSummary:
+        display_name = name or self._resolve_display_name(ts_code) or ts_code
+        return WatchlistItemSummary(
+            ts_code=ts_code,
+            name=display_name,
+            asof=asof,
+            price=0.0,
+            change_pct=None,
+            trend=TrendResult(
+                direction="sideways",
+                strength=0,
+                degraded=True,
+                evidence=["指标加载中…"],
+            ),
+            relative_strength=RelativeStrengthSummary(),
+            capital_flow=CapitalFlowSummary(label="不可用", available=False, degraded=True),
+            risk=RiskSummary(level="medium"),
+            events=EventSummary(flag="unavailable", available=False),
+            judgement=JudgementSummary(),
+            is_skeleton=True,
+        )
+
+    def _resolve_display_name(self, ts_code: str) -> Optional[str]:
+        try:
+            from services.search_snapshot_service import SearchSnapshotService
+
+            code = ts_code.split(".")[0]
+            for row in SearchSnapshotService().search_a_shares(code, limit=1):
+                if row.get("symbol") == code:
+                    return row.get("name")
+        except Exception:
+            return None
+        return None
+
+    def _get_risk_list_hits(
+        self,
+        ts_codes: List[str],
+    ) -> tuple[List[RiskListHitItem], Optional[str]]:
+        from services.risk_stock_service import RiskStockService
+
+        if not ts_codes:
+            return [], None
+
+        service = RiskStockService()
+        trade_date = service.get_latest_trade_date()
+        if not trade_date:
+            return [], None
+
+        risk_items = service.get_items(trade_date=trade_date)
+        if not risk_items:
+            return [], trade_date
+
+        watch_codes = {self._normalize_ts_code(code) for code in ts_codes}
+        hits: List[RiskListHitItem] = []
+        for item in risk_items:
+            code = self._normalize_ts_code(str(item.get("ts_code") or ""))
+            if code not in watch_codes:
+                continue
+            hits.append(
+                RiskListHitItem(
+                    ts_code=code,
+                    name=str(item.get("name") or code),
+                    trade_date=trade_date,
+                    tags=self._parse_risk_tags(item.get("tags_json")),
+                    risk_level=str(item.get("risk_level") or "high"),
+                    reason=str(item.get("reason") or ""),
+                )
+            )
+        hits.sort(key=lambda hit: hit.ts_code)
+        return hits, trade_date
+
+    def _parse_risk_tags(self, raw_tags: Any) -> List[str]:
+        if isinstance(raw_tags, list):
+            return [str(tag) for tag in raw_tags if tag]
+        try:
+            import json
+
+            parsed = json.loads(raw_tags or "[]")
+            return [str(tag) for tag in parsed if tag] if isinstance(parsed, list) else []
+        except Exception:
+            return []
+
+    def _apply_risk_list_flags(
+        self,
+        summary: WatchlistItemSummary,
+        risk_hits: List[RiskListHitItem],
+    ) -> None:
+        hit_map = {hit.ts_code: hit for hit in risk_hits}
+        hit = hit_map.get(summary.ts_code)
+        if not hit:
+            summary.on_risk_list = False
+            summary.risk_list_tags = []
+            return
+        summary.on_risk_list = True
+        summary.risk_list_tags = list(hit.tags)
+
     def _generate_single_summary(
         self,
         ts_code: str,
@@ -698,6 +874,8 @@ class WatchlistService:
         self,
         items: List[WatchlistItemSummary],
         weights_by_code: Optional[Dict[str, Optional[float]]] = None,
+        risk_hits: Optional[List[RiskListHitItem]] = None,
+        risk_trade_date: Optional[str] = None,
     ) -> WatchlistHealthOverview:
         total = len(items)
         if total == 0:
@@ -748,6 +926,7 @@ class WatchlistService:
             high_risk_count=high_risk_count,
             active_judgment_count=active_judgment_count,
             concentration_note=concentration_note,
+            risk_hits=risk_hits or [],
         )
 
         return WatchlistHealthOverview(
@@ -765,6 +944,8 @@ class WatchlistService:
             concentration_level=concentration_level,
             concentration_note=concentration_note,
             uses_position_weights=uses_position_weights,
+            risk_list_hits=risk_hits or [],
+            risk_list_trade_date=risk_trade_date,
         )
 
     def _resolve_position_weights(
@@ -887,10 +1068,15 @@ class WatchlistService:
         high_risk_count: int,
         active_judgment_count: int,
         concentration_note: str = "",
+        risk_hits: Optional[List[RiskListHitItem]] = None,
     ) -> str:
         if total <= 0:
             return "暂无自选标的，添加后可查看组合健康度。"
         parts = [f"当前自选组合整体{label}，共 {total} 只标的。"]
+        if risk_hits:
+            names = "、".join(hit.name for hit in risk_hits[:3])
+            suffix = f" 等 {len(risk_hits)} 只" if len(risk_hits) > 3 else ""
+            parts.append(f"{len(risk_hits)} 只命中今日风险股清单（{names}{suffix}），建议优先复核。")
         if high_risk_count > 0:
             parts.append(f"{high_risk_count} 只处于高风险状态，建议优先复核。")
         elif weak_count > strong_count:

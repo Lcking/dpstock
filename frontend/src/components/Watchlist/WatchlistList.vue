@@ -171,7 +171,51 @@
             {{ healthOverview.concentration_note }}
           </p>
         </div>
+        <div
+          v-if="healthOverview.risk_list_hits?.length"
+          class="health-risk-panel"
+        >
+          <div class="health-risk-header">
+            <span class="health-risk-title">命中风险股清单</span>
+            <span v-if="healthOverview.risk_list_trade_date" class="health-risk-meta">
+              交易日 {{ healthOverview.risk_list_trade_date }}
+            </span>
+          </div>
+          <div class="health-risk-list">
+            <div
+              v-for="hit in healthOverview.risk_list_hits"
+              :key="hit.ts_code"
+              class="health-risk-item"
+            >
+              <a :href="`/stock/${hit.ts_code.slice(0, 6)}`" class="health-risk-name">{{ hit.name }}</a>
+              <span class="health-risk-code">{{ hit.ts_code }}</span>
+              <n-space :size="4" class="health-risk-tags">
+                <n-tag
+                  v-for="tag in hit.tags"
+                  :key="`${hit.ts_code}-${tag}`"
+                  size="small"
+                  type="warning"
+                  :bordered="false"
+                >
+                  {{ tag }}
+                </n-tag>
+              </n-space>
+            </div>
+          </div>
+          <n-button size="small" tertiary type="warning" @click="goRiskStocks">
+            查看完整风险股清单
+          </n-button>
+        </div>
       </div>
+
+      <n-alert
+        v-if="detailLoading"
+        type="info"
+        :bordered="false"
+        class="detail-loading-alert"
+      >
+        正在加载完整指标，已展示缓存数据与骨架行…
+      </n-alert>
 
       <n-data-table
         :columns="tableColumns"
@@ -179,6 +223,7 @@
         :row-key="(row: WatchlistItemSummary) => row.ts_code"
         :checked-row-keys="selectedCodes"
         :loading="loading"
+        :row-class-name="rowClassName"
         :bordered="false"
         :single-line="false"
         :scroll-x="740"
@@ -250,7 +295,7 @@ import { ref, computed, h, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NButton, NIcon, NText, NModal, NForm, NFormItem,
-  NInput, NSpace, NAlert, NDataTable, NTag, NInputNumber, useMessage, useDialog,
+  NInput, NSpace, NAlert, NDataTable, NTag, NInputNumber, NSkeleton, useMessage, useDialog,
   type DataTableColumns, type DataTableRowKey
 } from 'naive-ui'
 import { AddCircleOutline } from '@vicons/ionicons5'
@@ -269,6 +314,7 @@ const notificationStore = useNotificationStore()
 
 // State
 const loading = ref(false)
+const detailLoading = ref(false)
 const adding = ref(false)
 const watchlistId = ref('default') // 默认自选股ID
 const summaryData = ref<WatchlistSummary | null>(null)
@@ -331,6 +377,19 @@ function flowTagType(label: string) {
   return 'info'
 }
 
+function rowClassName(row: WatchlistItemSummary) {
+  if (row.on_risk_list) return 'watchlist-row-risk-hit'
+  if (row.is_skeleton) return 'watchlist-row-skeleton'
+  return ''
+}
+
+function renderMetricCell(row: WatchlistItemSummary, content: () => ReturnType<typeof h>) {
+  if (row.is_skeleton) {
+    return h(NSkeleton, { text: true, width: '72%' })
+  }
+  return content()
+}
+
 const savingWeightCode = ref<string | null>(null)
 const weightDrafts = ref<Record<string, number | null>>({})
 
@@ -370,10 +429,16 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     render(row) {
       const displayName = row.name && row.name !== row.ts_code ? row.name : ''
       const codeOnly = row.ts_code.replace(/\.(SH|SZ|BJ)$/i, '')
-      return h('div', { class: 'cell-stock', onClick: () => navigateToAnalysis(row.ts_code), style: 'cursor:pointer' }, [
+      const children = [
         h('span', { class: 'cell-stock-name' }, displayName || codeOnly),
         h('span', { class: 'cell-stock-code' }, displayName ? codeOnly : ''),
-      ])
+      ]
+      if (row.on_risk_list) {
+        children.push(
+          h(NTag, { type: 'warning', size: 'small', bordered: false, class: 'cell-risk-tag' }, () => '风险清单')
+        )
+      }
+      return h('div', { class: 'cell-stock', onClick: () => navigateToAnalysis(row.ts_code), style: 'cursor:pointer' }, children)
     },
   },
   {
@@ -406,8 +471,10 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     align: 'center',
     sorter: (a, b) => a.price - b.price,
     render(row) {
-      if (!row.price) return h('span', { class: 'cell-na' }, '--')
-      return h('span', { class: 'cell-price' }, `¥${row.price.toFixed(2)}`)
+      return renderMetricCell(row, () => {
+        if (!row.price) return h('span', { class: 'cell-na' }, '--')
+        return h('span', { class: 'cell-price' }, `¥${row.price.toFixed(2)}`)
+      })
     },
   },
   {
@@ -417,9 +484,11 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     align: 'center',
     sorter: (a, b) => (a.change_pct ?? 0) - (b.change_pct ?? 0),
     render(row) {
-      if (row.change_pct === null || row.change_pct === undefined) return h('span', { class: 'cell-na' }, '--')
-      const cls = row.change_pct > 0 ? 'cell-up' : row.change_pct < 0 ? 'cell-down' : ''
-      return h('span', { class: `cell-change ${cls}` }, formatPercent(row.change_pct))
+      return renderMetricCell(row, () => {
+        if (row.change_pct === null || row.change_pct === undefined) return h('span', { class: 'cell-na' }, '--')
+        const cls = row.change_pct > 0 ? 'cell-up' : row.change_pct < 0 ? 'cell-down' : ''
+        return h('span', { class: `cell-change ${cls}` }, formatPercent(row.change_pct))
+      })
     },
   },
   {
@@ -428,10 +497,10 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     width: 100,
     align: 'center',
     render(row) {
-      return h('div', { class: 'cell-trend' }, [
+      return renderMetricCell(row, () => h('div', { class: 'cell-trend' }, [
         h(NTag, { type: trendTypeMap[row.trend.direction], size: 'small', bordered: false }, () => trendMap[row.trend.direction]),
         h('span', { class: 'cell-trend-num' }, String(row.trend.strength)),
-      ])
+      ]))
     },
   },
   {
@@ -440,9 +509,11 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     width: 90,
     align: 'center',
     render(row) {
-      const label = row.relative_strength.label_20d
-      if (!label) return h('span', { class: 'cell-na' }, '-')
-      return h(NTag, { type: rsTypeMap[label], size: 'small', bordered: false }, () => rsMap[label])
+      return renderMetricCell(row, () => {
+        const label = row.relative_strength.label_20d
+        if (!label) return h('span', { class: 'cell-na' }, '-')
+        return h(NTag, { type: rsTypeMap[label], size: 'small', bordered: false }, () => rsMap[label])
+      })
     },
   },
   {
@@ -451,8 +522,10 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     width: 100,
     align: 'center',
     render(row) {
-      if (!row.capital_flow.available) return h('span', { class: 'cell-na' }, '--')
-      return h(NTag, { type: flowTagType(row.capital_flow.label) as any, size: 'small', bordered: false }, () => row.capital_flow.label)
+      return renderMetricCell(row, () => {
+        if (!row.capital_flow.available) return h('span', { class: 'cell-na' }, '--')
+        return h(NTag, { type: flowTagType(row.capital_flow.label) as any, size: 'small', bordered: false }, () => row.capital_flow.label)
+      })
     },
   },
   {
@@ -461,15 +534,22 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
     width: 90,
     align: 'center',
     render(row) {
-      const children = [
-        h(NTag, { type: riskTypeMap[row.risk.level], size: 'small', bordered: false }, () => riskMap[row.risk.level]),
-      ]
-      if (row.events.flag === 'major') {
-        children.push(
-          h(NTag, { type: 'warning', size: 'small', bordered: false }, () => '事件'),
-        )
-      }
-      return h('div', { class: 'cell-risk' }, children)
+      return renderMetricCell(row, () => {
+        const children = [
+          h(NTag, { type: riskTypeMap[row.risk.level], size: 'small', bordered: false }, () => riskMap[row.risk.level]),
+        ]
+        if (row.events.flag === 'major') {
+          children.push(
+            h(NTag, { type: 'warning', size: 'small', bordered: false }, () => '事件'),
+          )
+        }
+        if (row.on_risk_list && row.risk_list_tags?.length) {
+          children.push(
+            h(NTag, { type: 'warning', size: 'small', bordered: false }, () => row.risk_list_tags![0]),
+          )
+        }
+        return h('div', { class: 'cell-risk' }, children)
+      })
     },
   },
   {
@@ -521,20 +601,39 @@ const confirmRemove = (row: WatchlistItemSummary) => {
   })
 }
 
-// 加载摘要数据
+// 加载摘要数据：fast 首屏 + full 完整指标
 const loadSummary = async () => {
   loading.value = true
+  detailLoading.value = false
   try {
     summaryData.value = await apiService.getWatchlistSummary(watchlistId.value, {
       sort: currentSort.value,
-      filters: currentFilters.value
+      filters: currentFilters.value,
+      phase: 'fast',
     })
     applyWatchlistState(summaryData.value)
   } catch (error) {
     console.error('Load summary error:', error)
     message.error('加载失败')
+    return
   } finally {
     loading.value = false
+  }
+
+  detailLoading.value = true
+  try {
+    const fullData = await apiService.getWatchlistSummary(watchlistId.value, {
+      sort: currentSort.value,
+      filters: currentFilters.value,
+      phase: 'full',
+    })
+    summaryData.value = fullData
+    applyWatchlistState(fullData)
+  } catch (error) {
+    console.error('Load full summary error:', error)
+    message.warning('完整指标加载失败，当前显示缓存/骨架数据')
+  } finally {
+    detailLoading.value = false
   }
 }
 
@@ -915,6 +1014,73 @@ onMounted(async () => {
   font-size: 12px;
   line-height: 1.5;
   color: var(--n-text-color-3);
+}
+
+.health-risk-panel {
+  flex-basis: 100%;
+  width: 100%;
+  padding-top: 12px;
+  border-top: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.health-risk-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.health-risk-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.health-risk-meta {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.health-risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.health-risk-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.health-risk-name {
+  color: #b45309;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.health-risk-code {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  font-family: monospace;
+}
+
+.detail-loading-alert {
+  margin-bottom: 12px;
+}
+
+:deep(.watchlist-row-risk-hit td) {
+  background: rgba(245, 158, 11, 0.08) !important;
+}
+
+:deep(.watchlist-row-skeleton td) {
+  opacity: 0.92;
+}
+
+.cell-risk-tag {
+  margin-top: 4px;
 }
 
 .metric-value {

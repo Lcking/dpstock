@@ -10,6 +10,8 @@ from services.quota_service import QuotaService
 from services.invite_service import InviteService
 from services.watchlist import watchlist_service
 from services.journal import journal_service
+from services.judgment_accuracy_service import JudgmentAccuracyService
+from services.watchlist_risk_alert_service import WatchlistRiskAlertService
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -36,6 +38,8 @@ async def get_user_center_overview(user: UserContext = Depends(get_current_user)
         recent_judgments = journal_service.get_records(user_id=user.user_id, page=1, page_size=5)
         due_count = journal_service.get_due_count(user.user_id)
         quota_status = quota_service.get_quota_status(user.user_id)
+        trust_stats = JudgmentAccuracyService().get_public_accuracy_stats(window_days=90)
+        risk_alert_unread_count = WatchlistRiskAlertService().get_unread_count(user.user_id)
 
         return {
             "user": {
@@ -54,6 +58,8 @@ async def get_user_center_overview(user: UserContext = Depends(get_current_user)
                 "reward_quota": InviteService.REWARD_QUOTA,
                 "daily_limit": QuotaService.DAILY_INVITE_LIMIT,
             },
+            "trust_stats": trust_stats,
+            "risk_alert_unread_count": risk_alert_unread_count,
         }
     except Exception as e:
         logger.error(f"[UserCenter] Failed to load overview: {e}")

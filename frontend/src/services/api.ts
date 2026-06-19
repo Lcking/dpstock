@@ -412,12 +412,13 @@ export const apiService = {
 
   getWatchlistSummary: async (
     watchlistId: string,
-    params: { sort?: string; filters?: string[] } = {}
+    params: { sort?: string; filters?: string[]; phase?: 'fast' | 'full' } = {}
   ): Promise<WatchlistSummary> => {
     const response = await axiosInstance.get(`/watchlists/${watchlistId}/summary`, {
       params: {
         sort: params.sort,
-        filters: params.filters?.join(',') || undefined
+        filters: params.filters?.join(',') || undefined,
+        phase: params.phase,
       }
     });
     return response.data;

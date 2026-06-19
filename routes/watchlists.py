@@ -171,15 +171,18 @@ async def get_summary(
     asof: Optional[str] = Query(None, description="日期 YYYY-MM-DD"),
     sort: str = Query("SCORE_DESC", description="排序方式"),
     filters: Optional[str] = Query(None, description="过滤条件，逗号分隔"),
+    phase: str = Query("full", description="加载阶段：fast=缓存+骨架，full=完整指标"),
     user: UserContext = Depends(get_current_user),
 ):
     try:
         filter_list = filters.split(",") if filters else []
+        normalized_phase = phase if phase in {"fast", "full"} else "full"
         return watchlist_service.get_summary(
             watchlist_id=watchlist_id,
             asof=asof,
             sort=sort,
             filters=filter_list,
+            phase=normalized_phase,
         )
     except Exception as e:
         logger.error(f"Error getting summary: {e}")

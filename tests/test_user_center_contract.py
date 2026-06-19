@@ -16,6 +16,10 @@ def test_user_center_overview_endpoint_exists():
         assert "watchlist_count" in data
         assert "due_count" in data
         assert "recent_judgments" in data
+        assert "trust_stats" in data
+        assert "risk_alert_unread_count" in data
+        assert "reviewed_count" in data["trust_stats"]
+        assert "condition_quality_leaderboard" in data["trust_stats"]
 
 
 def test_frontend_has_me_route_and_my_menu_entries():
