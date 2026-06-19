@@ -9,6 +9,10 @@ from typing import List, Optional, Dict, Any
 from database.db_factory import DatabaseFactory
 from schemas.watchlist import WatchlistItemSummary
 from services.journal.evaluator import evaluate_journal_conditions
+from services.journal.condition_quality import (
+    build_condition_quality_leaderboard,
+    extract_selected_condition_description,
+)
 from services.journal.failure_reasons import (
     failure_reason_label,
     normalize_failure_reason,
@@ -243,12 +247,13 @@ class JournalService:
         failure_reason_counts: Dict[str, int] = {}
         reviewed_count = 0
         pending_count = 0
+        reviewed_condition_items: List[Dict[str, Any]] = []
 
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, candidate, status, review, created_at
+                SELECT id, candidate, status, review, constraints, created_at
                 FROM judgments
                 WHERE user_id = ?
                 ORDER BY created_at DESC
@@ -277,6 +282,17 @@ class JournalService:
                 outcome = "uncertain"
             outcome_counts[outcome] += 1
             reviewed_count += 1
+
+            constraints = self._parse_constraints(row.get("constraints"))
+            reviewed_condition_items.append(
+                {
+                    "outcome": outcome,
+                    "condition_description": extract_selected_condition_description(
+                        constraints,
+                        candidate,
+                    ),
+                }
+            )
 
             system_evaluation = review.get("system_evaluation") or {}
             actual_path = system_evaluation.get("actual_path")
@@ -307,7 +323,23 @@ class JournalService:
             "most_common_failure_reason_label": failure_reason_label(
                 self._most_common_key(failure_reason_counts)
             ),
+            "condition_quality_leaderboard": build_condition_quality_leaderboard(
+                reviewed_condition_items
+            ),
         }
+
+    def _parse_constraints(self, raw_constraints: Any) -> Dict[str, Any]:
+        if not raw_constraints:
+            return {}
+        if isinstance(raw_constraints, dict):
+            return raw_constraints
+        if isinstance(raw_constraints, str):
+            try:
+                parsed = json.loads(raw_constraints)
+                return parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                return {}
+        return {}
 
     def _parse_review(self, raw_review: Any) -> Optional[Dict[str, Any]]:
         if not raw_review:

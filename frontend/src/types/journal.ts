@@ -68,6 +68,17 @@ export interface JournalReviewStats {
     failure_reason_counts: Record<string, number>
     most_common_failure_reason: string | null
     most_common_failure_reason_label: string | null
+    condition_quality_leaderboard: JournalConditionQualityItem[]
+}
+
+export interface JournalConditionQualityItem {
+    key: string
+    label: string
+    reviewed_count: number
+    supported_count: number
+    falsified_count: number
+    uncertain_count: number
+    support_rate: number | null
 }
 
 export interface ReviewTrigger {

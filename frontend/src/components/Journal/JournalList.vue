@@ -97,6 +97,33 @@
           <div class="stat-hint">证伪/不确定时的归因</div>
         </div>
       </div>
+      <div
+        v-if="conditionLeaderboard.length > 0"
+        class="condition-leaderboard"
+      >
+        <div class="leaderboard-title">条件质量榜单</div>
+        <div class="leaderboard-hint">按已复盘判断统计各条件类型的支持率，样本来自最近 {{ reviewStats?.limit }} 条记录。</div>
+        <div class="leaderboard-table">
+          <div class="leaderboard-head">
+            <span>条件类型</span>
+            <span>样本</span>
+            <span>支持率</span>
+            <span>结果分布</span>
+          </div>
+          <div
+            v-for="item in conditionLeaderboard"
+            :key="item.key"
+            class="leaderboard-row"
+          >
+            <span class="leaderboard-label">{{ item.label }}</span>
+            <span>{{ item.reviewed_count }}</span>
+            <span class="leaderboard-rate">{{ formatSupportRate(item.support_rate) }}</span>
+            <span class="leaderboard-breakdown">
+              支持 {{ item.supported_count }} / 证伪 {{ item.falsified_count }} / 不确定 {{ item.uncertain_count }}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Loading: Skeletons -->
@@ -298,6 +325,9 @@ const loading = ref(false)
 const records = ref<JournalRecord[]>([])
 const dueCount = ref(0)
 const reviewStats = ref<JournalReviewStats | null>(null)
+const conditionLeaderboard = computed(
+  () => reviewStats.value?.condition_quality_leaderboard ?? []
+)
 const errorMessage = ref('')
 const statusFilter = ref<string>('')
 const showReview = ref(false)
@@ -829,6 +859,66 @@ onMounted(() => {
   margin-top: 4px;
   font-size: 12px;
   color: var(--n-text-color-3);
+}
+
+.condition-leaderboard {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--n-border-color);
+}
+
+.leaderboard-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--n-text-color);
+}
+
+.leaderboard-hint {
+  margin-top: 4px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.leaderboard-table {
+  display: grid;
+  gap: 8px;
+}
+
+.leaderboard-head,
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.5fr 0.7fr 2fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.leaderboard-head {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  padding: 0 10px;
+}
+
+.leaderboard-row {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--n-color);
+  font-size: 13px;
+}
+
+.leaderboard-label {
+  font-weight: 600;
+  color: var(--n-text-color);
+}
+
+.leaderboard-rate {
+  font-weight: 700;
+  color: #2080f0;
+}
+
+.leaderboard-breakdown {
+  color: var(--n-text-color-3);
+  font-size: 12px;
 }
 
 .loading-container {

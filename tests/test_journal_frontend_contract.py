@@ -50,6 +50,9 @@ def test_journal_list_surfaces_review_stats_scorecard():
     assert "support_rate" in list_view
     assert "most_common_failure_reason_label" in list_view
     assert "最常失败原因" in list_view
+    assert "condition_quality_leaderboard" in journal_types
+    assert "JournalConditionQualityItem" in journal_types
+    assert "条件质量榜单" in list_view
     assert "loadReviewStats" in list_view
 
 

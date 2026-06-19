@@ -40,6 +40,7 @@ def _insert_judgment(
     candidate: str,
     status: str,
     review: dict | None = None,
+    constraints: dict | None = None,
     days_ago: int = 0,
 ) -> None:
     created_at = datetime.utcnow() - timedelta(days=days_ago)
@@ -59,7 +60,7 @@ def _insert_judgment(
                 candidate,
                 "[]",
                 "[]",
-                "{}",
+                json.dumps(constraints or {}, ensure_ascii=False),
                 "{}",
                 (created_at + timedelta(days=3)).isoformat() + "Z",
                 status,
@@ -206,6 +207,62 @@ def test_get_review_stats_summarizes_failure_reasons():
             db_path.unlink()
 
 
+def test_get_review_stats_builds_condition_quality_leaderboard():
+    db_path = Path("data") / f"test_journal_stats_condition_{uuid.uuid4().hex}.db"
+    db_path.parent.mkdir(exist_ok=True)
+    user_id = "user_stats_condition"
+    breakout_desc = "价格突破10.13且成交量连续2日高于20日均量1.5倍。"
+    range_desc = "价格在9.0-9.5区间震荡超过3个交易日，成交量回落至20日均量的0.8-1.2倍。"
+    try:
+        DatabaseFactory.initialize(str(db_path))
+        _create_judgments_table(db_path)
+        _insert_judgment(
+            db_path,
+            record_id="jr_breakout_supported",
+            user_id=user_id,
+            candidate="A",
+            status="reviewed",
+            constraints={"candidates": {"A": breakout_desc}},
+            review={"outcome": "supported", "system_evaluation": {"actual_path": "A"}},
+            days_ago=1,
+        )
+        _insert_judgment(
+            db_path,
+            record_id="jr_breakout_falsified",
+            user_id=user_id,
+            candidate="A",
+            status="reviewed",
+            constraints={"candidates": {"A": breakout_desc}},
+            review={"outcome": "falsified", "system_evaluation": {"actual_path": "C"}},
+            days_ago=2,
+        )
+        _insert_judgment(
+            db_path,
+            record_id="jr_range_uncertain",
+            user_id=user_id,
+            candidate="B",
+            status="reviewed",
+            constraints={"candidates": {"B": range_desc}},
+            review={"outcome": "uncertain", "system_evaluation": {"actual_path": None}},
+            days_ago=3,
+        )
+
+        stats = JournalService().get_review_stats(user_id=user_id, limit=30)
+        leaderboard = stats["condition_quality_leaderboard"]
+
+        assert len(leaderboard) == 2
+        assert leaderboard[0]["label"] == "突破+放量"
+        assert leaderboard[0]["reviewed_count"] == 2
+        assert leaderboard[0]["supported_count"] == 1
+        assert leaderboard[0]["falsified_count"] == 1
+        assert leaderboard[0]["support_rate"] == 50.0
+        assert leaderboard[1]["label"] == "区间震荡+缩量"
+        assert leaderboard[1]["reviewed_count"] == 1
+    finally:
+        if db_path.exists():
+            db_path.unlink()
+
+
 def test_get_review_stats_handles_empty_user():
     db_path = Path("data") / f"test_journal_stats_empty_{uuid.uuid4().hex}.db"
     db_path.parent.mkdir(exist_ok=True)
@@ -219,6 +276,7 @@ def test_get_review_stats_handles_empty_user():
         assert stats["reviewed_count"] == 0
         assert stats["support_rate"] is None
         assert stats["most_common_actual_path"] is None
+        assert stats["condition_quality_leaderboard"] == []
     finally:
         if db_path.exists():
             db_path.unlink()
