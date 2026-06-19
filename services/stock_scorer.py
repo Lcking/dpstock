@@ -105,26 +105,20 @@ class StockScorer:
             
     def get_recommendation(self, score: int) -> str:
         """
-        根据评分获取投资建议
-        
-        Args:
-            score: 股票评分（0-100）
-            
-        Returns:
-            投资建议文本
+        根据评分获取结构强弱标签（非买卖建议）
         """
         if score >= 80:
-            return "强烈推荐"
+            return "结构强"
         elif score >= 70:
-            return "推荐"
+            return "结构偏强"
         elif score >= 60:
-            return "谨慎推荐"
+            return "中性"
         elif score >= 40:
-            return "观望"
+            return "结构偏弱"
         elif score >= 20:
-            return "不推荐"
+            return "结构弱"
         else:
-            return "强烈不推荐"
+            return "结构极弱"
             
     def batch_score_stocks(self, stock_dfs: Dict[str, pd.DataFrame]) -> List[Tuple[str, int, str]]:
         """

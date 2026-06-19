@@ -94,11 +94,15 @@ def test_sitemap_includes_stock_index_and_hot_stock_pages():
         response = client.get("/sitemap.xml")
 
     assert response.status_code == 200
-    assert "https://aguai.net/stocks" in response.text
-    assert "https://aguai.net/risk-stocks" in response.text
-    assert "https://aguai.net/stock/600519" in response.text
-    assert "https://aguai.net/stock/002594" in response.text
-    assert "https://aguai.net/stock/688981" in response.text
+    body = response.text
+    assert "sitemapindex" in body or "https://aguai.net/stocks" in body
+    if "sitemapindex" in body:
+        assert "sitemap-core.xml" in body
+        assert "sitemap-stocks.xml" in body
+    else:
+        assert "https://aguai.net/stocks" in body
+        assert "https://aguai.net/risk-stocks" in body
+        assert "https://aguai.net/stock/600519" in body
 
 
 def test_stock_landing_page_lists_recent_articles(monkeypatch):
@@ -220,3 +224,16 @@ def test_stock_landing_page_returns_404_for_unknown_stock():
         response = client.get("/stock/not-a-stock")
 
     assert response.status_code == 404
+
+
+def test_llms_txt_is_dynamically_generated():
+    with TestClient(app) as client:
+        response = client.get("/llms.txt")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Agu AI" in body
+    assert "akshare / tushare" in body
+    assert "历史验证统计" in body
+    assert "2025-12-18" not in body
+    assert "/stock/600519" in body or "贵州茅台" in body

@@ -342,6 +342,18 @@ export const apiService = {
     }
   },
 
+  getJudgmentAccuracyStats: async (windowDays: number = 90) => {
+    try {
+      const response = await axiosInstance.get('/journal/accuracy-stats', {
+        params: { window_days: windowDays }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('获取历史验证统计时出错:', error);
+      return null;
+    }
+  },
+
   reviewRecord: async (recordId: string, notes: string | null, lesson?: string | null, failureReason?: string | null) => {
     try {
       const response = await axiosInstance.post(`/journal/${recordId}/review`, {

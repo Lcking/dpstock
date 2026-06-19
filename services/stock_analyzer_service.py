@@ -453,6 +453,9 @@ class StockAnalyzerService:
 
             # 当前分析日期
             analysis_date = datetime.now().strftime('%Y-%m-%d')
+            from services.data_provenance import build_data_provenance
+
+            provenance = build_data_provenance(market_type, df_with_indicators)
             
             # 生成基本分析结果
             basic_result = {
@@ -460,6 +463,7 @@ class StockAnalyzerService:
                 "name": stock_name,  # 添加股票名称
                 "market_type": market_type,
                 "analysis_date": analysis_date,
+                **provenance,
                 "score": score,
                 "price": latest_data['Close'],
                 "price_change": price_change_value,  # 涨跌额 (绝对值)

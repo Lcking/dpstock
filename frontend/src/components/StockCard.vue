@@ -73,6 +73,12 @@
       >
         绑定后资产不会因换设备或清缓存而丢失
       </div>
+      <div
+        v-if="stock.analysisStatus === 'completed' && stock.dataProvenanceLabel"
+        class="data-provenance"
+      >
+        {{ stock.dataProvenanceLabel }}
+      </div>
       <div class="analysis-status" v-if="stock.analysisStatus !== 'completed'">
         <n-tag 
           :type="getStatusType" 
@@ -348,8 +354,8 @@ const parsedAnalysis = computed(() => {
 
 // 关键词高亮处理函数
 function highlightKeywords(html: string): string {
-  // 买入/卖出/持有信号
-  html = html.replace(/(<strong>)(买入|卖出|持有)(<\/strong>)/g, '$1<span class="buy">$2</span>$3');
+  // 偏多/偏空/观望信号高亮
+  html = html.replace(/(<strong>)(偏多|偏空|观望|中性)(<\/strong>)/g, '$1<span class="buy">$2</span>$3');
   
   // 上涨/增长相关词
   html = html.replace(/(<strong>)(上涨|看涨|增长|增加|上升)(<\/strong>)/g, '$1<span class="up">$2</span>$3');
@@ -454,8 +460,8 @@ function getChineseTrend(trend: string): string {
 
 function getChineseSignal(signal: string): string {
   const signalMap: Record<string, string> = {
-    'BUY': '买入',
-    'SELL': '卖出',
+    'BUY': '偏多',
+    'SELL': '偏空',
     'HOLD': '持有',
     'NEUTRAL': '中性'
   };
@@ -541,7 +547,7 @@ async function copyStockAnalysis() {
     }
     
     if (props.stock.recommendation) {
-      result += `推荐: ${props.stock.recommendation}\n`;
+      result += `结构评级: ${props.stock.recommendation}\n`;
     }
     
     // 添加技术指标信息
@@ -882,6 +888,13 @@ function smoothScrollToBottom(element: HTMLElement) {
   border: 1px solid rgba(124, 58, 237, 0.12);
   border-radius: 12px;
   padding: 8px 12px;
+}
+
+.data-provenance {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
 }
 
 .header-left {

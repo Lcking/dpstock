@@ -22,12 +22,26 @@
       <div class="footer-disclaimer">
         投资有风险，入市需谨慎。本平台分析仅供参考，不构成投资建议。
       </div>
+      <div v-if="accuracySummary" class="footer-accuracy">
+        {{ accuracySummary }}
+      </div>
     </div>
   </footer>
 </template>
 
 <script setup lang="ts">
+import { onMounted, ref } from 'vue';
+import { apiService } from '@/services/api';
+
 const currentYear = new Date().getFullYear();
+const accuracySummary = ref('');
+
+onMounted(async () => {
+  const stats = await apiService.getJudgmentAccuracyStats(90);
+  if (stats?.reviewed_count > 0 && stats.support_rate != null) {
+    accuracySummary.value = `近 ${stats.window_days} 天历史验证：已复盘 ${stats.reviewed_count} 条，系统支持率 ${stats.support_rate}%（仅供参考）`;
+  }
+});
 </script>
 
 <style scoped>
@@ -80,6 +94,13 @@ const currentYear = new Date().getFullYear();
 .footer-disclaimer {
   font-size: 12px;
   color: #98a2b3;
+}
+
+.footer-accuracy {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
 }
 
 @media (max-width: 480px) {

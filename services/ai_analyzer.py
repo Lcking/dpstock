@@ -746,27 +746,6 @@ class AIAnalyzer:
                 "status": "error"
             })
             
-    def _extract_recommendation(self, analysis_text: str) -> str:
-        """从分析文本中提取投资建议"""
-        # 查找投资建议部分
-        investment_advice_pattern = r"##\s*投资建议\s*\n(.*?)(?:\n##|\Z)"
-        match = re.search(investment_advice_pattern, analysis_text, re.DOTALL)
-        
-        if match:
-            advice_text = match.group(1).strip()
-            
-            # 提取关键建议
-            if "买入" in advice_text or "增持" in advice_text:
-                return "买入"
-            elif "卖出" in advice_text or "减持" in advice_text:
-                return "卖出"
-            elif "持有" in advice_text:
-                return "持有"
-            else:
-                return "观望"
-        
-        return "观望"  # 默认建议
-        
     def _calculate_analysis_score(self, analysis_text: str, technical_summary: dict) -> int:
         """计算分析评分"""
         score = 50  # 基础分数

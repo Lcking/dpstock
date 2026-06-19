@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
 import json
+import tempfile
 import uuid
 import os
 import sqlite3
@@ -254,10 +255,8 @@ class TestJournalIdentityIntegration(unittest.TestCase):
     def test_bound_user_sees_same_journal_records_after_identity_merge(self):
         from database.db_factory import DatabaseFactory
 
-        temp_dir = Path("data")
-        temp_dir.mkdir(exist_ok=True)
-        db_path = temp_dir / f"test_journal_identity_{uuid.uuid4().hex}.db"
-        try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "journal_identity.db"
             _setup_journal_db(db_path)
             DatabaseFactory.initialize(str(db_path))
             user_service = UserService(db_path=str(db_path))
@@ -308,17 +307,12 @@ class TestJournalIdentityIntegration(unittest.TestCase):
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0]["id"], "jr_test_1")
             self.assertEqual(records[0]["user_id"], bound_user_id)
-        finally:
-            if db_path.exists():
-                db_path.unlink()
 
     def test_guest_journal_records_are_marked_temporary_until_bound(self):
         from database.db_factory import DatabaseFactory
 
-        temp_dir = Path("data")
-        temp_dir.mkdir(exist_ok=True)
-        db_path = temp_dir / f"test_journal_temp_{uuid.uuid4().hex}.db"
-        try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "journal_temp.db"
             _setup_journal_db(db_path)
             DatabaseFactory.initialize(str(db_path))
             user_service = UserService(db_path=str(db_path))
@@ -335,9 +329,6 @@ class TestJournalIdentityIntegration(unittest.TestCase):
             state = journal_service.get_journal_state(guest_user_id)
             self.assertTrue(state["is_temporary"])
             self.assertIn("绑定后可长期追踪与复盘", state["trial_message"])
-        finally:
-            if db_path.exists():
-                db_path.unlink()
 
 
 def run_tests():

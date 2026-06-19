@@ -61,50 +61,40 @@ def _insert_judgment(db_path: Path, record_id: str, status: str = "active") -> N
         conn.commit()
 
 
-def test_force_due_record_marks_active_judgment_due():
-    db_path = Path("data") / f"test_force_due_{uuid.uuid4().hex}.db"
-    db_path.parent.mkdir(exist_ok=True)
+def test_force_due_record_marks_active_judgment_due(tmp_path):
+    db_path = tmp_path / "force_due.db"
     record_id = "jr_force_due"
-    try:
-        DatabaseFactory.initialize(str(db_path))
-        _create_judgments_table(db_path)
-        _insert_judgment(db_path, record_id, status="active")
+    DatabaseFactory.initialize(str(db_path))
+    _create_judgments_table(db_path)
+    _insert_judgment(db_path, record_id, status="active")
 
-        result = JournalService().force_due_record(record_id)
+    result = JournalService().force_due_record(record_id)
 
-        assert result["ok"] is True
-        assert result["status"] == "due"
-        assert result["previous_status"] == "active"
+    assert result["ok"] is True
+    assert result["status"] == "due"
+    assert result["previous_status"] == "active"
 
-        with sqlite3.connect(db_path) as conn:
-            status, validation_date = conn.execute(
-                "SELECT status, validation_date FROM judgments WHERE id = ?", (record_id,)
-            ).fetchone()
-        assert status == "due"
-        assert datetime.fromisoformat(validation_date.replace("Z", "+00:00")).replace(tzinfo=None) < datetime.utcnow()
-    finally:
-        if db_path.exists():
-            db_path.unlink()
+    with sqlite3.connect(db_path) as conn:
+        status, validation_date = conn.execute(
+            "SELECT status, validation_date FROM judgments WHERE id = ?", (record_id,)
+        ).fetchone()
+    assert status == "due"
+    assert datetime.fromisoformat(validation_date.replace("Z", "+00:00")).replace(tzinfo=None) < datetime.utcnow()
 
 
-def test_force_due_record_does_not_reopen_reviewed_judgment():
-    db_path = Path("data") / f"test_force_due_reviewed_{uuid.uuid4().hex}.db"
-    db_path.parent.mkdir(exist_ok=True)
+def test_force_due_record_does_not_reopen_reviewed_judgment(tmp_path):
+    db_path = tmp_path / "force_due_reviewed.db"
     record_id = "jr_reviewed"
-    try:
-        DatabaseFactory.initialize(str(db_path))
-        _create_judgments_table(db_path)
-        _insert_judgment(db_path, record_id, status="reviewed")
+    DatabaseFactory.initialize(str(db_path))
+    _create_judgments_table(db_path)
+    _insert_judgment(db_path, record_id, status="reviewed")
 
-        result = JournalService().force_due_record(record_id)
+    result = JournalService().force_due_record(record_id)
 
-        assert result["ok"] is False
-        assert result["status"] == "reviewed"
-        assert "active" in result["reason"]
+    assert result["ok"] is False
+    assert result["status"] == "reviewed"
+    assert "active" in result["reason"]
 
-        with sqlite3.connect(db_path) as conn:
-            status = conn.execute("SELECT status FROM judgments WHERE id = ?", (record_id,)).fetchone()[0]
-        assert status == "reviewed"
-    finally:
-        if db_path.exists():
-            db_path.unlink()
+    with sqlite3.connect(db_path) as conn:
+        status = conn.execute("SELECT status FROM judgments WHERE id = ?", (record_id,)).fetchone()[0]
+    assert status == "reviewed"

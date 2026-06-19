@@ -56,6 +56,9 @@ export interface StockInfo {
   volumeRatio5d?: number | null;
   heatSignal?: HeatSignal | null;
   analysisDate?: string;
+  dataAsOf?: string;
+  dataSource?: string;
+  dataProvenanceLabel?: string;
 }
 
 export interface SearchResult {
@@ -142,6 +145,9 @@ export interface StreamAnalysisUpdate {
   volume_ratio_5d?: number | null;
   heat_signal?: HeatSignal | null;
   analysis_date?: string;
+  data_as_of?: string;
+  data_source?: string;
+  data_provenance_label?: string;
   ai_analysis_chunk?: string;
   ai_score?: import('./aiScore').AiScore | null;
 }

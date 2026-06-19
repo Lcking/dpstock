@@ -667,6 +667,14 @@ class WatchlistService:
             label = "偏强"
         else:
             label = "均衡"
+        summary_line = self._build_health_summary_line(
+            label=label,
+            total=total,
+            strong_count=strong_count,
+            weak_count=weak_count,
+            high_risk_count=high_risk_count,
+            active_judgment_count=active_judgment_count,
+        )
 
         return WatchlistHealthOverview(
             total_count=total,
@@ -677,8 +685,32 @@ class WatchlistService:
             active_judgment_count=active_judgment_count,
             health_score=max(0, min(100, health_score)),
             label=label,
+            summary_line=summary_line,
         )
     
+    def _build_health_summary_line(
+        self,
+        *,
+        label: str,
+        total: int,
+        strong_count: int,
+        weak_count: int,
+        high_risk_count: int,
+        active_judgment_count: int,
+    ) -> str:
+        if total <= 0:
+            return "暂无自选标的，添加后可查看组合健康度。"
+        parts = [f"当前自选组合整体{label}，共 {total} 只标的。"]
+        if high_risk_count > 0:
+            parts.append(f"{high_risk_count} 只处于高风险状态，建议优先复核。")
+        elif weak_count > strong_count:
+            parts.append(f"弱势标的 {weak_count} 只，多于强势标的 {strong_count} 只。")
+        elif strong_count > 0:
+            parts.append(f"强势标的 {strong_count} 只，结构相对占优。")
+        if active_judgment_count > 0:
+            parts.append(f"另有 {active_judgment_count} 只处于判断追踪中。")
+        return "".join(parts)
+
     def _apply_filters(
         self, 
         summaries: List[WatchlistItemSummary],

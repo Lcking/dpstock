@@ -82,6 +82,7 @@ class WatchlistHealthOverview(BaseModel):
     active_judgment_count: int = 0
     health_score: int = Field(0, ge=0, le=100)
     label: Literal["偏强", "均衡", "偏弱", "风险偏高"] = "均衡"
+    summary_line: str = ""
 
 
 class Watchlist(BaseModel):

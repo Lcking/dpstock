@@ -34,6 +34,10 @@
         <!-- 核心价值闭环 -->
         <ValueLoop />
 
+        <section v-if="accuracySummary" class="trust-strip">
+          {{ accuracySummary }}
+        </section>
+
         <section class="stock-index-entry">
           <div>
             <div class="stock-index-eyebrow">热门个股入口</div>
@@ -261,6 +265,7 @@ const searchOptions = ref<any[]>([]); // 搜索结果选项
 const isSearching = ref(false);
 const isAnalyzing = ref(false);
 const analyzedStocks = ref<StockInfo[]>([]);
+const accuracySummary = ref('');
 
 // 让控制台可以访问 analyzedStocks
 (window as any).analyzedStocks = analyzedStocks;
@@ -419,9 +424,9 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
     width: 100,
     render(row: StockInfo) {
       const signalMap: Record<string, string> = {
-        'BUY': '买入',
-        'SELL': '卖出',
-        'HOLD': '持有',
+        'BUY': '偏多',
+        'SELL': '偏空',
+        'HOLD': '观望',
         'NEUTRAL': '中性'
       };
       return row.macdSignal ? signalMap[row.macdSignal] || row.macdSignal : '--';
@@ -436,7 +441,7 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
     }
   },
   {
-    title: '推荐',
+    title: '结构评级',
     key: 'recommendation',
     width: 100
   },
@@ -689,6 +694,16 @@ function handleStreamUpdate(data: StreamAnalysisUpdate) {
       stock.analysisDate = data.analysis_date;
     }
 
+    if (data.data_provenance_label !== undefined) {
+      stock.dataProvenanceLabel = data.data_provenance_label;
+    }
+    if (data.data_as_of !== undefined) {
+      stock.dataAsOf = data.data_as_of;
+    }
+    if (data.data_source !== undefined) {
+      stock.dataSource = data.data_source;
+    }
+
     // ✅ Vue响应式更新
     analyzedStocks.value[stockIndex] = stock;
   }
@@ -880,7 +895,7 @@ async function copyAnalysisResults() {
         }
         
         if (stock.recommendation) {
-          result += `推荐: ${stock.recommendation}\n`;
+          result += `结构评级: ${stock.recommendation}\n`;
         }
         
         // 添加技术指标信息
@@ -905,8 +920,8 @@ async function copyAnalysisResults() {
         
         if (stock.macdSignal) {
           const signalMap: Record<string, string> = {
-            'BUY': '买入',
-            'SELL': '卖出',
+            'BUY': '偏多',
+            'SELL': '偏空',
             'HOLD': '持有',
             'NEUTRAL': '中性'
           };
@@ -969,7 +984,7 @@ function exportToCSV() {
   
   try {
     // 创建CSV内容
-    const headers = ['代码', '名称', '价格', '涨跌幅', 'RSI', '均线趋势', 'MACD信号', '成交量状态', '评分', '推荐', '分析日期'];
+    const headers = ['代码', '名称', '价格', '涨跌幅', 'RSI', '均线趋势', 'MACD信号', '成交量状态', '评分', '结构评级', '分析日期'];
     let csvContent = headers.join(',') + '\n';
     
     // 添加数据行
@@ -1029,8 +1044,8 @@ function getChineseTrend(trend: string): string {
 // 辅助函数：获取中文信号描述
 function getChineseSignal(signal: string): string {
   const signalMap: Record<string, string> = {
-    'BUY': '买入',
-    'SELL': '卖出',
+    'BUY': '偏多',
+    'SELL': '偏空',
     'HOLD': '持有',
     'NEUTRAL': '中性'
   };
@@ -1066,6 +1081,11 @@ onMounted(async () => {
       announcement.value = config.announcement;
       // 使用通知显示公告
       showAnnouncement(config.announcement);
+    }
+
+    const stats = await apiService.getJudgmentAccuracyStats(90);
+    if (stats?.reviewed_count > 0 && stats.support_rate != null) {
+      accuracySummary.value = `近 ${stats.window_days} 天历史验证：已复盘 ${stats.reviewed_count} 条，系统支持率 ${stats.support_rate}%（仅供参考，不构成投资建议）`;
     }
   } catch (error) {
     console.error('获取配置时出错:', error);
@@ -1130,6 +1150,17 @@ function handleOpenBindFromQuota() {
 
 .invite-accepted-action {
   margin-top: 10px;
+}
+
+.trust-strip {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(47, 91, 234, 0.06);
+  border: 1px solid rgba(47, 91, 234, 0.12);
+  color: #3d4a66;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .stock-index-entry {

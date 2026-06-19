@@ -133,6 +133,19 @@ async def get_review_stats(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/accuracy-stats")
+async def get_public_accuracy_stats(
+    window_days: int = Query(90, ge=7, le=365),
+):
+    try:
+        from services.judgment_accuracy_service import JudgmentAccuracyService
+
+        return JudgmentAccuracyService().get_public_accuracy_stats(window_days=window_days)
+    except Exception as e:
+        logger.error(f"Get public accuracy stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{record_id}")
 async def get_record(
     record_id: str,

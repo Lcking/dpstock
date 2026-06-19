@@ -109,6 +109,9 @@
           >
             {{ healthOverview.label }}
           </n-tag>
+          <p v-if="healthOverview.summary_line" class="health-summary-line">
+            {{ healthOverview.summary_line }}
+          </p>
         </div>
         <div class="health-metrics">
           <div class="health-metric">
@@ -730,6 +733,14 @@ onMounted(async () => {
 
 .health-status-tag {
   margin-top: 2px;
+}
+
+.health-summary-line {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--n-text-color-3);
+  max-width: 280px;
 }
 
 .health-metrics {

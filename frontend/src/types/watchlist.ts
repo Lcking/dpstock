@@ -64,6 +64,7 @@ export interface WatchlistHealthOverview {
     active_judgment_count: number
     health_score: number
     label: '偏强' | '均衡' | '偏弱' | '风险偏高'
+    summary_line: string
 }
 
 export interface WatchlistSummary {

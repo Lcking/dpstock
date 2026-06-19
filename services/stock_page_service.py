@@ -154,10 +154,46 @@ class StockPageService:
 
     def get_stock(self, stock_code: str) -> Optional[StockPageInfo]:
         normalized = self.normalize_code(stock_code)
-        return self.HOT_STOCKS.get(normalized)
+        hot = self.HOT_STOCKS.get(normalized)
+        if hot:
+            return hot
+        return self._resolve_from_snapshot(normalized)
+
+    def _resolve_from_snapshot(self, stock_code: str) -> Optional[StockPageInfo]:
+        try:
+            from services.search_snapshot_service import SearchSnapshotService
+
+            rows = SearchSnapshotService()._load_snapshot("A")
+            for row in rows:
+                symbol = self.normalize_code(row.get("symbol"))
+                if symbol == stock_code:
+                    name = str(row.get("name") or stock_code).strip()
+                    if name:
+                        return StockPageInfo(code=stock_code, name=name, market="A")
+        except Exception:
+            return None
+        return None
 
     def list_hot_stocks(self) -> List[StockPageInfo]:
         return list(self.HOT_STOCKS.values())
+
+    def list_a_share_stocks(self) -> List[StockPageInfo]:
+        try:
+            from services.search_snapshot_service import SearchSnapshotService
+
+            rows = SearchSnapshotService()._load_snapshot("A")
+            stocks = []
+            seen = set()
+            for row in rows:
+                code = self.normalize_code(row.get("symbol"))
+                name = str(row.get("name") or "").strip()
+                if not code or not name or code in seen:
+                    continue
+                seen.add(code)
+                stocks.append(StockPageInfo(code=code, name=name, market="A"))
+            return stocks
+        except Exception:
+            return []
 
     async def render_stock_page(self, stock_code: str) -> Optional[str]:
         stock = self.get_stock(stock_code)
@@ -174,6 +210,22 @@ class StockPageService:
             "相对强弱和风险线索解读个股，仅供研究参考，不构成投资建议。"
         )
         updated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+        from services.data_provenance import resolve_data_source
+        from services.judgment_accuracy_service import JudgmentAccuracyService
+
+        data_source = resolve_data_source(stock.market)
+        data_provenance_label = f"页面更新 {updated_at} · 行情来源：{data_source}"
+        accuracy_stats = JudgmentAccuracyService().get_public_accuracy_stats(window_days=90)
+        accuracy_line = ""
+        if (
+            accuracy_stats.get("reviewed_count", 0) > 0
+            and accuracy_stats.get("support_rate") is not None
+        ):
+            accuracy_line = (
+                f"近 {accuracy_stats['window_days']} 天历史验证："
+                f"已复盘 {accuracy_stats['reviewed_count']} 条，"
+                f"系统支持率 {accuracy_stats['support_rate']}%（仅供参考）"
+            )
         realtime_url = f"/?code={stock.code}&market={stock.market}&focus=search"
         if recent_articles is None:
             recent_articles = await self._get_recent_articles(stock)
@@ -377,6 +429,8 @@ class StockPageService:
         这是 {self._escape(stock.name)}({self._escape(stock.code)}) 的 Agu AI 个股诊股入口页，
         用于从结构、趋势、相对强弱和风险线索理解这只股票。
       </p>
+      <p class="disclaimer">{self._escape(data_provenance_label)}</p>
+      {f'<p class="disclaimer">{self._escape(accuracy_line)}</p>' if accuracy_line else ''}
       <a class="cta" href="{self._escape(realtime_url)}">实时 AI 诊断这只股票</a>
     </header>
     <section>
