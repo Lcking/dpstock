@@ -20,6 +20,14 @@ def test_stock_landing_page_returns_server_rendered_html():
     assert "仅供研究参考，不构成投资建议" in html
     assert 'rel="canonical"' in html
     assert 'application/ld+json' in html
+    assert '"@type":"FAQPage"' in html.replace(" ", "")
+    assert "常见问题" in html
+    assert "贵州茅台股票怎么看？" in html
+    assert "600519当前 AI 诊断关注什么？" in html
+    assert "主要风险是什么？" in html
+    assert "数据更新时间是什么？" in html
+    assert "faq-section" in html
+    assert "faq-question" in html
     assert "/?code=600519&amp;market=A&amp;focus=search" in html
     assert "<style>" in html
     assert "linear-gradient" in html
@@ -126,6 +134,56 @@ def test_stock_landing_page_lists_recent_articles(monkeypatch):
     assert "贵州茅台量价复盘" in html
     assert "/analysis/11" in html
     assert "评分 78" in html
+
+
+def test_stock_landing_page_faq_uses_ai_score_insights(monkeypatch):
+    ai_score = {
+        "version": "1.0.0",
+        "overall": {"score": 78, "label": "结构偏强", "confidence": 0.82, "degraded": False},
+        "dimensions": [
+            {
+                "id": "risk",
+                "name": "风险",
+                "score": 55,
+                "weight": 0.2,
+                "evidence": ["波动率处于近一年高位", "量价出现背离信号"],
+                "available": True,
+                "degraded": False,
+            }
+        ],
+        "explain": {
+            "one_liner": "结构尚可，但波动与量价需继续观察。",
+            "notes": [],
+        },
+    }
+
+    async def fake_get_articles(self, limit=20, offset=0, keyword=None):
+        assert keyword == "600519"
+        return [
+            {
+                "id": 11,
+                "title": "贵州茅台结构观察",
+                "publish_date": "2026-06-15",
+                "score": 78,
+                "ai_score_json": __import__("json").dumps(ai_score, ensure_ascii=False),
+            }
+        ]
+
+    monkeypatch.setattr(
+        "services.archive_service.ArchiveService.get_articles",
+        fake_get_articles,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/stock/600519")
+
+    html = response.text
+    assert response.status_code == 200
+    assert "结构尚可，但波动与量价需继续观察。" in html
+    assert "波动率处于近一年高位" in html
+    assert "量价出现背离信号" in html
+    assert "综合评级为「结构偏强」" in html
+    assert "最近一次 AI 诊断沉淀日期为 2026-06-15" in html
 
 
 def test_stock_landing_page_supports_stocks_with_archived_articles(monkeypatch):

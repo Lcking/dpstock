@@ -178,6 +178,9 @@ class StockPageService:
         if recent_articles is None:
             recent_articles = await self._get_recent_articles(stock)
 
+        faq_entries = self._build_faq_entries(stock, recent_articles, updated_at)
+        faq_json_ld = self._build_faq_json_ld(faq_entries)
+
         json_ld = {
             "@context": "https://schema.org",
             "@type": "WebPage",
@@ -211,6 +214,7 @@ class StockPageService:
   <meta property="og:url" content="{self._escape(canonical_url)}">
   <meta property="og:type" content="website">
   <script type="application/ld+json">{self._json(json_ld)}</script>
+  <script type="application/ld+json">{self._json(faq_json_ld)}</script>
   <style>
     :root {{
       color-scheme: light;
@@ -324,6 +328,28 @@ class StockPageService:
       color: #6b7280;
       font-size: 14px;
     }}
+    .faq-list {{
+      display: grid;
+      gap: 14px;
+      margin: 0;
+      padding: 0;
+    }}
+    .faq-item {{
+      margin: 0;
+      padding: 16px 18px;
+      border-radius: 14px;
+      background: #f8faff;
+      border: 1px solid rgba(61, 91, 204, 0.10);
+    }}
+    .faq-question {{
+      margin: 0 0 8px;
+      font-size: 17px;
+      line-height: 1.45;
+    }}
+    .faq-answer {{
+      margin: 0;
+      color: #344054;
+    }}
   </style>
 </head>
 <body>
@@ -367,6 +393,7 @@ class StockPageService:
       <h2>最近 AI 诊断沉淀</h2>
       {self._render_recent_articles(recent_articles)}
     </section>
+    {self._render_faq_section(faq_entries)}
     <section>
       <h2>实时 AI 诊股</h2>
       <p>点击下方入口，可进入 Agu AI 前端工具，对 {self._escape(stock.name)} 发起实时分析，并定位到“智能搜索与选择”区域。</p>
@@ -488,6 +515,140 @@ class StockPageService:
                 f'<div class="article-meta">{publish_date} · {score_text}</div></li>'
             )
         return f'<ul class="article-list">{"".join(items)}</ul>'
+
+    def _build_faq_entries(
+        self,
+        stock: StockPageInfo,
+        recent_articles: List[Dict[str, Any]],
+        updated_at: str,
+    ) -> List[Dict[str, str]]:
+        insights = self._parse_article_ai_insights(recent_articles[0] if recent_articles else None)
+        latest_article = recent_articles[0] if recent_articles else None
+        latest_date = ""
+        if latest_article:
+            latest_date = str(
+                latest_article.get("publish_date") or latest_article.get("created_at") or ""
+            ).strip()
+
+        how_to_read = (
+            f"查看 {stock.name}({stock.code}) 时，Agu AI 会从结构、趋势、相对强弱、量价和风险线索五个维度做研究型解读。"
+            "你可以先阅读本页沉淀的 AI 诊断文章，或点击「实时 AI 诊断」获取最新观察。"
+            "本内容仅供研究参考，不构成投资建议。"
+        )
+
+        if insights.get("one_liner"):
+            focus_prefix = f"最近一次诊断（{latest_date}）" if latest_date else "最近一次诊断"
+            overall_label = insights.get("overall_label")
+            label_suffix = f"综合评级为「{overall_label}」。" if overall_label else ""
+            diagnosis_focus = (
+                f"{focus_prefix}，{stock.code} 的 AI 诊断重点关注：{insights['one_liner']} {label_suffix}"
+                "你也可以在本页查看结构、趋势、相对强弱、量价和风险线索等维度拆解。"
+            )
+        elif latest_article:
+            title = str(latest_article.get("title") or "").strip()
+            score = latest_article.get("score")
+            score_text = f"评分 {score}" if score is not None else "评分待补充"
+            diagnosis_focus = (
+                f"当前可参考最近一次 AI 诊断《{title}》（{latest_date or '日期待补充'}，{score_text}）。"
+                f"Agu AI 会从结构、趋势、相对强弱、量价和风险线索理解 {stock.name}({stock.code})，"
+                "并持续沉淀到分析专栏。"
+            )
+        else:
+            diagnosis_focus = (
+                f"当前 {stock.code} 暂无可引用的沉淀诊断，发起实时分析后，Agu AI 会优先关注："
+                "趋势结构是否延续、相对市场强弱、量价配合、关键位置得失与波动风险。"
+            )
+
+        risk_points = insights.get("risk_evidence") or []
+        if risk_points:
+            risk_text = "；".join(str(point) for point in risk_points[:3])
+            main_risk = (
+                f"{stock.name}({stock.code}) 需要重点留意的风险线索包括：{risk_text}。"
+                "以上来自最近一次 AI 诊断的风险维度拆解，仅供研究参考，不构成投资建议。"
+            )
+        else:
+            main_risk = (
+                f"研究 {stock.name}({stock.code}) 时，常见需观察的风险线索包括：关键位置失守、"
+                "波动异常放大、量价背离、相对强弱走弱，以及事件扰动带来的不确定性。"
+                "请结合自身判断独立决策，市场有风险。"
+            )
+
+        data_updated = f"本页服务端 HTML 更新时间为 {updated_at}。"
+        if latest_date:
+            data_updated += f" 最近一次 AI 诊断沉淀日期为 {latest_date}。"
+        data_updated += " 实时诊股结果会随市场数据与模型分析即时更新。"
+
+        return [
+            {"question": f"{stock.name}股票怎么看？", "answer": how_to_read},
+            {"question": f"{stock.code}当前 AI 诊断关注什么？", "answer": diagnosis_focus},
+            {"question": "主要风险是什么？", "answer": main_risk},
+            {"question": "数据更新时间是什么？", "answer": data_updated},
+        ]
+
+    def _build_faq_json_ld(self, faq_entries: List[Dict[str, str]]) -> Dict[str, Any]:
+        return {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": [
+                {
+                    "@type": "Question",
+                    "name": entry["question"],
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": entry["answer"],
+                    },
+                }
+                for entry in faq_entries
+            ],
+        }
+
+    def _render_faq_section(self, faq_entries: List[Dict[str, str]]) -> str:
+        items = []
+        for entry in faq_entries:
+            items.append(
+                f'<article class="faq-item">'
+                f'<h3 class="faq-question">{self._escape(entry["question"])}</h3>'
+                f'<p class="faq-answer">{self._escape(entry["answer"])}</p>'
+                f"</article>"
+            )
+        return (
+            '<section class="faq-section" aria-labelledby="stock-faq-heading">'
+            '<h2 id="stock-faq-heading">常见问题</h2>'
+            f'<div class="faq-list">{"".join(items)}</div>'
+            "</section>"
+        )
+
+    def _parse_article_ai_insights(self, article: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        if not article:
+            return {}
+
+        raw = article.get("ai_score_json")
+        if not raw:
+            return {}
+
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else raw
+        except Exception:
+            return {}
+
+        if not isinstance(data, dict):
+            return {}
+
+        explain = data.get("explain") or {}
+        risk_evidence: List[str] = []
+        for dim in data.get("dimensions") or []:
+            if isinstance(dim, dict) and dim.get("id") == "risk":
+                evidence = dim.get("evidence") or []
+                if isinstance(evidence, list):
+                    risk_evidence = [str(item) for item in evidence if item]
+                break
+
+        overall = data.get("overall") or {}
+        return {
+            "one_liner": str(explain.get("one_liner") or "").strip(),
+            "risk_evidence": risk_evidence,
+            "overall_label": str(overall.get("label") or "").strip(),
+        }
 
     def _render_nav(self) -> str:
         return """<header class="nav-shell">
