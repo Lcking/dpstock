@@ -13,6 +13,31 @@ def _write_snapshot(snapshot_dir: Path, name: str, rows: list[dict]) -> None:
     )
 
 
+def test_search_snapshot_service_refreshes_when_snapshot_too_small(tmp_path, monkeypatch):
+    from services.search_snapshot_service import SearchSnapshotService, MIN_A_SHARE_SNAPSHOT_COUNT
+
+    _write_snapshot(
+        tmp_path,
+        "a_shares.json",
+        [{"symbol": f"{idx:06d}", "name": f"股票{idx}", "market": "A", "pinyin": "gp"}
+         for idx in range(1, 101)],
+    )
+    service = SearchSnapshotService(snapshot_dir=tmp_path)
+
+    def fake_get_a_share_list():
+        return [{"code": f"{idx:06d}", "name": f"股票{idx}", "pinyin": "gp"} for idx in range(1, 5001)]
+
+    monkeypatch.setattr(
+        "services.stock_data_provider.StockDataProvider.get_a_share_list",
+        lambda self: fake_get_a_share_list(),
+    )
+
+    count = service.ensure_a_share_snapshot(min_count=MIN_A_SHARE_SNAPSHOT_COUNT)
+
+    assert count == 5000
+    assert len(service._load_snapshot("A")) == 5000
+
+
 def test_search_snapshot_service_reads_local_a_hk_us_snapshots(tmp_path):
     from services.search_snapshot_service import SearchSnapshotService
 

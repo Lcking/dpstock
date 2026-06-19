@@ -70,23 +70,32 @@ def test_stock_landing_page_supports_more_hot_stocks():
             assert code in response.text
 
 
-def test_stock_index_page_lists_hot_stock_links():
+def test_stock_index_page_lists_hot_stock_links(monkeypatch):
+    from services.stock_page_service import StockPageInfo, StockPageService
+
+    sample_stocks = [
+        StockPageInfo(code=f"{idx:06d}", name=f"股票{idx}", market="A")
+        for idx in range(1, 251)
+    ]
+    monkeypatch.setattr(StockPageService, "list_a_share_stocks", lambda self, ensure_full=True: sample_stocks)
+
     with TestClient(app) as client:
         response = client.get("/stocks")
 
     assert response.status_code == 200
     html = response.text
-    assert "热门个股 AI 诊股清单" in html
-    assert "/stock/600519" in html
-    assert "贵州茅台" in html
-    assert "/stock/002594" in html
-    assert "比亚迪" in html
+    assert "A股个股 AI 诊股清单" in html
+    assert "共 250 只" in html
+    assert "/stock/000001" in html
+    assert "/stock/000200" in html
+    assert "/stock/000201" not in html
+    assert "第 1 / 2 页" in html
+    assert '/stocks?page=2"' in html
     assert "nav-shell" in html
     assert "stock-index-grid" in html
     assert "stock-index-item" in html
     assert "/risk-stocks" in html
     assert "风险股清单" in html
-    assert "article-card" not in html[html.index("热门股票列表"):]
 
 
 def test_sitemap_includes_stock_index_and_hot_stock_pages():

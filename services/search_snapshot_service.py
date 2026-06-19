@@ -9,6 +9,8 @@ from utils.logger import get_logger
 
 logger = get_logger()
 
+MIN_A_SHARE_SNAPSHOT_COUNT = 4500
+
 POPULAR_HK_STOCKS = [
     ("00700", "腾讯控股"), ("00388", "香港交易所"), ("00939", "建设银行"),
     ("00941", "中国移动"), ("01299", "友邦保险"), ("02318", "中国平安"),
@@ -108,6 +110,16 @@ class SearchSnapshotService:
         self._cache[market] = normalized_rows
         self._cache_mtime[market] = mtime
         return normalized_rows
+
+    def ensure_a_share_snapshot(self, min_count: int = MIN_A_SHARE_SNAPSHOT_COUNT) -> int:
+        """Refresh A-share snapshot when cached list is missing or too small."""
+        current = self._load_snapshot("A")
+        if len(current) >= min_count:
+            return len(current)
+        refreshed = self.refresh_a_share_snapshot()
+        if refreshed > 0:
+            return refreshed
+        return len(self._load_snapshot("A"))
 
     def refresh_a_share_snapshot(self) -> int:
         try:

@@ -699,10 +699,10 @@ async def stock_landing_page(stock_code: str):
 
 
 @app.get("/stocks")
-async def stock_index_page():
+async def stock_index_page(page: int = 1):
     from services.stock_page_service import StockPageService
 
-    html_content = StockPageService(base_url="https://aguai.net").render_stock_index_page()
+    html_content = StockPageService(base_url="https://aguai.net").render_stock_index_page(page=page)
     return Response(
         content=html_content,
         media_type="text/html",

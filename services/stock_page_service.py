@@ -159,11 +159,64 @@ class StockPageService:
             return hot
         return self._resolve_from_snapshot(normalized)
 
+    def list_a_share_stocks(self, ensure_full: bool = True) -> List[StockPageInfo]:
+        try:
+            from services.search_snapshot_service import SearchSnapshotService
+
+            snapshot_service = SearchSnapshotService()
+            if ensure_full:
+                snapshot_service.ensure_a_share_snapshot()
+            rows = snapshot_service._load_snapshot("A")
+            if len(rows) < 100:
+                rows = self._fetch_a_share_rows_live()
+            stocks = []
+            seen = set()
+            for row in rows:
+                code = self.normalize_code(row.get("symbol"))
+                name = str(row.get("name") or "").strip()
+                if not code or not name or code in seen:
+                    continue
+                seen.add(code)
+                stocks.append(StockPageInfo(code=code, name=name, market="A"))
+            stocks.sort(key=lambda item: item.code)
+            return stocks
+        except Exception:
+            return self._list_a_share_stocks_from_provider()
+
+    def _fetch_a_share_rows_live(self) -> List[Dict[str, str]]:
+        return [
+            {"symbol": row["code"], "name": row["name"]}
+            for row in self._list_a_share_provider_rows()
+        ]
+
+    def _list_a_share_provider_rows(self) -> List[Dict[str, str]]:
+        try:
+            from services.stock_data_provider import StockDataProvider
+
+            return StockDataProvider().get_a_share_list()
+        except Exception:
+            return []
+
+    def _list_a_share_stocks_from_provider(self) -> List[StockPageInfo]:
+        stocks = []
+        seen = set()
+        for row in self._list_a_share_provider_rows():
+            code = self.normalize_code(row.get("code") or row.get("symbol"))
+            name = str(row.get("name") or "").strip()
+            if not code or not name or code in seen:
+                continue
+            seen.add(code)
+            stocks.append(StockPageInfo(code=code, name=name, market="A"))
+        stocks.sort(key=lambda item: item.code)
+        return stocks
+
     def _resolve_from_snapshot(self, stock_code: str) -> Optional[StockPageInfo]:
         try:
             from services.search_snapshot_service import SearchSnapshotService
 
-            rows = SearchSnapshotService()._load_snapshot("A")
+            snapshot_service = SearchSnapshotService()
+            snapshot_service.ensure_a_share_snapshot()
+            rows = snapshot_service._load_snapshot("A")
             for row in rows:
                 symbol = self.normalize_code(row.get("symbol"))
                 if symbol == stock_code:
@@ -176,24 +229,6 @@ class StockPageService:
 
     def list_hot_stocks(self) -> List[StockPageInfo]:
         return list(self.HOT_STOCKS.values())
-
-    def list_a_share_stocks(self) -> List[StockPageInfo]:
-        try:
-            from services.search_snapshot_service import SearchSnapshotService
-
-            rows = SearchSnapshotService()._load_snapshot("A")
-            stocks = []
-            seen = set()
-            for row in rows:
-                code = self.normalize_code(row.get("symbol"))
-                name = str(row.get("name") or "").strip()
-                if not code or not name or code in seen:
-                    continue
-                seen.add(code)
-                stocks.append(StockPageInfo(code=code, name=name, market="A"))
-            return stocks
-        except Exception:
-            return []
 
     async def render_stock_page(self, stock_code: str) -> Optional[str]:
         stock = self.get_stock(stock_code)
@@ -465,17 +500,28 @@ class StockPageService:
 </body>
 </html>"""
 
-    def render_stock_index_page(self) -> str:
-        title = "热门个股 AI 诊股清单 - Agu AI"
-        description = "Agu AI 热门个股 AI 诊股清单，聚合 A 股核心资产的结构、趋势、相对强弱和风险线索分析入口。"
-        canonical_url = f"{self.base_url}/stocks"
+    def render_stock_index_page(self, page: int = 1, per_page: int = 200) -> str:
+        all_stocks = self.list_a_share_stocks()
+        total = len(all_stocks)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * per_page
+        page_stocks = all_stocks[start : start + per_page]
+
+        title = "A股个股 AI 诊股清单 - Agu AI"
+        description = (
+            f"Agu AI A股个股 AI 诊股清单，覆盖 {total} 只 A 股的服务端落地页入口，"
+            "便于搜索引擎和用户发现每只股票的 AI 诊股页面。"
+        )
+        canonical_url = f"{self.base_url}/stocks" if page == 1 else f"{self.base_url}/stocks?page={page}"
         stock_links = "\n".join(
             f'<li class="stock-index-item"><a class="stock-index-link" href="/stock/{self._escape(stock.code)}">'
             f'<span class="stock-index-name">{self._escape(stock.name)}</span>'
             f'<span class="stock-index-code">{self._escape(stock.code)}</span>'
             f'</a></li>'
-            for stock in self.list_hot_stocks()
+            for stock in page_stocks
         )
+        pagination_links = self._render_stock_index_pagination(page, total_pages)
         json_ld = {
             "@context": "https://schema.org",
             "@type": "CollectionPage",
@@ -509,16 +555,17 @@ class StockPageService:
   {self._render_nav()}
   <main class="page">
     <header class="hero">
-      <div class="eyebrow">A股 · 热门个股</div>
-      <h1>热门个股 AI 诊股清单</h1>
-      <p>这里聚合 Agu AI 当前开放的热门个股服务端落地页，方便搜索引擎和用户发现每只股票的 AI 诊股入口。</p>
+      <div class="eyebrow">A股 · 全市场个股</div>
+      <h1>A股个股 AI 诊股清单</h1>
+      <p>这里聚合 Agu AI 当前开放的 A 股个股服务端落地页，共 {total} 只，方便搜索引擎和用户发现每只股票的 AI 诊股入口。</p>
       <p>也可查看 <a href="/risk-stocks">每日风险股清单</a>，聚焦 ST 股与三连板及以上高波动标的。</p>
       <a class="cta" href="/">返回首页实时诊股</a>
     </header>
     <section>
-      <h2>热门股票列表</h2>
-      <p class="section-hint">紧凑展示当前开放的热门个股入口；所有链接均为服务端 HTML 页面，便于用户浏览和搜索引擎抓取。</p>
+      <h2>个股列表</h2>
+      <p class="section-hint">第 {page} / {total_pages} 页，本页展示 {len(page_stocks)} 只个股入口；所有链接均为服务端 HTML 页面，便于用户浏览和搜索引擎抓取。</p>
       <ul class="stock-index-grid">{stock_links}</ul>
+      {pagination_links}
     </section>
     <section>
       <h2>风险提示</h2>
@@ -527,6 +574,19 @@ class StockPageService:
   </main>
 </body>
 </html>"""
+
+    def _render_stock_index_pagination(self, page: int, total_pages: int) -> str:
+        if total_pages <= 1:
+            return ""
+        links = []
+        if page > 1:
+            prev_page = page - 1
+            prev_href = "/stocks" if prev_page == 1 else f"/stocks?page={prev_page}"
+            links.append(f'<a class="stock-index-page-link" href="{prev_href}">上一页</a>')
+        links.append(f'<span class="stock-index-page-status">第 {page} / {total_pages} 页</span>')
+        if page < total_pages:
+            links.append(f'<a class="stock-index-page-link" href="/stocks?page={page + 1}">下一页</a>')
+        return f'<nav class="stock-index-pagination" aria-label="分页">{" ".join(links)}</nav>'
 
     async def _get_recent_articles(self, stock: StockPageInfo) -> List[Dict[str, Any]]:
         try:
@@ -865,6 +925,27 @@ class StockPageService:
       color: #667085;
       font-size: 12px;
       font-variant-numeric: tabular-nums;
+    }
+    .stock-index-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+    .stock-index-page-link {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(61, 91, 204, 0.14);
+      background: rgba(255, 255, 255, 0.9);
+      font-weight: 600;
+    }
+    .stock-index-page-status {
+      color: #667085;
+      font-size: 14px;
     }
     .disclaimer {
       color: #6b7280;
