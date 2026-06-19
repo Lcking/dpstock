@@ -68,7 +68,26 @@ class RiskStockService:
                 )
             conn.commit()
 
-        return {"trade_date": trade_date, "count": len(items)}
+        result = {"trade_date": trade_date, "count": len(items)}
+        result.update(self._sync_watchlist_alerts(trade_date))
+        return result
+
+    def _sync_watchlist_alerts(self, trade_date: Optional[str]) -> Dict[str, Any]:
+        if not trade_date:
+            return {"alerts_created": 0, "alerts_matched_users": 0}
+        try:
+            from services.watchlist_risk_alert_service import WatchlistRiskAlertService
+
+            alert_result = WatchlistRiskAlertService().sync_alerts_for_trade_date(
+                trade_date=trade_date
+            )
+            return {
+                "alerts_created": alert_result.get("created", 0),
+                "alerts_matched_users": alert_result.get("matched_users", 0),
+            }
+        except Exception as exc:
+            logger.warning(f"[RiskStockService] watchlist alert sync failed: {exc}")
+            return {"alerts_created": 0, "alerts_matched_users": 0}
 
     def get_latest_trade_date(self) -> Optional[str]:
         with self.db.get_connection() as conn:
@@ -81,16 +100,7 @@ class RiskStockService:
         effective_date, rows = self.collector.collect_rows(trade_date=trade_date)
         result = self.refresh_from_rows(effective_date, rows, source=source)
         result["source_rows"] = len(rows)
-        try:
-            from services.watchlist_risk_alert_service import WatchlistRiskAlertService
-
-            alert_result = WatchlistRiskAlertService().sync_alerts_for_trade_date(
-                trade_date=result.get("trade_date")
-            )
-            result["alerts_created"] = alert_result.get("created", 0)
-        except Exception as exc:
-            logger.warning(f"[RiskStockService] watchlist alert sync failed: {exc}")
-            result["alerts_created"] = 0
+        result.update(self._sync_watchlist_alerts(result.get("trade_date")))
         logger.info(
             f"[RiskStockService] refreshed trade_date={result.get('trade_date')} "
             f"classified={result.get('count')} source_rows={len(rows)}"

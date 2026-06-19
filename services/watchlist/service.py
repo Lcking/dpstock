@@ -643,7 +643,8 @@ class WatchlistService:
             score = self._calc_structure_score(item)
             scores.append(score)
 
-            is_high_risk = item.risk.level == "high" or item.events.flag == "major"
+            # Keep high_risk_count aligned with the table "风险" column (risk.level only).
+            is_high_risk = item.risk.level == "high"
             is_strong = (item.trend.direction == "up" and item.risk.level != "high") or item.relative_strength.label_20d == "strong"
             is_weak = item.trend.direction == "down" or item.relative_strength.label_20d == "weak"
 

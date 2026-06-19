@@ -84,8 +84,10 @@ class RiskStockScheduler:
             latest = service.get_latest_trade_date()
             expected_date = trade_date or service.collector._resolve_trade_date()
             if latest and latest >= expected_date:
+                alert_result = service._sync_watchlist_alerts(latest)
                 logger.info(
-                    f"[RiskStockScheduler] Latest risk stock data already present: {latest} (expected={expected_date})"
+                    f"[RiskStockScheduler] Latest risk stock data already present: {latest} "
+                    f"(expected={expected_date}) alerts_created={alert_result.get('alerts_created', 0)}"
                 )
                 return latest
 

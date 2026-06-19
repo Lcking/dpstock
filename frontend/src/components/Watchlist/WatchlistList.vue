@@ -101,7 +101,12 @@
         <div class="health-overview-main">
           <div class="health-label">自选健康度</div>
           <div class="health-score">{{ healthOverview.health_score }}</div>
-          <n-tag :type="healthLabelType(healthOverview.label)" size="small" :bordered="false">
+          <n-tag
+            class="health-status-tag"
+            :type="healthLabelType(healthOverview.label)"
+            size="small"
+            :bordered="false"
+          >
             {{ healthOverview.label }}
           </n-tag>
         </div>
@@ -114,7 +119,10 @@
             <span class="metric-value weak">{{ healthOverview.weak_count }}</span>
             <span class="metric-label">弱势</span>
           </div>
-          <div class="health-metric">
+          <div
+            class="health-metric"
+            :class="{ 'health-metric--highlight': healthOverview.high_risk_count > 0 }"
+          >
             <span class="metric-value risk">{{ healthOverview.high_risk_count }}</span>
             <span class="metric-label">高风险</span>
           </div>
@@ -356,10 +364,18 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
   {
     title: '风险',
     key: 'risk',
-    width: 70,
+    width: 90,
     align: 'center',
     render(row) {
-      return h(NTag, { type: riskTypeMap[row.risk.level], size: 'small', bordered: false }, () => riskMap[row.risk.level])
+      const children = [
+        h(NTag, { type: riskTypeMap[row.risk.level], size: 'small', bordered: false }, () => riskMap[row.risk.level]),
+      ]
+      if (row.events.flag === 'major') {
+        children.push(
+          h(NTag, { type: 'warning', size: 'small', bordered: false }, () => '事件'),
+        )
+      }
+      return h('div', { class: 'cell-risk' }, children)
     },
   },
   {
@@ -543,8 +559,12 @@ const handleBindSuccess = async () => {
 }
 
 async function loadRiskAlerts() {
-  const response = await apiService.getWatchlistRiskAlerts({ unread_only: true, limit: 10 })
-  riskAlerts.value = response.items
+  try {
+    const response = await apiService.getWatchlistRiskAlerts({ unread_only: true, limit: 10 })
+    riskAlerts.value = response.items
+  } catch (error) {
+    console.error('Load risk alerts error:', error)
+  }
 }
 
 function goRiskStocks() {
@@ -563,15 +583,15 @@ async function markRiskAlertsRead() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   applyPageSeo({
     title: '我的观察 | Agu AI',
     description: '查看你的自选股观察列表与跟踪状态。',
     canonicalPath: '/watchlist',
     robots: 'noindex, nofollow',
   })
-  initWatchlist()
-  loadRiskAlerts()
+  await initWatchlist()
+  await loadRiskAlerts()
 })
 </script>
 
@@ -690,9 +710,10 @@ onMounted(() => {
 
 .health-overview-main {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 180px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 120px;
 }
 
 .health-label {
@@ -701,10 +722,14 @@ onMounted(() => {
 }
 
 .health-score {
-  font-size: 26px;
+  font-size: 32px;
   line-height: 1;
   font-weight: 800;
   color: var(--n-text-color);
+}
+
+.health-status-tag {
+  margin-top: 2px;
 }
 
 .health-metrics {
@@ -722,6 +747,11 @@ onMounted(() => {
   padding: 8px;
   border-radius: 10px;
   background: var(--n-color);
+}
+
+.health-metric--highlight {
+  background: rgba(208, 48, 80, 0.08);
+  border: 1px solid rgba(208, 48, 80, 0.22);
 }
 
 .metric-value {
@@ -819,6 +849,13 @@ onMounted(() => {
 :deep(.cell-na) {
   font-size: 12px;
   color: var(--n-text-color-3);
+}
+
+:deep(.cell-risk) {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 :deep(.cell-actions) {

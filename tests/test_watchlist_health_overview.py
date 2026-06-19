@@ -54,6 +54,31 @@ def test_watchlist_health_overview_counts_strength_risk_and_watch_items():
     assert overview.label in {"偏强", "均衡", "偏弱", "风险偏高"}
 
 
+def test_watchlist_health_overview_major_event_does_not_count_as_high_risk():
+    service = WatchlistService()
+    items = [
+        _item("risk", "sideways", 45, "neutral", "high"),
+        WatchlistItemSummary(
+            ts_code="event_only",
+            name="event_only",
+            asof="2026-06-18",
+            price=10.0,
+            change_pct=None,
+            trend=TrendResult(direction="sideways", strength=50, degraded=False, evidence=[]),
+            relative_strength=RelativeStrengthSummary(label_20d="neutral"),
+            capital_flow=CapitalFlowSummary(label="中性", available=True, degraded=False),
+            risk=RiskSummary(level="medium"),
+            events=EventSummary(flag="major", available=True),
+            judgement=JudgementSummary(has_active=False),
+        ),
+    ]
+
+    overview = service._build_health_overview(items)
+
+    assert overview.high_risk_count == 1
+    assert overview.watch_count == 1
+
+
 def test_watchlist_health_overview_assigns_each_stock_to_one_bucket():
     service = WatchlistService()
     items = [
