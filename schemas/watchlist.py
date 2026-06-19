@@ -9,6 +9,13 @@ from datetime import datetime
 from services.trend.schemas import TrendResult
 
 
+class IndustryExposureItem(BaseModel):
+    """单行业暴露（等权假设：每只自选股权重相同）"""
+    industry: str
+    count: int = Field(ge=0)
+    weight_pct: float = Field(ge=0, le=100)
+
+
 class RelativeStrengthSummary(BaseModel):
     """相对强弱摘要 (RS)"""
     excess_20d_vs_000300: Optional[float] = Field(None, description="20日超额收益 vs 沪深300")
@@ -83,6 +90,10 @@ class WatchlistHealthOverview(BaseModel):
     health_score: int = Field(0, ge=0, le=100)
     label: Literal["偏强", "均衡", "偏弱", "风险偏高"] = "均衡"
     summary_line: str = ""
+    industry_count: int = 0
+    top_industries: List[IndustryExposureItem] = Field(default_factory=list)
+    concentration_level: Literal["分散", "中等", "偏高"] = "分散"
+    concentration_note: str = ""
 
 
 class Watchlist(BaseModel):

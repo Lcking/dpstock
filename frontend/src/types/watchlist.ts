@@ -55,6 +55,12 @@ export interface WatchlistItemSummary {
     judgement: JudgementSummary
 }
 
+export interface IndustryExposureItem {
+    industry: string
+    count: number
+    weight_pct: number
+}
+
 export interface WatchlistHealthOverview {
     total_count: number
     strong_count: number
@@ -65,6 +71,10 @@ export interface WatchlistHealthOverview {
     health_score: number
     label: '偏强' | '均衡' | '偏弱' | '风险偏高'
     summary_line: string
+    industry_count: number
+    top_industries: IndustryExposureItem[]
+    concentration_level: '分散' | '中等' | '偏高'
+    concentration_note: string
 }
 
 export interface WatchlistSummary {

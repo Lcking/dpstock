@@ -4,13 +4,13 @@ Watchlist Service
 """
 import uuid
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from database.db_factory import DatabaseFactory
 from schemas.watchlist import (
     Watchlist, WatchlistCreate, WatchlistItemSummary,
     RelativeStrengthSummary, CapitalFlowSummary, RiskSummary,
     EventSummary, JudgementSummary, WatchlistSummaryResponse,
-    WatchlistHealthOverview
+    WatchlistHealthOverview, IndustryExposureItem,
 )
 from services.user_service import UserService
 from services.trend import trend_calculator, TrendInput, TrendResult
@@ -667,6 +667,9 @@ class WatchlistService:
             label = "偏强"
         else:
             label = "均衡"
+        industry_count, top_industries, concentration_level, concentration_note = (
+            self._build_industry_exposure(items)
+        )
         summary_line = self._build_health_summary_line(
             label=label,
             total=total,
@@ -674,6 +677,7 @@ class WatchlistService:
             weak_count=weak_count,
             high_risk_count=high_risk_count,
             active_judgment_count=active_judgment_count,
+            concentration_note=concentration_note,
         )
 
         return WatchlistHealthOverview(
@@ -686,7 +690,60 @@ class WatchlistService:
             health_score=max(0, min(100, health_score)),
             label=label,
             summary_line=summary_line,
+            industry_count=industry_count,
+            top_industries=top_industries,
+            concentration_level=concentration_level,
+            concentration_note=concentration_note,
         )
+
+    def _build_industry_exposure(self, items: List[WatchlistItemSummary]) -> tuple[
+        int, List[IndustryExposureItem], Literal["分散", "中等", "偏高"], str
+    ]:
+        from services.a_share_industry_lookup import AShareIndustryLookup
+
+        total = len(items)
+        if total == 0:
+            return 0, [], "分散", ""
+
+        counts: Dict[str, int] = {}
+        unknown_count = 0
+        for item in items:
+            industry = AShareIndustryLookup.lookup(item.ts_code)
+            if not industry:
+                unknown_count += 1
+                industry = "未分类"
+            counts[industry] = counts.get(industry, 0) + 1
+
+        ranked = sorted(counts.items(), key=lambda pair: pair[1], reverse=True)
+        top_industries = [
+            IndustryExposureItem(
+                industry=name,
+                count=count,
+                weight_pct=round(count / total * 100, 1),
+            )
+            for name, count in ranked[:3]
+        ]
+        industry_count = len(ranked) - (1 if "未分类" in counts else 0)
+        top_name, top_count = ranked[0]
+        top_weight = top_count / total * 100
+
+        if top_weight >= 50:
+            concentration_level = "偏高"
+        elif top_weight >= 35 or (len(ranked) <= 2 and total >= 4):
+            concentration_level = "中等"
+        else:
+            concentration_level = "分散"
+
+        concentration_note = ""
+        if top_name != "未分类" and concentration_level != "分散":
+            concentration_note = (
+                f"{top_name}行业占 {round(top_weight, 1)}%，"
+                f"组合行业集中度{concentration_level}。"
+            )
+        elif unknown_count >= max(2, total // 2):
+            concentration_note = f"{unknown_count} 只标的暂无行业分类，集中度仅供参考。"
+
+        return industry_count, top_industries, concentration_level, concentration_note
     
     def _build_health_summary_line(
         self,
@@ -697,6 +754,7 @@ class WatchlistService:
         weak_count: int,
         high_risk_count: int,
         active_judgment_count: int,
+        concentration_note: str = "",
     ) -> str:
         if total <= 0:
             return "暂无自选标的，添加后可查看组合健康度。"
@@ -709,6 +767,8 @@ class WatchlistService:
             parts.append(f"强势标的 {strong_count} 只，结构相对占优。")
         if active_judgment_count > 0:
             parts.append(f"另有 {active_judgment_count} 只处于判断追踪中。")
+        if concentration_note:
+            parts.append(concentration_note)
         return "".join(parts)
 
     def _apply_filters(

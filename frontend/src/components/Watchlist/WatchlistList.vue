@@ -138,6 +138,37 @@
             <span class="metric-label">追踪中</span>
           </div>
         </div>
+        <div
+          v-if="healthOverview.top_industries.length > 0"
+          class="health-exposure-panel"
+        >
+          <div class="health-exposure-header">
+            <span class="health-exposure-title">行业暴露</span>
+            <n-tag
+              size="small"
+              :type="concentrationTagType(healthOverview.concentration_level)"
+              :bordered="false"
+            >
+              集中度 {{ healthOverview.concentration_level }}
+            </n-tag>
+            <span v-if="healthOverview.industry_count > 0" class="health-exposure-meta">
+              覆盖 {{ healthOverview.industry_count }} 个行业
+            </span>
+          </div>
+          <div class="health-exposure-list">
+            <div
+              v-for="item in healthOverview.top_industries"
+              :key="item.industry"
+              class="health-exposure-item"
+            >
+              <span class="exposure-industry">{{ item.industry }}</span>
+              <span class="exposure-weight">{{ item.count }} 只 · {{ item.weight_pct }}%</span>
+            </div>
+          </div>
+          <p v-if="healthOverview.concentration_note" class="health-exposure-note">
+            {{ healthOverview.concentration_note }}
+          </p>
+        </div>
       </div>
 
       <n-data-table
@@ -281,6 +312,13 @@ function healthLabelType(label: string): 'success' | 'warning' | 'error' | 'info
   if (label === '偏强') return 'success'
   if (label === '偏弱') return 'warning'
   if (label === '风险偏高') return 'error'
+  return 'info'
+}
+
+function concentrationTagType(level: string): 'success' | 'warning' | 'error' | 'info' {
+  if (level === '分散') return 'success'
+  if (level === '中等') return 'warning'
+  if (level === '偏高') return 'error'
   return 'info'
 }
 
@@ -701,6 +739,7 @@ onMounted(async () => {
 
 .health-overview-panel {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 14px;
@@ -763,6 +802,66 @@ onMounted(async () => {
 .health-metric--highlight {
   background: rgba(208, 48, 80, 0.08);
   border: 1px solid rgba(208, 48, 80, 0.22);
+}
+
+.health-exposure-panel {
+  flex-basis: 100%;
+  width: 100%;
+  margin-top: 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(91, 103, 241, 0.1);
+}
+
+.health-exposure-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.health-exposure-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--n-text-color);
+}
+
+.health-exposure-meta {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.health-exposure-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.health-exposure-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.12);
+}
+
+.exposure-industry {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.exposure-weight {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.health-exposure-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--n-text-color-3);
 }
 
 .metric-value {
