@@ -440,6 +440,17 @@ export const apiService = {
     return response.data;
   },
 
+  updateWatchlistSymbolWeight: async (
+    watchlistId: string,
+    tsCode: string,
+    weightPct: number | null,
+  ) => {
+    const response = await axiosInstance.patch(`/watchlists/${watchlistId}/symbols/${tsCode}/weight`, {
+      weight_pct: weightPct,
+    });
+    return response.data;
+  },
+
   getWatchlistRiskAlertUnreadCount: async (): Promise<number> => {
     try {
       const response = await axiosInstance.get('/watchlists/risk-alerts/unread-count');

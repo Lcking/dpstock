@@ -105,16 +105,17 @@ def test_watchlist_health_overview_assigns_each_stock_to_one_bucket():
 def test_watchlist_health_overview_builds_industry_exposure_and_concentration(monkeypatch):
     from services.a_share_industry_lookup import AShareIndustryLookup
 
+    industry_map = {
+        "600519": "白酒",
+        "000001": "银行",
+        "300750": "电气设备",
+        "601318": "保险",
+        "002594": "汽车",
+    }
     monkeypatch.setattr(
         AShareIndustryLookup,
         "lookup",
-        classmethod(lambda cls, ts_code: {
-            "600519": "白酒",
-            "000001": "银行",
-            "300750": "白酒",
-            "601318": "保险",
-            "002594": "白酒",
-        }.get(ts_code, "电子")),
+        classmethod(lambda cls, ts_code: industry_map.get(ts_code.split(".")[0], None)),
     )
 
     service = WatchlistService()
@@ -123,15 +124,46 @@ def test_watchlist_health_overview_builds_industry_exposure_and_concentration(mo
         _item("300750", "up", 75, "strong", "low"),
         _item("002594", "sideways", 55, "neutral", "medium"),
         _item("000001", "sideways", 50, "neutral", "low"),
-        _item("601318", "down", 30, "weak", "medium"),
     ]
 
     overview = service._build_health_overview(items)
 
-    assert overview.industry_count == 3
+    assert overview.industry_count == 4
+    assert len(overview.top_industries) == 4
+    industries = {item.industry for item in overview.top_industries}
+    assert "白酒" in industries
+    assert overview.concentration_level == "分散"
+
+
+def test_watchlist_health_overview_uses_position_weights_for_concentration(monkeypatch):
+    from services.a_share_industry_lookup import AShareIndustryLookup
+
+    monkeypatch.setattr(
+        AShareIndustryLookup,
+        "lookup",
+        classmethod(lambda cls, ts_code: {
+            "600519": "白酒",
+            "000001": "银行",
+            "300750": "白酒",
+        }.get(ts_code, "其他")),
+    )
+
+    service = WatchlistService()
+    items = [
+        _item("600519", "up", 80, "strong", "low"),
+        _item("300750", "up", 75, "strong", "low"),
+        _item("000001", "sideways", 50, "neutral", "low"),
+    ]
+    weights = {
+        "600519": 50.0,
+        "300750": 30.0,
+        "000001": 20.0,
+    }
+
+    overview = service._build_health_overview(items, weights)
+
+    assert overview.uses_position_weights is True
     assert overview.top_industries[0].industry == "白酒"
-    assert overview.top_industries[0].count == 3
-    assert overview.top_industries[0].weight_pct == 60.0
+    assert overview.top_industries[0].weight_pct == 80.0
     assert overview.concentration_level == "偏高"
-    assert "白酒" in overview.concentration_note
-    assert "集中度偏高" in overview.summary_line
+    assert "持仓权重" in overview.concentration_note

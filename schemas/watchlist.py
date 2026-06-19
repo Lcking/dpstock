@@ -77,6 +77,7 @@ class WatchlistItemSummary(BaseModel):
     risk: RiskSummary
     events: EventSummary
     judgement: JudgementSummary
+    weight_pct: Optional[float] = Field(None, ge=0, le=100, description="用户设定持仓权重%")
 
 
 class WatchlistHealthOverview(BaseModel):
@@ -94,6 +95,7 @@ class WatchlistHealthOverview(BaseModel):
     top_industries: List[IndustryExposureItem] = Field(default_factory=list)
     concentration_level: Literal["分散", "中等", "偏高"] = "分散"
     concentration_note: str = ""
+    uses_position_weights: bool = False
 
 
 class Watchlist(BaseModel):
@@ -121,6 +123,11 @@ class WatchlistUpdate(BaseModel):
 class WatchlistAddSymbols(BaseModel):
     """添加标的请求"""
     ts_codes: List[str] = Field(..., min_length=1, max_length=50)
+
+
+class WatchlistSymbolWeightUpdate(BaseModel):
+    """更新单只标的持仓权重（百分比，留空表示恢复等权）"""
+    weight_pct: Optional[float] = Field(None, ge=0, le=100)
 
 
 class WatchlistSummaryRequest(BaseModel):

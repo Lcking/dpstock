@@ -153,6 +153,8 @@
             </n-tag>
             <span v-if="healthOverview.industry_count > 0" class="health-exposure-meta">
               覆盖 {{ healthOverview.industry_count }} 个行业
+              <template v-if="healthOverview.uses_position_weights"> · 按持仓权重</template>
+              <template v-else> · 按等权</template>
             </span>
           </div>
           <div class="health-exposure-list">
@@ -248,7 +250,7 @@ import { ref, computed, h, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NButton, NIcon, NText, NModal, NForm, NFormItem,
-  NInput, NSpace, NAlert, NDataTable, NTag, useMessage, useDialog,
+  NInput, NSpace, NAlert, NDataTable, NTag, NInputNumber, useMessage, useDialog,
   type DataTableColumns, type DataTableRowKey
 } from 'naive-ui'
 import { AddCircleOutline } from '@vicons/ionicons5'
@@ -329,6 +331,34 @@ function flowTagType(label: string) {
   return 'info'
 }
 
+const savingWeightCode = ref<string | null>(null)
+const weightDrafts = ref<Record<string, number | null>>({})
+
+function getWeightDraft(row: WatchlistItemSummary): number | null {
+  if (row.ts_code in weightDrafts.value) {
+    return weightDrafts.value[row.ts_code]
+  }
+  return row.weight_pct ?? null
+}
+
+async function handleWeightUpdate(row: WatchlistItemSummary, value: number | null) {
+  if (!watchlistId.value) return
+  if (row.weight_pct === value || (row.weight_pct == null && value == null)) {
+    return
+  }
+  savingWeightCode.value = row.ts_code
+  try {
+    await apiService.updateWatchlistSymbolWeight(watchlistId.value, row.ts_code, value)
+    delete weightDrafts.value[row.ts_code]
+    await loadSummary()
+  } catch (error) {
+    console.error('Update weight error:', error)
+    message.error('权重保存失败')
+  } finally {
+    savingWeightCode.value = null
+  }
+}
+
 const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
   { type: 'selection', fixed: 'left', width: 40 },
   {
@@ -344,6 +374,29 @@ const tableColumns = computed<DataTableColumns<WatchlistItemSummary>>(() => [
         h('span', { class: 'cell-stock-name' }, displayName || codeOnly),
         h('span', { class: 'cell-stock-code' }, displayName ? codeOnly : ''),
       ])
+    },
+  },
+  {
+    title: '权重%',
+    key: 'weight_pct',
+    width: 96,
+    align: 'center',
+    render(row) {
+      return h(NInputNumber, {
+        size: 'small',
+        min: 0,
+        max: 100,
+        step: 1,
+        placeholder: '均分',
+        value: getWeightDraft(row),
+        loading: savingWeightCode.value === row.ts_code,
+        showButton: false,
+        style: 'width: 72px',
+        onUpdateValue: (value: number | null) => {
+          weightDrafts.value[row.ts_code] = value
+        },
+        onBlur: () => handleWeightUpdate(row, getWeightDraft(row)),
+      })
     },
   },
   {

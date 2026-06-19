@@ -53,6 +53,7 @@ export interface WatchlistItemSummary {
     risk: RiskSummary
     events: EventSummary
     judgement: JudgementSummary
+    weight_pct?: number | null
 }
 
 export interface IndustryExposureItem {
@@ -75,6 +76,7 @@ export interface WatchlistHealthOverview {
     top_industries: IndustryExposureItem[]
     concentration_level: '分散' | '中等' | '偏高'
     concentration_note: string
+    uses_position_weights: boolean
 }
 
 export interface WatchlistSummary {

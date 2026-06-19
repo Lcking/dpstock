@@ -8,7 +8,7 @@ from typing import Optional, List
 from auth.dependencies import get_current_user, UserContext
 from schemas.watchlist import (
     Watchlist, WatchlistCreate, WatchlistUpdate,
-    WatchlistAddSymbols, WatchlistSummaryResponse,
+    WatchlistAddSymbols, WatchlistSummaryResponse, WatchlistSymbolWeightUpdate,
 )
 from services.watchlist import watchlist_service
 from services.watchlist_risk_alert_service import WatchlistRiskAlertService
@@ -139,6 +139,29 @@ async def remove_symbol(
         raise
     except Exception as e:
         logger.error(f"Error removing symbol: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{watchlist_id}/symbols/{ts_code}/weight")
+async def update_symbol_weight(
+    watchlist_id: str,
+    ts_code: str,
+    data: WatchlistSymbolWeightUpdate,
+    user: UserContext = Depends(get_current_user),
+):
+    try:
+        updated = watchlist_service.update_symbol_weight(
+            watchlist_id,
+            ts_code,
+            data.weight_pct,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Symbol not found")
+        return {"updated": True, "weight_pct": data.weight_pct}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating symbol weight: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

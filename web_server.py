@@ -101,6 +101,16 @@ async def startup_event():
 
     asyncio.create_task(_refresh_search_snapshot_background())
     asyncio.create_task(_refresh_risk_stocks_background())
+    asyncio.create_task(_preload_industry_map_background())
+
+
+async def _preload_industry_map_background():
+    try:
+        from services.a_share_industry_lookup import AShareIndustryLookup
+
+        await asyncio.to_thread(AShareIndustryLookup.get_map)
+    except Exception as e:
+        logger.warning(f"[Startup] Failed to preload industry map: {e}")
 
 
 async def _refresh_risk_stocks_background():

@@ -3,8 +3,9 @@ Watchlist Service
 自选股列表服务 - 核心业务逻辑
 """
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any, Literal, Tuple
 from database.db_factory import DatabaseFactory
 from schemas.watchlist import (
     Watchlist, WatchlistCreate, WatchlistItemSummary,
@@ -207,6 +208,58 @@ class WatchlistService:
         
         return removed
     
+    def get_watchlist_item_weights(self, watchlist_id: str) -> Dict[str, Optional[float]]:
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT ts_code, weight_pct
+                FROM watchlist_items
+                WHERE watchlist_id = ?
+                """,
+                (watchlist_id,),
+            )
+            rows = cursor.fetchall()
+        weights: Dict[str, Optional[float]] = {}
+        for row in rows:
+            ts_code = self._normalize_ts_code(str(row.get("ts_code") or ""))
+            raw_weight = row.get("weight_pct")
+            if raw_weight is None:
+                weights[ts_code] = None
+            else:
+                try:
+                    weights[ts_code] = float(raw_weight)
+                except (TypeError, ValueError):
+                    weights[ts_code] = None
+        return weights
+
+    def update_symbol_weight(
+        self,
+        watchlist_id: str,
+        ts_code: str,
+        weight_pct: Optional[float],
+    ) -> bool:
+        normalized = self._normalize_ts_code(ts_code)
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE watchlist_items
+                SET weight_pct = ?
+                WHERE watchlist_id = ? AND ts_code = ?
+                """,
+                (weight_pct, watchlist_id, normalized),
+            )
+            updated = cursor.rowcount > 0
+            if updated:
+                now = datetime.utcnow().isoformat() + "Z"
+                cursor.execute(
+                    "UPDATE watchlists SET updated_at = ? WHERE id = ?",
+                    (now, watchlist_id),
+                )
+            conn.commit()
+        return updated
+
     def get_watchlist_items(self, watchlist_id: str) -> List[str]:
         """获取自选股列表中的所有标的代码"""
         with self.db.get_connection() as conn:
@@ -255,7 +308,10 @@ class WatchlistService:
             )
         
         # 批量生成摘要
+        weights_by_code = self.get_watchlist_item_weights(watchlist_id)
         summaries = self._batch_generate_summaries(ts_codes, asof)
+        for summary in summaries:
+            summary.weight_pct = weights_by_code.get(summary.ts_code)
         
         # 应用过滤
         filtered = self._apply_filters(summaries, filters or [])
@@ -269,7 +325,7 @@ class WatchlistService:
             items=sorted_items,
             total_count=len(ts_codes),
             filtered_count=len(sorted_items),
-            health_overview=self._build_health_overview(sorted_items),
+            health_overview=self._build_health_overview(sorted_items, weights_by_code),
             is_temporary=is_temporary,
             trial_message=trial_message,
         )
@@ -279,19 +335,29 @@ class WatchlistService:
         ts_codes: List[str], 
         asof: str
     ) -> List[WatchlistItemSummary]:
-        """批量生成摘要"""
-        summaries = []
-        
-        for ts_code in ts_codes:
-            try:
-                summary = self._generate_single_summary(ts_code, asof)
-                summaries.append(summary)
-            except Exception as e:
-                logger.error(f"Failed to generate summary for {ts_code}: {e}")
-                # 降级摘要
-                summaries.append(self._degraded_summary(ts_code, asof))
-        
-        return summaries
+        """批量生成摘要（并行拉取，保留原顺序）"""
+        if not ts_codes:
+            return []
+        if len(ts_codes) == 1:
+            return [self._generate_single_summary(ts_codes[0], asof)]
+
+        max_workers = min(4, len(ts_codes))
+        results_by_code: Dict[str, WatchlistItemSummary] = {}
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self._generate_single_summary, ts_code, asof): ts_code
+                for ts_code in ts_codes
+            }
+            for future in as_completed(futures):
+                ts_code = futures[future]
+                try:
+                    results_by_code[ts_code] = future.result()
+                except Exception as e:
+                    logger.error(f"Failed to generate summary for {ts_code}: {e}")
+                    results_by_code[ts_code] = self._degraded_summary(ts_code, asof)
+
+        return [results_by_code[code] for code in ts_codes if code in results_by_code]
     
     def _generate_single_summary(
         self,
@@ -628,7 +694,11 @@ class WatchlistService:
             judgement=JudgementSummary()
         )
 
-    def _build_health_overview(self, items: List[WatchlistItemSummary]) -> WatchlistHealthOverview:
+    def _build_health_overview(
+        self,
+        items: List[WatchlistItemSummary],
+        weights_by_code: Optional[Dict[str, Optional[float]]] = None,
+    ) -> WatchlistHealthOverview:
         total = len(items)
         if total == 0:
             return WatchlistHealthOverview()
@@ -667,8 +737,8 @@ class WatchlistService:
             label = "偏强"
         else:
             label = "均衡"
-        industry_count, top_industries, concentration_level, concentration_note = (
-            self._build_industry_exposure(items)
+        industry_count, top_industries, concentration_level, concentration_note, uses_position_weights = (
+            self._build_industry_exposure(items, weights_by_code or {})
         )
         summary_line = self._build_health_summary_line(
             label=label,
@@ -694,38 +764,96 @@ class WatchlistService:
             top_industries=top_industries,
             concentration_level=concentration_level,
             concentration_note=concentration_note,
+            uses_position_weights=uses_position_weights,
         )
 
-    def _build_industry_exposure(self, items: List[WatchlistItemSummary]) -> tuple[
-        int, List[IndustryExposureItem], Literal["分散", "中等", "偏高"], str
+    def _resolve_position_weights(
+        self,
+        items: List[WatchlistItemSummary],
+        weights_by_code: Dict[str, Optional[float]],
+    ) -> Tuple[Dict[str, float], bool]:
+        codes = [item.ts_code for item in items]
+        if not codes:
+            return {}, False
+
+        explicit = {
+            code: float(weights_by_code[code])
+            for code in codes
+            if weights_by_code.get(code) is not None and float(weights_by_code[code]) > 0
+        }
+        uses_position_weights = len(explicit) > 0
+
+        if not explicit:
+            equal = 100.0 / len(codes)
+            return {code: equal for code in codes}, False
+
+        explicit_sum = sum(explicit.values())
+        unset_codes = [code for code in codes if code not in explicit]
+        resolved: Dict[str, float] = {}
+
+        if explicit_sum >= 100 or not unset_codes:
+            factor = 100.0 / explicit_sum if explicit_sum > 0 else 0.0
+            for code in codes:
+                resolved[code] = explicit.get(code, 0.0) * factor
+            return resolved, uses_position_weights
+
+        remainder = max(0.0, 100.0 - explicit_sum)
+        per_unset = remainder / len(unset_codes) if unset_codes else 0.0
+        for code in codes:
+            resolved[code] = explicit.get(code, per_unset)
+        return resolved, uses_position_weights
+
+    def _build_industry_exposure(
+        self,
+        items: List[WatchlistItemSummary],
+        weights_by_code: Dict[str, Optional[float]],
+    ) -> tuple[
+        int,
+        List[IndustryExposureItem],
+        Literal["分散", "中等", "偏高"],
+        str,
+        bool,
     ]:
         from services.a_share_industry_lookup import AShareIndustryLookup
 
         total = len(items)
         if total == 0:
-            return 0, [], "分散", ""
+            return 0, [], "分散", "", False
 
-        counts: Dict[str, int] = {}
-        unknown_count = 0
+        resolved_weights, uses_position_weights = self._resolve_position_weights(
+            items,
+            weights_by_code,
+        )
+
+        industry_stats: Dict[str, Dict[str, float | int]] = {}
+        unknown_weight = 0.0
         for item in items:
             industry = AShareIndustryLookup.lookup(item.ts_code)
+            item_weight = float(resolved_weights.get(item.ts_code, 0.0))
             if not industry:
-                unknown_count += 1
+                unknown_weight += item_weight
                 industry = "未分类"
-            counts[industry] = counts.get(industry, 0) + 1
+            bucket = industry_stats.setdefault(industry, {"count": 0, "weight": 0.0})
+            bucket["count"] = int(bucket["count"]) + 1
+            bucket["weight"] = float(bucket["weight"]) + item_weight
 
-        ranked = sorted(counts.items(), key=lambda pair: pair[1], reverse=True)
+        ranked = sorted(
+            industry_stats.items(),
+            key=lambda pair: (float(pair[1]["weight"]), int(pair[1]["count"]), pair[0]),
+            reverse=True,
+        )
+        display_limit = min(len(ranked), 8)
         top_industries = [
             IndustryExposureItem(
                 industry=name,
-                count=count,
-                weight_pct=round(count / total * 100, 1),
+                count=int(stats["count"]),
+                weight_pct=round(float(stats["weight"]), 1),
             )
-            for name, count in ranked[:3]
+            for name, stats in ranked[:display_limit]
         ]
-        industry_count = len(ranked) - (1 if "未分类" in counts else 0)
-        top_name, top_count = ranked[0]
-        top_weight = top_count / total * 100
+        industry_count = len(ranked) - (1 if "未分类" in industry_stats else 0)
+        top_name, top_stats = ranked[0]
+        top_weight = float(top_stats["weight"])
 
         if top_weight >= 50:
             concentration_level = "偏高"
@@ -734,16 +862,20 @@ class WatchlistService:
         else:
             concentration_level = "分散"
 
+        weight_basis = "持仓权重" if uses_position_weights else "等权"
         concentration_note = ""
         if top_name != "未分类" and concentration_level != "分散":
             concentration_note = (
-                f"{top_name}行业占 {round(top_weight, 1)}%，"
+                f"{top_name}行业占 {round(top_weight, 1)}%（{weight_basis}），"
                 f"组合行业集中度{concentration_level}。"
             )
-        elif unknown_count >= max(2, total // 2):
-            concentration_note = f"{unknown_count} 只标的暂无行业分类，集中度仅供参考。"
+        elif unknown_weight >= 25:
+            concentration_note = (
+                f"部分标的暂无行业分类（约 {round(unknown_weight, 1)}%），"
+                f"集中度按{weight_basis}仅供参考。"
+            )
 
-        return industry_count, top_industries, concentration_level, concentration_note
+        return industry_count, top_industries, concentration_level, concentration_note, uses_position_weights
     
     def _build_health_summary_line(
         self,
