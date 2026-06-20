@@ -654,7 +654,7 @@ class AIAnalyzer:
                         # 使用统一评分器计算分析评分（与 StockScorer 算法一致）
                         score = self.scorer.calculate_score(df)
                         
-                        # 使用统一评分器获取投资建议
+                        # 使用统一评分器获取结构评级
                         recommendation = self.scorer.get_recommendation(score)
 
                         # 计算 AI 综合评分（Spec v1.0）
@@ -710,7 +710,7 @@ class AIAnalyzer:
                     # 使用统一评分器计算分析评分（与 StockScorer 算法一致）
                     score = self.scorer.calculate_score(df)
                     
-                    # 使用统一评分器获取投资建议
+                    # 使用统一评分器获取结构评级
                     recommendation = self.scorer.get_recommendation(score)
 
                     # 计算 AI 综合评分（Spec v1.0）

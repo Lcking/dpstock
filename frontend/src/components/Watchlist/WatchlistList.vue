@@ -13,8 +13,8 @@
       </div>
     </div>
 
+    <div v-if="riskAlerts.length > 0" id="risk-alert-panel">
     <n-alert
-      v-if="riskAlerts.length > 0"
       type="warning"
       :bordered="false"
       class="risk-alert-panel"
@@ -49,6 +49,7 @@
         </n-space>
       </div>
     </n-alert>
+    </div>
 
     <n-alert
       v-if="watchlistState.isTemporary && watchlistState.trialMessage"
@@ -170,6 +171,9 @@
           <p v-if="healthOverview.concentration_note" class="health-exposure-note">
             {{ healthOverview.concentration_note }}
           </p>
+          <p v-if="weightNote" class="health-exposure-note weight-note">
+            {{ weightNote }}
+          </p>
         </div>
         <div
           v-if="healthOverview.risk_list_hits?.length"
@@ -204,6 +208,15 @@
           </div>
           <n-button size="small" tertiary type="warning" @click="goRiskStocks">
             查看完整风险股清单
+          </n-button>
+          <n-button
+            v-if="healthOverview.risk_list_hits.length >= 2"
+            size="small"
+            type="warning"
+            secondary
+            @click="compareRiskHits"
+          >
+            对比命中标的
           </n-button>
         </div>
       </div>
@@ -291,8 +304,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, h, onMounted, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import {
   NButton, NIcon, NText, NModal, NForm, NFormItem,
   NInput, NSpace, NAlert, NDataTable, NTag, NInputNumber, NSkeleton, useMessage, useDialog,
@@ -308,6 +321,7 @@ import { applyPageSeo } from '@/utils/seo'
 import { useNotificationStore } from '@/stores/notification'
 
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
 const dialog = useDialog()
 const notificationStore = useNotificationStore()
@@ -342,6 +356,21 @@ const applyWatchlistState = (source?: Partial<WatchlistSummary & Watchlist> | nu
 
 const tableData = computed(() => summaryData.value?.items ?? [])
 const healthOverview = computed(() => summaryData.value?.health_overview ?? null)
+
+const weightTotal = computed(() => {
+  const items = summaryData.value?.items ?? []
+  const weighted = items.filter((item) => item.weight_pct != null)
+  if (weighted.length === 0) return null
+  return weighted.reduce((sum, item) => sum + Number(item.weight_pct || 0), 0)
+})
+
+const weightNote = computed(() => {
+  if (weightTotal.value == null) return ''
+  const total = Math.round(weightTotal.value * 10) / 10
+  if (total === 100) return '持仓权重合计 100%，集中度按权重计算。'
+  if (total > 100) return `持仓权重合计 ${total}%（超过 100%，建议调整）。`
+  return `持仓权重合计 ${total}%（未满 100%，未设权重的标的按等权补充理解）。`
+})
 
 const formatPercent = (value: number | null) => {
   if (value === null || value === undefined) return '--'
@@ -746,6 +775,25 @@ const navigateToCompare = () => {
   })
 }
 
+function compareRiskHits() {
+  const hits = healthOverview.value?.risk_list_hits ?? []
+  if (hits.length < 2) {
+    message.warning('至少需要 2 只命中标的才能对比')
+    return
+  }
+  const codes = hits.map((hit) => hit.ts_code)
+  selectedCodes.value = codes
+  router.push({
+    path: '/compare',
+    query: { codes: codes.join(',') }
+  })
+}
+
+async function scrollToRiskPanel() {
+  await nextTick()
+  document.getElementById('risk-alert-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 const handleBindSuccess = async () => {
   message.success('已绑定邮箱，你的观察列表现在会长期保存')
   await initWatchlist()
@@ -785,6 +833,9 @@ onMounted(async () => {
   })
   await initWatchlist()
   await loadRiskAlerts()
+  if (route.query.focus === 'risk') {
+    await scrollToRiskPanel()
+  }
 })
 </script>
 
@@ -1081,6 +1132,10 @@ onMounted(async () => {
 
 .cell-risk-tag {
   margin-top: 4px;
+}
+
+.weight-note {
+  color: #b45309;
 }
 
 .metric-value {

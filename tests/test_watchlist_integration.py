@@ -34,7 +34,6 @@ TEST_STOCKS = [
 ]
 
 TEST_USER_ID = "test-user-12345"
-DEFAULT_INTEGRATION_DB = "data/stocks.db"
 
 
 def _apply_migration(db_path: Path, migration_name: str) -> None:
@@ -57,10 +56,28 @@ def _setup_watchlist_db(db_path: Path) -> None:
 
 
 @pytest.fixture
-def integration_db():
-    """Reset DatabaseFactory to the default integration database for shared-service tests."""
-    DatabaseFactory.initialize(DEFAULT_INTEGRATION_DB)
-    return DEFAULT_INTEGRATION_DB
+def integration_db(isolated_db):
+    """Use isolated temp database instead of data/stocks.db for integration tests."""
+    return isolated_db
+
+
+def check_tables_exist(db_path: Path, *table_names: str) -> bool:
+    """Check if required tables exist in the given database."""
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        for table_name in table_names:
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+                (table_name,),
+            )
+            if cursor.fetchone() is None:
+                conn.close()
+                return False
+        conn.close()
+        return True
+    except Exception:
+        return False
 
 
 def test_guest_watchlist_items_are_marked_temporary_until_bound(tmp_path):
@@ -211,29 +228,13 @@ class TestTrendIntegration:
 DB_SKIP_REASON = "Requires initialized watchlist/journal database tables"
 
 
-def check_tables_exist(*table_names: str):
-    """Check if required tables exist in the default integration database."""
-    import sqlite3
-    try:
-        conn = sqlite3.connect('data/stocks.db')
-        cursor = conn.cursor()
-        for table_name in table_names:
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
-                (table_name,),
-            )
-            result = cursor.fetchone()
-            if result is None:
-                conn.close()
-                return False
-        conn.close()
-        return True
-    except Exception:
-        return False
+def check_tables_exist_legacy(*table_names: str):
+    """Deprecated helper kept for backward compatibility in skip markers."""
+    return True
 
 
 @pytest.mark.skipif(
-    not check_tables_exist("watchlists"),
+    not check_tables_exist_legacy("watchlists"),
     reason=DB_SKIP_REASON
 )
 class TestWatchlistService:
@@ -301,7 +302,7 @@ class TestCompareService:
 
 
 @pytest.mark.skipif(
-    not check_tables_exist("watchlists", "judgments"),
+    not check_tables_exist_legacy("watchlists", "judgments"),
     reason=DB_SKIP_REASON
 )
 class TestJournalService:
@@ -346,16 +347,15 @@ class TestJournalService:
 
 
 @pytest.mark.skipif(
-    not check_tables_exist("watchlists", "judgments"),
+    not check_tables_exist_legacy("watchlists", "judgments"),
     reason=DB_SKIP_REASON  
 )
 class TestAPIEndpoints:
     """API endpoint integration tests using TestClient"""
     
     @pytest.fixture
-    def client(self):
+    def client(self, isolated_db):
         """Create test client"""
-        DatabaseFactory.initialize(DEFAULT_INTEGRATION_DB)
         from web_server import app
         return TestClient(app)
     

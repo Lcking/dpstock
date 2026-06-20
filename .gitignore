@@ -211,6 +211,10 @@ data/*backup*
 data_backup*/
 data/search_snapshots/
 
+data/test_*.db*
+data/*.test.db*
+urls.txt
+
 # docker compose local overrides (server-specific)
 docker-compose.override.yml
 docker-compose.*.override.yml

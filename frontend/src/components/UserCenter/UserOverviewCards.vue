@@ -38,12 +38,15 @@
           <n-text depth="3">我的观察</n-text>
           <n-text class="metric">{{ overview.watchlist_count }}</n-text>
           <n-text depth="3">共跟踪 {{ overview.watchlist_items_count }} 只标的</n-text>
-          <n-text
+          <n-button
             v-if="overview.risk_alert_unread_count > 0"
-            class="risk-unread"
+            text
+            type="warning"
+            class="risk-unread-btn"
+            @click="$emit('go-watchlist', { focus: 'risk' })"
           >
-            {{ overview.risk_alert_unread_count }} 条风险提醒未读
-          </n-text>
+            {{ overview.risk_alert_unread_count }} 条风险提醒未读 →
+          </n-button>
           <n-button size="small" @click="$emit('go-watchlist')">查看观察列表</n-button>
         </n-space>
       </n-card>
@@ -54,30 +57,31 @@
         <n-space vertical :size="8">
           <n-text depth="3">待复盘</n-text>
           <n-text class="metric">{{ overview.due_count }}</n-text>
-          <n-text depth="3">及时复盘，沉淀可验证判断</n-text>
+          <n-text depth="3">共 {{ overview.judgment_count || 0 }} 条判断记录</n-text>
           <n-button size="small" @click="$emit('go-journal')">查看判断日记</n-button>
         </n-space>
       </n-card>
     </n-grid-item>
   </n-grid>
 
-  <n-card v-if="trustSummary || topConditionLabel" size="small" class="trust-card">
-    <n-space vertical :size="8">
-      <n-text depth="3">历史验证与条件质量</n-text>
-      <n-text v-if="trustSummary">{{ trustSummary }}</n-text>
-      <n-text v-if="topConditionLabel" depth="3">{{ topConditionLabel }}</n-text>
-      <n-text v-if="!trustSummary && !topConditionLabel" depth="3">
-        完成判断复盘后，这里会展示系统支持率与条件质量参考。
-      </n-text>
-      <n-button size="small" @click="$emit('go-journal')">查看判断日记</n-button>
+  <n-card size="small" class="trust-card">
+    <n-space vertical :size="10">
+      <n-text depth="3">我的复盘表现</n-text>
+      <n-text v-if="personalSummary">{{ personalSummary }}</n-text>
+      <n-text v-else depth="3">完成判断复盘后，这里会展示你的个人支持率与常用条件类型。</n-text>
+      <n-divider style="margin: 4px 0" />
+      <n-text depth="3">平台历史验证（全站参考）</n-text>
+      <n-text v-if="platformSummary" depth="3">{{ platformSummary }}</n-text>
+      <n-text v-else depth="3">平台复盘样本积累中。</n-text>
+      <n-button size="small" @click="$emit('go-journal')">去判断日记复盘</n-button>
     </n-space>
   </n-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NButton, NCard, NGrid, NGridItem, NSpace, NTag, NText } from 'naive-ui'
-import { buildTrustSummary, topConditionQualityItem } from '@/utils/trustStats'
+import { NButton, NCard, NDivider, NGrid, NGridItem, NSpace, NTag, NText } from 'naive-ui'
+import { buildPersonalReviewSummary, buildTrustSummary } from '@/utils/trustStats'
 
 const props = defineProps<{
   overview: any
@@ -86,17 +90,15 @@ const props = defineProps<{
 defineEmits<{
   (e: 'bind'): void
   (e: 'invite'): void
-  (e: 'go-watchlist'): void
+  (e: 'go-watchlist', payload?: { focus?: string }): void
   (e: 'go-journal'): void
 }>()
 
-const trustSummary = computed(() => buildTrustSummary(props.overview?.trust_stats))
+const personalSummary = computed(() =>
+  buildPersonalReviewSummary(props.overview?.personal_review_stats)
+)
 
-const topConditionLabel = computed(() => {
-  const top = topConditionQualityItem(props.overview?.trust_stats?.condition_quality_leaderboard)
-  if (!top || top.support_rate == null) return ''
-  return `样本最多条件：${top.label}（${top.reviewed_count} 条复盘，支持率 ${top.support_rate}%）`
-})
+const platformSummary = computed(() => buildTrustSummary(props.overview?.trust_stats))
 </script>
 
 <style scoped>
@@ -109,8 +111,8 @@ const topConditionLabel = computed(() => {
   font-weight: 700;
 }
 
-.risk-unread {
-  color: #b45309;
+.risk-unread-btn {
+  padding: 0;
   font-size: 13px;
 }
 

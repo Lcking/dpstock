@@ -17,6 +17,29 @@ export function topConditionQualityItem(
   return leaderboard.find((item) => item.reviewed_count >= minReviewed) ?? null
 }
 
+export interface PersonalReviewStats {
+  reviewed_count: number
+  pending_count?: number
+  support_rate: number | null
+  condition_quality_leaderboard?: JournalConditionQualityItem[]
+}
+
+export function buildPersonalReviewSummary(
+  stats: PersonalReviewStats | null | undefined,
+): string {
+  if (!stats || stats.reviewed_count <= 0 || stats.support_rate == null) {
+    return ''
+  }
+  const parts = [
+    `你已复盘 ${stats.reviewed_count} 条判断，个人支持率 ${stats.support_rate}%`,
+  ]
+  const top = topConditionQualityItem(stats.condition_quality_leaderboard, 2)
+  if (top?.label) {
+    parts.push(`最常验证条件：${top.label}`)
+  }
+  return parts.join(' · ')
+}
+
 export function buildTrustSummary(stats: PublicAccuracyStats | null | undefined): string {
   if (!stats || stats.reviewed_count <= 0 || stats.support_rate == null) {
     return ''

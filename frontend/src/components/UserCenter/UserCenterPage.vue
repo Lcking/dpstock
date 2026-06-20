@@ -8,12 +8,38 @@
     </div>
 
     <n-alert
-      v-if="overview?.user?.is_temporary"
+      v-if="overview?.user?.is_temporary && guestAssetSummary"
+      type="warning"
+      :bordered="false"
+      class="top-alert"
+    >
+      {{ guestAssetSummary }}
+      <template v-if="overview.watchlist_items_count > 0 || overview.judgment_count > 0">
+        <n-button size="small" type="primary" secondary style="margin-top: 8px" @click="showBindDialog = true">
+          立即绑定邮箱
+        </n-button>
+      </template>
+    </n-alert>
+
+    <n-alert
+      v-else-if="overview?.user?.is_temporary"
       type="warning"
       :bordered="false"
       class="top-alert"
     >
       当前仍是游客模式。绑定邮箱后，你的观察列表和判断日记可长期保存，并支持跨设备同步。
+    </n-alert>
+
+    <n-alert
+      v-if="overview?.due_count > 0"
+      type="info"
+      :bordered="false"
+      class="top-alert"
+    >
+      你有 {{ overview.due_count }} 条判断待复盘，及时复盘有助于沉淀个人验证记录。
+      <n-button size="small" tertiary type="primary" style="margin-left: 8px" @click="router.push('/journal')">
+        去复盘
+      </n-button>
     </n-alert>
 
     <div v-if="loading" class="loading-area">
@@ -41,7 +67,7 @@
         :overview="overview"
         @bind="showBindDialog = true"
         @invite="showInviteDialog = true"
-        @go-watchlist="router.push('/watchlist')"
+        @go-watchlist="handleGoWatchlist"
         @go-journal="router.push('/journal')"
       />
 
@@ -74,6 +100,15 @@
         <n-grid-item>
           <n-card title="下一步动作" size="small">
             <n-space vertical :size="12">
+              <n-button
+                v-if="overview.risk_alert_unread_count > 0"
+                block
+                type="warning"
+                secondary
+                @click="handleGoWatchlist({ focus: 'risk' })"
+              >
+                查看 {{ overview.risk_alert_unread_count }} 条风险提醒
+              </n-button>
               <n-button block @click="router.push('/watchlist')">去我的观察</n-button>
               <n-button block @click="router.push('/journal')">去判断日记</n-button>
               <n-button block @click="showInviteDialog = true">额度与邀请</n-button>
@@ -100,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NAlert,
@@ -128,6 +163,25 @@ const overview = ref<any>(null)
 const errorMessage = ref('')
 const showBindDialog = ref(false)
 const showInviteDialog = ref(false)
+
+const guestAssetSummary = computed(() => {
+  if (!overview.value?.user?.is_temporary) return ''
+  const watchCount = overview.value.watchlist_items_count || 0
+  const judgmentCount = overview.value.judgment_count || 0
+  if (watchCount <= 0 && judgmentCount <= 0) return ''
+  const parts: string[] = []
+  if (watchCount > 0) parts.push(`${watchCount} 只观察标的`)
+  if (judgmentCount > 0) parts.push(`${judgmentCount} 条判断记录`)
+  return `你当前已有 ${parts.join('、')}，绑定邮箱后可跨设备长期保存。`
+})
+
+const handleGoWatchlist = (payload?: { focus?: string }) => {
+  if (payload?.focus === 'risk') {
+    router.push({ path: '/watchlist', query: { focus: 'risk' } })
+    return
+  }
+  router.push('/watchlist')
+}
 
 const loadOverview = async () => {
   loading.value = true

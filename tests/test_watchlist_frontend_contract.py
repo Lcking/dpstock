@@ -37,14 +37,37 @@ def test_watchlist_page_supports_two_phase_summary_loading():
     assert "phase: 'full'" in watchlist_view
     assert "detailLoading" in watchlist_view
     assert "命中风险股清单" in watchlist_view
+    assert "compareRiskHits" in watchlist_view
+    assert "weightNote" in watchlist_view
+    assert "focus === 'risk'" in watchlist_view
     assert "phase?: 'fast' | 'full'" in api_service
+
+
+def test_analysis_results_surface_data_provenance():
+    analysis_app = (REPO_ROOT / "frontend/src/components/StockAnalysisApp.vue").read_text(encoding="utf-8")
+    stock_card = (REPO_ROOT / "frontend/src/components/StockCard.vue").read_text(encoding="utf-8")
+
+    assert "latestProvenanceLabel" in analysis_app
+    assert "dataProvenanceLabel" in analysis_app
+    assert "data-provenance" in stock_card
+
+
+def test_user_center_surfaces_personal_review_and_guest_conversion():
+    overview_cards = (REPO_ROOT / "frontend/src/components/UserCenter/UserOverviewCards.vue").read_text(encoding="utf-8")
+    user_center_page = (REPO_ROOT / "frontend/src/components/UserCenter/UserCenterPage.vue").read_text(encoding="utf-8")
+
+    assert "我的复盘表现" in overview_cards
+    assert "buildPersonalReviewSummary" in overview_cards
+    assert "judgment_count" in overview_cards
+    assert "guestAssetSummary" in user_center_page
+    assert "focus: 'risk'" in user_center_page
 
 
 def test_user_center_surfaces_trust_stats_and_risk_unread():
     overview_cards = (REPO_ROOT / "frontend/src/components/UserCenter/UserOverviewCards.vue").read_text(encoding="utf-8")
     user_center_page = (REPO_ROOT / "frontend/src/components/UserCenter/UserCenterPage.vue").read_text(encoding="utf-8")
 
-    assert "历史验证与条件质量" in overview_cards
+    assert "我的复盘表现" in overview_cards
     assert "risk_alert_unread_count" in overview_cards
     assert "buildTrustSummary" in overview_cards
     assert "n-skeleton" in user_center_page.lower()

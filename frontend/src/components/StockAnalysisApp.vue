@@ -106,7 +106,16 @@
               <div class="results-section">
                 <div class="results-header">
                   <n-space align="center" justify="space-between">
-                    <n-text>分析结果 ({{ analyzedStocks.length }})</n-text>
+                    <n-space vertical :size="4">
+                      <n-text>分析结果 ({{ analyzedStocks.length }})</n-text>
+                      <n-text
+                        v-if="latestProvenanceLabel"
+                        depth="3"
+                        class="results-provenance"
+                      >
+                        {{ latestProvenanceLabel }}
+                      </n-text>
+                    </n-space>
                     <n-space>
                       <n-select 
                         v-model:value="displayMode" 
@@ -200,7 +209,7 @@
 
 import HtmlRenderer from './HtmlRenderer';
 import { h } from 'vue';
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, nextTick, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { 
   NLayout, 
@@ -267,6 +276,14 @@ const isSearching = ref(false);
 const isAnalyzing = ref(false);
 const analyzedStocks = ref<StockInfo[]>([]);
 const accuracySummary = ref('');
+
+const latestProvenanceLabel = computed(() => {
+  const completed = analyzedStocks.value.filter(
+    (stock) => stock.analysisStatus === 'completed' && stock.dataProvenanceLabel
+  );
+  if (completed.length === 0) return '';
+  return completed[completed.length - 1].dataProvenanceLabel;
+});
 
 // 让控制台可以访问 analyzedStocks
 (window as any).analyzedStocks = analyzedStocks;
@@ -439,6 +456,15 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
     width: 80,
     render(row: StockInfo) {
       return row.score !== undefined ? row.score : '--';
+    }
+  },
+  {
+    title: '数据截至',
+    key: 'dataProvenanceLabel',
+    width: 220,
+    ellipsis: { tooltip: true },
+    render(row: StockInfo) {
+      return row.dataProvenanceLabel || '--';
     }
   },
   {
@@ -1149,6 +1175,11 @@ function handleOpenBindFromQuota() {
 
 .invite-accepted-action {
   margin-top: 10px;
+}
+
+.results-provenance {
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .trust-strip {

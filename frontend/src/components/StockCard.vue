@@ -673,7 +673,7 @@ async function generateShareImage() {
 ${categoryName}: ${stockName}
 代码: ${props.stock.code}
 综合评分: ${score}分
-投资建议: ${recommendation}
+结构评级: ${recommendation}
 
 📈 分析摘要:
 ${analysisSummary}
@@ -892,9 +892,13 @@ function smoothScrollToBottom(element: HTMLElement) {
 
 .data-provenance {
   margin-top: 8px;
+  padding: 6px 10px;
   font-size: 12px;
-  color: #64748b;
+  color: #475569;
   line-height: 1.5;
+  border-radius: 8px;
+  background: rgba(47, 91, 234, 0.06);
+  border: 1px solid rgba(47, 91, 234, 0.12);
 }
 
 .header-left {
