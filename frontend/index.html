@@ -40,6 +40,13 @@
     </script>
   </head>
   <body>
+    <style>
+      /* SSR 正文仅供无 JS 爬虫阅读；用户侧由 Vue 渲染，避免重复展示 */
+      html.js-enabled #ssr-article {
+        display: none !important;
+      }
+    </style>
+    <script>document.documentElement.classList.add('js-enabled');</script>
     <!--SSR:ARTICLE_BODY--><!--/SSR:ARTICLE_BODY-->
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>

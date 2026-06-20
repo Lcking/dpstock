@@ -358,7 +358,10 @@ function getScoreClass(score: number) {
   return 'low';
 }
 
-onMounted(fetchArticle);
+onMounted(() => {
+  document.getElementById('ssr-article')?.remove();
+  void fetchArticle();
+});
 </script>
 
 <style scoped>

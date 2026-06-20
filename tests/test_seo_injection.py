@@ -45,6 +45,13 @@ def test_article_seo_injection_replaces_all_placeholders():
     assert_no_ssr_placeholders_remain(html)
 
 
+def test_index_html_hides_ssr_article_for_js_users():
+    html = _sample_index_html()
+    assert "js-enabled" in html
+    assert "#ssr-article" in html
+    assert "display: none" in html
+
+
 def test_article_description_uses_trend_text_not_generic_site_copy():
     article = {
         "id": 7,
