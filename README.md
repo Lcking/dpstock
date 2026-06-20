@@ -54,13 +54,27 @@
 
 ## 验证命令
 
-后端验证：
+后端验证（与 GitHub Actions `test.yml` 门禁一致）：
+
+```bash
+pip install -r requirements.txt
+python -m pytest \
+  tests/test_instrument_resolver.py \
+  tests/test_etf_article_names.py \
+  tests/test_analyze_quota_and_limit.py \
+  tests/test_judgment_verifier.py \
+  tests/test_seo_injection.py \
+  tests/test_risk_stock_frontend_contract.py \
+  -q
+python -m compileall routes services web_server.py
+```
+
+单项验证：
 
 ```bash
 python -m pytest tests/test_user_identity_flow.py -v
 python -m pytest tests/test_watchlist_integration.py -v
 python -m pytest tests/test_verification_integration.py -v
-python -m compileall routes services web_server.py
 ```
 
 前端验证：

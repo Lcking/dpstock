@@ -52,3 +52,6 @@ email-validator==2.1.0
 # Task Scheduling
 apscheduler==3.11.0
 
+# Testing (CI + local regression)
+pytest==8.3.5
+
