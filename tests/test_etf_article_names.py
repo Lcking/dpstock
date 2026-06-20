@@ -1,11 +1,32 @@
 from services.article_seo_service import ArticleSeoService
 from services.instrument_name_resolver import (
+    build_archive_title,
     enrich_article_record,
     infer_market_type,
     is_placeholder_name,
     resolve_display_name,
     resolve_stock_page_info,
 )
+
+
+def test_build_archive_title_uses_etf_suffix():
+    title = build_archive_title(
+        "159915",
+        stock_name="易方达创业板ETF",
+        market_type="A",
+        publish_date="2026-06-19",
+    )
+    assert title == "2026年06月19日 易方达创业板ETF 159915 ETF行情走势异动分析"
+
+
+def test_build_archive_title_uses_lof_suffix():
+    title = build_archive_title(
+        "161226",
+        stock_name="国投瑞银白银期货(LOF)-A",
+        market_type="LOF",
+        publish_date="2026-06-19",
+    )
+    assert title == "2026年06月19日 国投瑞银白银期货(LOF)-A 161226 LOF行情走势异动分析"
 
 
 def test_infer_market_type_detects_etf_from_code_prefix():

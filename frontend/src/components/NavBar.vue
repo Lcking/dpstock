@@ -11,6 +11,10 @@
           <span class="btn-text">分析专栏</span>
         </router-link>
 
+        <router-link to="/risk-stocks" class="nav-btn">
+          <span class="btn-text">风险股清单</span>
+        </router-link>
+
         <a
           v-for="link in links"
           :key="link.text"

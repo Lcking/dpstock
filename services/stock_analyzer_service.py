@@ -561,11 +561,23 @@ class StockAnalyzerService:
             
             # 分析完成后，自动归档为文章
             if full_analysis:
-                # 动态获取品类名称
-                category_map = {'A': '股票', 'HK': '股票', 'US': '股票', 'ETF': 'ETF', 'LOF': 'LOF'}
-                category_name = category_map.get(market_type, '股票')
-                name_part = f"{stock_name} " if stock_name else ""
-                title = f"{datetime.now().strftime('%Y年%m月%d日')} {name_part}{stock_code} {category_name}行情走势异动分析"
+                from services.instrument_name_resolver import build_archive_title, enrich_article_record
+
+                enriched_meta = enrich_article_record(
+                    {
+                        "stock_code": stock_code,
+                        "stock_name": stock_name,
+                        "market_type": market_type,
+                    }
+                )
+                resolved_name = str(enriched_meta.get("stock_name") or "")
+                resolved_market = str(enriched_meta.get("market_type") or market_type)
+                title = build_archive_title(
+                    stock_code,
+                    stock_name=resolved_name,
+                    market_type=resolved_market,
+                    publish_date=analysis_date,
+                )
                 score_version = None
                 ai_score_json = None
                 overall_score = score
@@ -579,8 +591,8 @@ class StockAnalyzerService:
                 article_data = {
                     "title": title,
                     "stock_code": stock_code,
-                    "stock_name": stock_name,
-                    "market_type": market_type,
+                    "stock_name": resolved_name,
+                    "market_type": resolved_market,
                     "content": _build_archive_content(analysis_v1, full_analysis),
                     "score": overall_score,
                     "legacy_score": score,

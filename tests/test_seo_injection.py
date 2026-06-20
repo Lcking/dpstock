@@ -37,6 +37,10 @@ def test_article_seo_injection_replaces_all_placeholders():
     assert '<article id="ssr-article"' in html
     assert "不构成投资建议" in html
     assert '"@type": "Article"' in html
+    assert '"@type": "FAQPage"' in html
+    assert "ssr-faq-section" in html
+    assert "常见问题" in html
+    assert "主要风险是什么？" in html
     assert "<!--SSR:" not in html
     assert_no_ssr_placeholders_remain(html)
 

@@ -275,6 +275,15 @@ def resolve_display_name(
     return ""
 
 
+ARCHIVE_TITLE_SUFFIX = {
+    "A": "股票行情走势异动分析",
+    "HK": "港股行情走势异动分析",
+    "US": "美股行情走势异动分析",
+    "ETF": "ETF行情走势异动分析",
+    "LOF": "LOF行情走势异动分析",
+}
+
+
 def market_category_label(market_type: str) -> str:
     return {
         "ETF": "ETF",
@@ -283,6 +292,39 @@ def market_category_label(market_type: str) -> str:
         "US": "美股",
         "A": "股票",
     }.get(str(market_type or "A").upper(), "标的")
+
+
+def build_archive_title(
+    stock_code: str,
+    *,
+    stock_name: str = "",
+    market_type: str = "A",
+    publish_date: str = "",
+) -> str:
+    from datetime import datetime
+
+    code = _normalize_code(stock_code)
+    effective_market = infer_market_type(code, market_type)
+    suffix = ARCHIVE_TITLE_SUFFIX.get(effective_market, ARCHIVE_TITLE_SUFFIX["A"])
+    name = str(stock_name or "").strip()
+    if is_placeholder_name(name, code):
+        name = ""
+    name_part = f"{name} " if name else ""
+
+    date_str = str(publish_date or "").strip()
+    if date_str:
+        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S"):
+            try:
+                date_str = datetime.strptime(date_str.split(" ")[0], fmt).strftime("%Y年%m月%d日")
+                break
+            except ValueError:
+                continue
+        else:
+            date_str = datetime.now().strftime("%Y年%m月%d日")
+    else:
+        date_str = datetime.now().strftime("%Y年%m月%d日")
+
+    return f"{date_str} {name_part}{code} {suffix}"
 
 
 def fallback_display_name(stock_code: str, market_type: str = "A") -> str:

@@ -42,6 +42,7 @@
 当前导航结构：
 - `Aguai` Logo：首页入口
 - `分析专栏`
+- `风险股清单`
 - `我的`
 - `实盘策略平台`
 
@@ -70,6 +71,7 @@ npm run build
 ```
 
 说明：
+- `frontend/dist/` 不再纳入 git 跟踪，生产镜像由 `Dockerfile` 多阶段构建自动生成；本地开发需先执行 `npm run build`，或由 `npm run dev` 单独起前端
 - 前端构建当前仍会出现 `vendor-echarts` 的 chunk size warning，这是打包体积提示，不影响当前功能正确性
 - 如需继续推进，可优先进入后续的打包优化与前端按需拆分工作
 
