@@ -1,5 +1,32 @@
 from services.article_seo_service import ArticleSeoService
-from services.instrument_name_resolver import enrich_article_record, resolve_stock_page_info
+from services.instrument_name_resolver import (
+    enrich_article_record,
+    resolve_display_name,
+    resolve_stock_page_info,
+)
+
+
+def test_enrich_article_record_uses_fallback_when_lookup_missing(monkeypatch):
+    monkeypatch.setattr(
+        "services.instrument_name_resolver.resolve_display_name",
+        lambda *args, **kwargs: "",
+    )
+
+    enriched = enrich_article_record(
+        {
+            "id": 1605,
+            "stock_code": "159941",
+            "stock_name": "",
+            "market_type": "ETF",
+            "title": "2026年06月19日 159941 ETF行情走势异动分析",
+        }
+    )
+
+    assert enriched["stock_name"] == "ETF 159941"
+
+
+def test_resolve_display_name_supports_us_popular_list():
+    assert resolve_display_name("AAPL", market_type="US", allow_network=False) == "Apple"
 
 
 def test_enrich_article_record_resolves_etf_name(monkeypatch):

@@ -14,12 +14,21 @@ logger = get_logger()
 _ETF_NAME_CACHE: Dict[str, str] = {}
 _LOF_NAME_CACHE: Dict[str, str] = {}
 _CACHE_LOADED_AT: Dict[str, float] = {}
+_LOAD_FAILURE_UNTIL: Dict[str, float] = {}
 _CACHE_TTL_SECONDS = 30 * 60
+_FAILURE_COOLDOWN_SECONDS = 5 * 60
 _CACHE_LOCK = threading.Lock()
 
 
 def _normalize_code(stock_code: str) -> str:
     return str(stock_code or "").strip().upper().split(".")[0]
+
+
+def _to_tushare_ts_code(stock_code: str) -> str:
+    code = _normalize_code(stock_code)
+    if code.startswith("6") or code.startswith("5"):
+        return f"{code}.SH"
+    return f"{code}.SZ"
 
 
 def _cache_valid(market_type: str) -> bool:
@@ -30,26 +39,54 @@ def _cache_valid(market_type: str) -> bool:
     return bool(cache) and (time.monotonic() - loaded_at) < _CACHE_TTL_SECONDS
 
 
-def _load_fund_name_cache(market_type: str) -> Dict[str, str]:
+def _in_failure_cooldown(market_type: str) -> bool:
+    until = _LOAD_FAILURE_UNTIL.get(market_type)
+    return until is not None and time.monotonic() < until
+
+
+def _mark_load_failure(market_type: str) -> None:
+    _LOAD_FAILURE_UNTIL[market_type] = time.monotonic() + _FAILURE_COOLDOWN_SECONDS
+
+
+def _fetch_fund_mapping(market_type: str) -> Dict[str, str]:
+    import akshare as ak
+
+    if market_type == "ETF":
+        df = ak.fund_etf_spot_em()
+    else:
+        df = ak.fund_lof_spot_em()
+    return {
+        _normalize_code(str(row.get("代码") or "")): str(row.get("名称") or "").strip()
+        for _, row in df.iterrows()
+        if row.get("代码") and row.get("名称")
+    }
+
+
+def _load_fund_name_cache(market_type: str, *, force: bool = False) -> Dict[str, str]:
     market_type = market_type if market_type in {"ETF", "LOF"} else "ETF"
     with _CACHE_LOCK:
-        if _cache_valid(market_type):
+        if not force and _cache_valid(market_type):
+            return _ETF_NAME_CACHE if market_type == "ETF" else _LOF_NAME_CACHE
+        if not force and _in_failure_cooldown(market_type):
             return _ETF_NAME_CACHE if market_type == "ETF" else _LOF_NAME_CACHE
 
-    try:
-        import akshare as ak
+    mapping: Dict[str, str] = {}
+    last_error: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            mapping = _fetch_fund_mapping(market_type)
+            if mapping:
+                break
+        except Exception as exc:
+            last_error = exc
+            time.sleep(1.5 * (attempt + 1))
 
-        if market_type == "ETF":
-            df = ak.fund_etf_spot_em()
-        else:
-            df = ak.fund_lof_spot_em()
-        mapping = {
-            _normalize_code(str(row.get("代码") or "")): str(row.get("名称") or "").strip()
-            for _, row in df.iterrows()
-            if row.get("代码") and row.get("名称")
-        }
-    except Exception as exc:
-        logger.warning(f"[InstrumentNameResolver] failed to load {market_type} names: {exc}")
+    if not mapping:
+        if last_error is not None:
+            logger.warning(
+                f"[InstrumentNameResolver] failed to load {market_type} names after retries: {last_error}"
+            )
+        _mark_load_failure(market_type)
         with _CACHE_LOCK:
             return _ETF_NAME_CACHE if market_type == "ETF" else _LOF_NAME_CACHE
 
@@ -61,7 +98,14 @@ def _load_fund_name_cache(market_type: str) -> Dict[str, str]:
             _LOF_NAME_CACHE.clear()
             _LOF_NAME_CACHE.update(mapping)
         _CACHE_LOADED_AT[market_type] = time.monotonic()
+        _LOAD_FAILURE_UNTIL.pop(market_type, None)
         return _ETF_NAME_CACHE if market_type == "ETF" else _LOF_NAME_CACHE
+
+
+def preload_fund_name_caches(*, force: bool = False) -> None:
+    """Load ETF/LOF name caches once (for batch jobs)."""
+    _load_fund_name_cache("ETF", force=force)
+    _load_fund_name_cache("LOF", force=force)
 
 
 def lookup_fund_name(stock_code: str, market_type: str = "ETF") -> str:
@@ -70,7 +114,78 @@ def lookup_fund_name(stock_code: str, market_type: str = "ETF") -> str:
         return ""
     market_type = market_type if market_type in {"ETF", "LOF"} else "ETF"
     cache = _load_fund_name_cache(market_type)
-    return cache.get(code, "")
+    hit = cache.get(code, "")
+    if hit:
+        return hit
+    return _lookup_tushare_fund_name(code)
+
+
+def _lookup_tushare_fund_name(stock_code: str) -> str:
+    try:
+        from services.tushare.client import tushare_client
+
+        tushare_client.ensure_initialized(log_missing_token=False)
+        if not tushare_client.is_available:
+            return ""
+        ts_code = _to_tushare_ts_code(stock_code)
+        df = tushare_client.query(
+            "fund_basic",
+            ts_code=ts_code,
+            fields="ts_code,name,fund_type,market",
+        )
+        if df is not None and not df.empty:
+            name = str(df.iloc[0].get("name") or "").strip()
+            return name
+    except Exception as exc:
+        logger.debug(f"[InstrumentNameResolver] tushare fund_basic failed for {stock_code}: {exc}")
+    return ""
+
+
+def _lookup_static_name(stock_code: str, market_type: str) -> str:
+    code = _normalize_code(stock_code)
+    if not code:
+        return ""
+
+    if market_type == "US":
+        from services.us_stock_service_async import POPULAR_US_STOCKS
+
+        for row in POPULAR_US_STOCKS:
+            if str(row.get("symbol") or "").upper() == code:
+                return str(row.get("name") or "").strip()
+
+    if market_type == "HK":
+        from services.search_snapshot_service import POPULAR_HK_STOCKS
+
+        for hk_code, hk_name in POPULAR_HK_STOCKS:
+            if _normalize_code(hk_code) == code:
+                return hk_name
+
+    if market_type == "A":
+        try:
+            from services.search_snapshot_service import SearchSnapshotService
+
+            for row in SearchSnapshotService().search_a_shares(code, limit=1):
+                if _normalize_code(str(row.get("symbol") or "")) == code:
+                    return str(row.get("name") or "").strip()
+        except Exception as exc:
+            logger.debug(f"[InstrumentNameResolver] snapshot lookup failed for {code}: {exc}")
+
+    return ""
+
+
+def _lookup_tushare_stock_name(stock_code: str) -> str:
+    try:
+        from services.tushare.client import tushare_client
+
+        tushare_client.ensure_initialized(log_missing_token=False)
+        if not tushare_client.is_available:
+            return ""
+        df = tushare_client.get_stock_basic(_to_tushare_ts_code(stock_code))
+        if df is not None and not df.empty:
+            return str(df.iloc[0].get("name") or "").strip()
+    except Exception as exc:
+        logger.debug(f"[InstrumentNameResolver] tushare stock_basic failed for {stock_code}: {exc}")
+    return ""
 
 
 def resolve_display_name(
@@ -89,12 +204,19 @@ def resolve_display_name(
     if not code:
         return ""
 
+    static_name = _lookup_static_name(code, market_type)
+    if static_name:
+        return static_name
+
     if market_type in {"ETF", "LOF"}:
         fund_name = lookup_fund_name(code, market_type)
         if fund_name:
             return fund_name
 
     if market_type == "A" and allow_network:
+        resolved = _lookup_tushare_stock_name(code)
+        if resolved:
+            return resolved
         try:
             from services.stock_data_provider import StockDataProvider
 
@@ -103,6 +225,9 @@ def resolve_display_name(
                 return resolved
         except Exception as exc:
             logger.debug(f"[InstrumentNameResolver] A-share lookup failed for {code}: {exc}")
+
+    if market_type in {"ETF", "LOF"} and allow_network:
+        return _lookup_tushare_fund_name(code)
 
     return ""
 
@@ -135,6 +260,8 @@ def enrich_article_record(article: Dict[str, object]) -> Dict[str, object]:
     )
     if resolved:
         enriched["stock_name"] = resolved
+    elif code:
+        enriched["stock_name"] = fallback_display_name(code, market_type)
     return enriched
 
 

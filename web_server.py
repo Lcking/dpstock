@@ -692,19 +692,20 @@ async def get_article_detail(article_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/stock/{stock_code}")
-async def stock_landing_page(stock_code: str):
+@app.api_route("/stock/{stock_code}", methods=["GET", "HEAD"])
+async def stock_landing_page(stock_code: str, request: Request):
     from services.stock_page_service import StockPageService
 
     html_content = await StockPageService(base_url="https://aguai.net").render_stock_page(stock_code)
     if not html_content:
         raise HTTPException(status_code=404, detail="股票页面不存在")
+    headers = {"Cache-Control": "public, max-age=600"}
+    if request.method == "HEAD":
+        return Response(status_code=200, headers=headers)
     return Response(
         content=html_content,
         media_type="text/html",
-        headers={
-            "Cache-Control": "public, max-age=600",
-        },
+        headers=headers,
     )
 
 

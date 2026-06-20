@@ -8,14 +8,19 @@ import argparse
 import asyncio
 
 from database.db_factory import DatabaseFactory
-from services.archive_service import ArchiveService
-from services.instrument_name_resolver import enrich_article_record, resolve_display_name
+from services.instrument_name_resolver import (
+    fallback_display_name,
+    preload_fund_name_caches,
+    resolve_display_name,
+)
 from utils.logger import get_logger
 
 logger = get_logger()
 
 
-async def backfill_missing_names(dry_run: bool = False) -> int:
+async def backfill_missing_names(dry_run: bool = False, use_fallback: bool = True) -> int:
+    preload_fund_name_caches(force=True)
+
     updated = 0
     with DatabaseFactory.get_connection() as conn:
         cursor = conn.cursor()
@@ -31,19 +36,24 @@ async def backfill_missing_names(dry_run: bool = False) -> int:
 
     for row in rows:
         article = dict(row)
+        code = str(article.get("stock_code") or "")
+        market_type = str(article.get("market_type") or "A")
         resolved = resolve_display_name(
-            str(article.get("stock_code") or ""),
-            market_type=str(article.get("market_type") or "A"),
+            code,
+            market_type=market_type,
             stock_name=str(article.get("stock_name") or ""),
             allow_network=True,
         )
+        if not resolved and use_fallback:
+            resolved = fallback_display_name(code, market_type)
+            logger.warning(
+                f"article {article['id']}: fallback name for {code} -> {resolved}"
+            )
         if not resolved:
-            logger.warning(f"skip article {article['id']}: unable to resolve name for {article.get('stock_code')}")
+            logger.warning(f"skip article {article['id']}: unable to resolve name for {code}")
             continue
 
-        enriched = enrich_article_record({**article, "stock_name": resolved})
         new_title = str(article.get("title") or "")
-        code = str(article.get("stock_code") or "")
         if code and resolved and resolved not in new_title:
             new_title = new_title.replace(f" {code} ", f" {resolved} {code} ", 1)
             if new_title == str(article.get("title") or ""):
@@ -73,8 +83,15 @@ async def backfill_missing_names(dry_run: bool = False) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill missing archived article stock names")
     parser.add_argument("--dry-run", action="store_true", help="Only log changes without writing")
+    parser.add_argument(
+        "--no-fallback",
+        action="store_true",
+        help="Skip rows that cannot be resolved to a real name",
+    )
     args = parser.parse_args()
-    count = asyncio.run(backfill_missing_names(dry_run=args.dry_run))
+    count = asyncio.run(
+        backfill_missing_names(dry_run=args.dry_run, use_fallback=not args.no_fallback)
+    )
     print(f"processed {count} articles")
 
 
