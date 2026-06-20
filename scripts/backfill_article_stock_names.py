@@ -10,6 +10,8 @@ import asyncio
 from database.db_factory import DatabaseFactory
 from services.instrument_name_resolver import (
     fallback_display_name,
+    infer_market_type,
+    is_placeholder_name,
     preload_fund_name_caches,
     resolve_display_name,
 )
@@ -28,7 +30,11 @@ async def backfill_missing_names(dry_run: bool = False, use_fallback: bool = Tru
             """
             SELECT id, stock_code, stock_name, market_type, title
             FROM articles
-            WHERE stock_name IS NULL OR TRIM(stock_name) = ''
+            WHERE stock_name IS NULL
+               OR TRIM(stock_name) = ''
+               OR TRIM(UPPER(stock_name)) = TRIM(UPPER(stock_code))
+               OR TRIM(UPPER(stock_name)) = ('ETF ' || TRIM(UPPER(stock_code)))
+               OR TRIM(UPPER(stock_name)) = ('LOF ' || TRIM(UPPER(stock_code)))
             ORDER BY id
             """
         )
@@ -37,15 +43,20 @@ async def backfill_missing_names(dry_run: bool = False, use_fallback: bool = Tru
     for row in rows:
         article = dict(row)
         code = str(article.get("stock_code") or "")
-        market_type = str(article.get("market_type") or "A")
+        declared_market = str(article.get("market_type") or "A")
+        effective_market = infer_market_type(code, declared_market)
+        current_name = str(article.get("stock_name") or "")
+        if is_placeholder_name(current_name, code):
+            current_name = ""
+
         resolved = resolve_display_name(
             code,
-            market_type=market_type,
-            stock_name=str(article.get("stock_name") or ""),
+            market_type=effective_market,
+            stock_name=current_name,
             allow_network=True,
         )
         if not resolved and use_fallback:
-            resolved = fallback_display_name(code, market_type)
+            resolved = fallback_display_name(code, effective_market)
             logger.warning(
                 f"article {article['id']}: fallback name for {code} -> {resolved}"
             )
@@ -69,10 +80,10 @@ async def backfill_missing_names(dry_run: bool = False, use_fallback: bool = Tru
             cursor.execute(
                 """
                 UPDATE articles
-                SET stock_name = ?, title = ?
+                SET stock_name = ?, market_type = ?, title = ?
                 WHERE id = ?
                 """,
-                (resolved, new_title, article["id"]),
+                (resolved, effective_market, new_title, article["id"]),
             )
             conn.commit()
         updated += 1

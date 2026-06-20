@@ -24,6 +24,46 @@ def _normalize_code(stock_code: str) -> str:
     return str(stock_code or "").strip().upper().split(".")[0]
 
 
+def infer_market_type(stock_code: str, declared_market: str = "A") -> str:
+    declared = str(declared_market or "A").strip().upper() or "A"
+    if declared in {"ETF", "LOF", "HK", "US"}:
+        return declared
+
+    code = _normalize_code(stock_code)
+    if not code:
+        return declared
+    if code.isalpha() and len(code) <= 5:
+        return "US"
+    if code.isdigit() and len(code) == 5:
+        return "HK"
+    if code.isdigit() and len(code) == 6:
+        if code.startswith("161"):
+            return "LOF"
+        if code.startswith(("159", "51", "56", "58")):
+            return "ETF"
+    return "A"
+
+
+def is_placeholder_name(name: str, stock_code: str) -> bool:
+    label = str(name or "").strip()
+    code = _normalize_code(stock_code)
+    if not label or not code:
+        return not bool(label)
+    if label.upper() == code:
+        return True
+    for prefix in ("ETF", "LOF", "股票", "港股", "美股"):
+        if label.upper() == f"{prefix} {code}":
+            return True
+    return False
+
+
+def _accept_name(name: str, stock_code: str) -> str:
+    cleaned = str(name or "").strip()
+    if cleaned and not is_placeholder_name(cleaned, stock_code):
+        return cleaned
+    return ""
+
+
 def _to_tushare_ts_code(stock_code: str) -> str:
     code = _normalize_code(stock_code)
     if code.startswith("6") or code.startswith("5"):
@@ -166,7 +206,9 @@ def _lookup_static_name(stock_code: str, market_type: str) -> str:
 
             for row in SearchSnapshotService().search_a_shares(code, limit=1):
                 if _normalize_code(str(row.get("symbol") or "")) == code:
-                    return str(row.get("name") or "").strip()
+                    name = str(row.get("name") or "").strip()
+                    if name and name != code:
+                        return name
         except Exception as exc:
             logger.debug(f"[InstrumentNameResolver] snapshot lookup failed for {code}: {exc}")
 
@@ -195,25 +237,26 @@ def resolve_display_name(
     *,
     allow_network: bool = False,
 ) -> str:
-    name = str(stock_name or "").strip()
-    if name:
-        return name
-
-    market_type = str(market_type or "A").strip().upper() or "A"
     code = _normalize_code(stock_code)
     if not code:
         return ""
 
-    static_name = _lookup_static_name(code, market_type)
-    if static_name:
-        return static_name
+    existing = _accept_name(stock_name, code)
+    if existing:
+        return existing
 
-    if market_type in {"ETF", "LOF"}:
-        fund_name = lookup_fund_name(code, market_type)
+    effective_market = infer_market_type(code, market_type)
+
+    if effective_market in {"ETF", "LOF"}:
+        fund_name = lookup_fund_name(code, effective_market)
         if fund_name:
             return fund_name
 
-    if market_type == "A" and allow_network:
+    static_name = _lookup_static_name(code, effective_market)
+    if static_name:
+        return static_name
+
+    if effective_market == "A" and allow_network:
         resolved = _lookup_tushare_stock_name(code)
         if resolved:
             return resolved
@@ -226,7 +269,7 @@ def resolve_display_name(
         except Exception as exc:
             logger.debug(f"[InstrumentNameResolver] A-share lookup failed for {code}: {exc}")
 
-    if market_type in {"ETF", "LOF"} and allow_network:
+    if effective_market in {"ETF", "LOF"} and allow_network:
         return _lookup_tushare_fund_name(code)
 
     return ""
@@ -251,17 +294,25 @@ def fallback_display_name(stock_code: str, market_type: str = "A") -> str:
 def enrich_article_record(article: Dict[str, object]) -> Dict[str, object]:
     enriched = dict(article)
     code = str(enriched.get("stock_code") or "")
-    market_type = str(enriched.get("market_type") or "A")
+    declared_market = str(enriched.get("market_type") or "A")
+    effective_market = infer_market_type(code, declared_market)
+    if effective_market != declared_market:
+        enriched["market_type"] = effective_market
+
+    current_name = str(enriched.get("stock_name") or "")
+    if is_placeholder_name(current_name, code):
+        current_name = ""
+
     resolved = resolve_display_name(
         code,
-        market_type=market_type,
-        stock_name=str(enriched.get("stock_name") or ""),
+        market_type=effective_market,
+        stock_name=current_name,
         allow_network=True,
     )
     if resolved:
         enriched["stock_name"] = resolved
     elif code:
-        enriched["stock_name"] = fallback_display_name(code, market_type)
+        enriched["stock_name"] = fallback_display_name(code, effective_market)
     return enriched
 
 
@@ -274,13 +325,16 @@ def resolve_stock_page_info(
     code = _normalize_code(stock_code)
     if not code:
         return None
-    market_type = str(market_type or "A").strip().upper() or "A"
+    effective_market = infer_market_type(code, market_type)
+    current_name = stock_name
+    if is_placeholder_name(str(current_name or ""), code):
+        current_name = ""
     name = resolve_display_name(
         code,
-        market_type=market_type,
-        stock_name=stock_name,
+        market_type=effective_market,
+        stock_name=str(current_name or ""),
         allow_network=True,
     )
     if not name:
-        name = fallback_display_name(code, market_type)
-    return code, name, market_type
+        name = fallback_display_name(code, effective_market)
+    return code, name, effective_market

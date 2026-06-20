@@ -1,9 +1,58 @@
 from services.article_seo_service import ArticleSeoService
 from services.instrument_name_resolver import (
     enrich_article_record,
+    infer_market_type,
+    is_placeholder_name,
     resolve_display_name,
     resolve_stock_page_info,
 )
+
+
+def test_infer_market_type_detects_etf_from_code_prefix():
+    assert infer_market_type("159915", "A") == "ETF"
+    assert infer_market_type("513120", "A") == "ETF"
+    assert infer_market_type("161226", "A") == "LOF"
+
+
+def test_is_placeholder_name_treats_code_as_invalid():
+    assert is_placeholder_name("159915", "159915") is True
+    assert is_placeholder_name("ETF 159915", "159915") is True
+    assert is_placeholder_name("易方达创业板ETF", "159915") is False
+
+
+def test_resolve_display_name_re_resolves_placeholder_name(monkeypatch):
+    monkeypatch.setattr(
+        "services.instrument_name_resolver.lookup_fund_name",
+        lambda code, market_type="ETF": "易方达创业板ETF" if code == "159915" else "",
+    )
+
+    resolved = resolve_display_name(
+        "159915",
+        market_type="A",
+        stock_name="159915",
+        allow_network=False,
+    )
+    assert resolved == "易方达创业板ETF"
+
+
+def test_enrich_article_record_fixes_wrong_market_and_placeholder_name(monkeypatch):
+    monkeypatch.setattr(
+        "services.instrument_name_resolver.lookup_fund_name",
+        lambda code, market_type="ETF": "广发纳斯达克100ETF(QDII)" if code == "159941" else "",
+    )
+
+    enriched = enrich_article_record(
+        {
+            "id": 1605,
+            "stock_code": "159941",
+            "stock_name": "159941",
+            "market_type": "A",
+            "title": "2026年06月19日 159941 ETF行情走势异动分析",
+        }
+    )
+
+    assert enriched["market_type"] == "ETF"
+    assert enriched["stock_name"] == "广发纳斯达克100ETF(QDII)"
 
 
 def test_enrich_article_record_uses_fallback_when_lookup_missing(monkeypatch):
