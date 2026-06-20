@@ -27,11 +27,25 @@ class WatchlistRiskAlertService:
     def sync_alerts_for_trade_date(self, trade_date: Optional[str] = None) -> Dict[str, Any]:
         effective_date = trade_date or self.risk_stock_service.get_latest_trade_date()
         if not effective_date:
-            return {"trade_date": None, "created": 0, "matched_users": 0}
+            return {
+                "trade_date": None,
+                "created": 0,
+                "matched_users": 0,
+                "emails_sent": 0,
+                "emails_skipped": 0,
+                "emails_failed": 0,
+            }
 
         risk_items = self.risk_stock_service.get_items(trade_date=effective_date)
         if not risk_items:
-            return {"trade_date": effective_date, "created": 0, "matched_users": 0}
+            return {
+                "trade_date": effective_date,
+                "created": 0,
+                "matched_users": 0,
+                "emails_sent": 0,
+                "emails_skipped": 0,
+                "emails_failed": 0,
+            }
 
         risk_by_code = {item["ts_code"]: item for item in risk_items}
         codes = list(risk_by_code.keys())
@@ -91,11 +105,24 @@ class WatchlistRiskAlertService:
         logger.info(
             f"[WatchlistRiskAlert] trade_date={effective_date} created={created} users={len(matched_users)}"
         )
+        email_result = self._send_email_digests(effective_date)
         return {
             "trade_date": effective_date,
             "created": created,
             "matched_users": len(matched_users),
+            "emails_sent": email_result.get("sent", 0),
+            "emails_skipped": email_result.get("skipped", 0),
+            "emails_failed": email_result.get("failed", 0),
         }
+
+    def _send_email_digests(self, trade_date: str) -> Dict[str, Any]:
+        try:
+            from services.risk_alert_email_service import RiskAlertEmailService
+
+            return RiskAlertEmailService().send_digests_for_trade_date(trade_date)
+        except Exception as exc:
+            logger.warning(f"[WatchlistRiskAlert] risk alert email dispatch failed: {exc}")
+            return {"sent": 0, "skipped": 0, "failed": 0}
 
     def get_unread_count(self, user_id: str) -> int:
         if not user_id:

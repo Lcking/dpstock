@@ -65,6 +65,7 @@ python -m pytest \
   tests/test_judgment_verifier.py \
   tests/test_seo_injection.py \
   tests/test_risk_stock_frontend_contract.py \
+  tests/test_risk_alert_email.py \
   -q
 python -m compileall routes services web_server.py
 ```

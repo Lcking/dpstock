@@ -3,6 +3,7 @@ User Center API Routes — uses unified auth
 """
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
+from pydantic import BaseModel
 
 from auth.dependencies import get_current_user, UserContext
 from services.user_service import UserService
@@ -12,6 +13,7 @@ from services.watchlist import watchlist_service
 from services.journal import journal_service
 from services.judgment_accuracy_service import JudgmentAccuracyService
 from services.watchlist_risk_alert_service import WatchlistRiskAlertService
+from services.notify_pref_service import NotifyPrefService
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -19,6 +21,11 @@ router = APIRouter(prefix="/api/user-center", tags=["user-center"])
 
 user_service = UserService()
 quota_service = QuotaService()
+notify_pref_service = NotifyPrefService()
+
+
+class NotifyPrefUpdateRequest(BaseModel):
+    risk_alert_email: bool
 
 
 def _mask_email(email: Optional[str]) -> Optional[str]:
@@ -53,6 +60,7 @@ async def get_user_center_overview(user: UserContext = Depends(get_current_user)
                 "email_verified": bool(user_record.get("email_verified")),
                 "masked_email": _mask_email(user_record.get("primary_email")),
                 "status": user_record.get("status", "active"),
+                "notify_pref": notify_pref_service.get_notify_pref(user.user_id),
             },
             "quota_status": quota_status,
             "watchlist_count": len(watchlists),
@@ -71,3 +79,17 @@ async def get_user_center_overview(user: UserContext = Depends(get_current_user)
     except Exception as e:
         logger.error(f"[UserCenter] Failed to load overview: {e}")
         raise HTTPException(status_code=500, detail="获取用户中心概览失败")
+
+
+@router.get("/notify-pref")
+async def get_notify_pref(user: UserContext = Depends(get_current_user)):
+    return {"notify_pref": notify_pref_service.get_notify_pref(user.user_id)}
+
+
+@router.patch("/notify-pref")
+async def update_notify_pref(
+    body: NotifyPrefUpdateRequest,
+    user: UserContext = Depends(get_current_user),
+):
+    pref = notify_pref_service.set_risk_alert_email(user.user_id, body.risk_alert_email)
+    return {"notify_pref": pref}

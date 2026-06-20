@@ -84,6 +84,7 @@ class RiskStockService:
             return {
                 "alerts_created": alert_result.get("created", 0),
                 "alerts_matched_users": alert_result.get("matched_users", 0),
+                "emails_sent": alert_result.get("emails_sent", 0),
             }
         except Exception as exc:
             logger.warning(f"[RiskStockService] watchlist alert sync failed: {exc}")
