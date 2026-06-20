@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, Optional
 
 from services.seo_head_injection import inject_ssr_fields
+from services.instrument_name_resolver import enrich_article_record
 
 
 class ArticleSeoService:
@@ -67,6 +68,7 @@ class ArticleSeoService:
         }
 
     def inject_article_page(self, html_content: str, article: Dict[str, Any]) -> str:
+        article = enrich_article_record(article)
         article_id = article.get("id")
         title = f"{article.get('title') or '分析文章'} - Agu AI"
         description = self.build_description(article)
@@ -102,6 +104,7 @@ class ArticleSeoService:
         )
 
     def render_article_body(self, article: Dict[str, Any], description: str) -> str:
+        article = enrich_article_record(article)
         parsed = self._parse_article_content(article.get("content") or "")
         stock_name = html.escape(str(article.get("stock_name") or ""))
         stock_code = html.escape(str(article.get("stock_code") or ""))

@@ -54,6 +54,7 @@ class SitemapGenerator:
                 )
 
             articles = await self._get_articles_safely()
+            archived_stock_paths = set()
             for article in articles:
                 article_id = article.get("id") if hasattr(article, "get") else None
                 if not article_id:
@@ -70,9 +71,22 @@ class SitemapGenerator:
                     priority="0.8",
                     changefreq="weekly",
                 )
+                stock_code = str(article.get("stock_code") or "").strip()
+                if stock_code:
+                    archived_stock_paths.add(f"/stock/{stock_code}")
+
+            for stock_path in sorted(archived_stock_paths):
+                if stock_path in {f"/stock/{stock.code}" for stock in hot_stocks}:
+                    continue
+                self._add_url(
+                    urlset,
+                    stock_path,
+                    priority="0.6",
+                    changefreq="weekly",
+                )
 
             logger.info(
-                f"生成 core sitemap 成功, 包含 {len(articles) + len(hot_stocks) + 4} 个URL"
+                f"生成 core sitemap 成功, 包含 {len(articles) + len(hot_stocks) + len(archived_stock_paths) + 4} 个URL"
             )
             return self._render_urlset(urlset)
         except Exception as e:

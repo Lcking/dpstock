@@ -136,7 +136,12 @@ class ArchiveService:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
-                return cursor.fetchone()  # Already dict or None
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                from services.instrument_name_resolver import enrich_article_record
+
+                return enrich_article_record(dict(row))
         except Exception as e:
             logger.error(f"获取文章详情出错: {str(e)}")
             return None

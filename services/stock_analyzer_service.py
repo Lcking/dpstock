@@ -356,14 +356,26 @@ class StockAnalyzerService:
             df = await self.data_provider.get_stock_data(stock_code, market_type)
 
             # 如果名称为空（快速路径跳过了列表查询），尝试补全
-            if not stock_name and market_type == 'A':
-                stock_name = await asyncio.to_thread(
-                    self.data_provider.lookup_stock_name,
-                    stock_code,
-                    True,
-                )
-                if stock_name:
-                    logger.info(f"补全股票名称: {stock_code} -> {stock_name}")
+            if not stock_name:
+                if market_type in ("ETF", "LOF"):
+                    from services.instrument_name_resolver import resolve_display_name
+
+                    stock_name = resolve_display_name(
+                        stock_code,
+                        market_type=market_type,
+                        stock_name=stock_name,
+                        allow_network=True,
+                    )
+                    if stock_name:
+                        logger.info(f"补全基金名称: {stock_code} -> {stock_name}")
+                elif market_type == "A":
+                    stock_name = await asyncio.to_thread(
+                        self.data_provider.lookup_stock_name,
+                        stock_code,
+                        True,
+                    )
+                    if stock_name:
+                        logger.info(f"补全股票名称: {stock_code} -> {stock_name}")
             
             # 检查是否有错误
             if hasattr(df, 'error'):

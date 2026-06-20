@@ -619,11 +619,17 @@ class StockPageService:
         article_code = self.normalize_code(article.get("stock_code") or normalized)
         if article_code != normalized:
             return None
-        stock_name = str(article.get("stock_name") or "").strip()
-        if not stock_name:
+        from services.instrument_name_resolver import resolve_stock_page_info
+
+        resolved = resolve_stock_page_info(
+            article_code,
+            stock_name=str(article.get("stock_name") or ""),
+            market_type=str(article.get("market_type") or "A"),
+        )
+        if not resolved:
             return None
-        market_type = str(article.get("market_type") or "A").strip() or "A"
-        return StockPageInfo(code=normalized, name=stock_name, market=market_type)
+        code, stock_name, market_type = resolved
+        return StockPageInfo(code=code, name=stock_name, market=market_type)
 
     def _render_recent_articles(self, articles: List[Dict[str, Any]]) -> str:
         if not articles:
