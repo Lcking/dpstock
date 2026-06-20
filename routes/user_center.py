@@ -38,7 +38,10 @@ async def get_user_center_overview(user: UserContext = Depends(get_current_user)
         recent_judgments = journal_service.get_records(user_id=user.user_id, page=1, page_size=5)
         due_count = journal_service.get_due_count(user.user_id)
         judgment_count = journal_service.get_records_count(user.user_id)
-        quota_status = quota_service.get_quota_status(user.user_id)
+        quota_status = quota_service.get_quota_status(
+            user.user_id,
+            is_authenticated=user.is_authenticated,
+        )
         trust_stats = JudgmentAccuracyService().get_public_accuracy_stats(window_days=90)
         personal_review_stats = journal_service.get_review_stats(user.user_id, limit=50)
         risk_alert_unread_count = WatchlistRiskAlertService().get_unread_count(user.user_id)

@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, Response, Depends, HTTPException, Backgrou
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from services.stock_analyzer_service import StockAnalyzerService
 from services.us_stock_service_async import USStockServiceAsync
@@ -17,6 +17,7 @@ from services.market_overview_service import MarketOverviewService
 import asyncio
 import httpx
 from services.quota_service import QuotaService
+from services.analyze_rate_limiter import check_analyze_rate_limit
 from services.invite_service import InviteService
 from services.user_service import UserService
 from services.verification_scheduler import start_verification_scheduler
@@ -132,11 +133,20 @@ fund_service = FundServiceAsync()
 search_snapshot_service = SearchSnapshotService()
 market_overview_service = MarketOverviewService()
 SEARCH_TASK_TIMEOUT_SECONDS = 2.5
+ANALYZE_BATCH_MAX = int(os.getenv("ANALYZE_BATCH_MAX", "20"))
 
 # 定义请求和响应模型
 class AnalyzeRequest(BaseModel):
-    stock_codes: List[str]
+    stock_codes: List[str] = Field(..., min_length=1, max_length=ANALYZE_BATCH_MAX)
     market_type: str = "A"
+
+    @field_validator("stock_codes")
+    @classmethod
+    def normalize_stock_codes(cls, value: List[str]) -> List[str]:
+        normalized = [str(code).strip() for code in value if str(code).strip()]
+        if not normalized:
+            raise ValueError("股票代码不能为空")
+        return normalized
 
 class LoginRequest(BaseModel):
     password: str
@@ -272,6 +282,7 @@ async def analyze_slo(user: UserContext = Depends(require_login)):
 @app.post("/api/analyze")
 async def analyze(
     request: AnalyzeRequest,
+    http_request: Request,
     response: Response,
     user: UserContext = Depends(require_login),
     aguai_ref: Optional[str] = Cookie(None),
@@ -283,30 +294,42 @@ async def analyze(
         market_type = request.market_type
 
         quota_service_instance = QuotaService()
-        invite_service_instance = InviteService()
         canonical_user_id = user.user_id
-        
-        # Quota check for single stock analysis only (batch analysis not subject to quota)
-        if len(stock_codes) == 1 and canonical_user_id:
-            stock_code = stock_codes[0].strip()
-            
-            # Check quota before analysis
-            allowed, reason, details = quota_service_instance.check_quota(
-                user_id=canonical_user_id,
-                stock_code=stock_code
-            )
-            
+        client_host = http_request.client.host if http_request.client else "unknown"
+
+        if canonical_user_id:
+            allowed, limit_reason = check_analyze_rate_limit(canonical_user_id, client_host)
             if not allowed:
-                logger.warning(f"Quota exceeded for user {canonical_user_id}, stock {stock_code}")
+                raise HTTPException(
+                    status_code=429,
+                    detail={
+                        "error": limit_reason,
+                        "message": "分析请求过于频繁，请稍后再试",
+                    },
+                )
+
+            allowed, reason, details = quota_service_instance.check_quota_for_codes(
+                user_id=canonical_user_id,
+                stock_codes=stock_codes,
+                is_authenticated=user.is_authenticated,
+            )
+            if not allowed:
+                logger.warning(
+                    f"Quota exceeded for user {canonical_user_id}, "
+                    f"codes={stock_codes}, required={details.get('required_quota')}"
+                )
                 raise HTTPException(
                     status_code=403,
                     detail={
                         "error": "quota_exceeded",
                         "message": details.get("message", "今日分析额度已用完"),
                         "remaining_quota": details.get("remaining_quota", 0),
-                        "analyzed_stocks_today": details.get("analyzed_stocks_today", [])
-                    }
+                        "required_quota": details.get("required_quota", len(stock_codes)),
+                        "analyzed_stocks_today": details.get("analyzed_stocks_today", []),
+                    },
                 )
+
+        invite_service_instance = InviteService()
         
         # 后端再次去重，确保安全
         original_count = len(stock_codes)
@@ -503,6 +526,16 @@ async def analyze(
                     }, ensure_ascii=False)
                     analyze_slo_tracker.add_chunk(slo_sample)
                     yield end_payload + '\n'
+
+                    if canonical_user_id:
+                        quota_service_instance.record_analyses(
+                            user_id=canonical_user_id,
+                            stock_codes=resolved_codes,
+                        )
+                        logger.info(
+                            f"Recorded batch analysis for user {canonical_user_id}, "
+                            f"stocks={resolved_codes}"
+                        )
             except Exception as stream_exc:
                 logger.error(f"分析流异常: {stream_exc}")
                 if slo_sample.status == "running":

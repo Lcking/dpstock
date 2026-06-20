@@ -6,6 +6,7 @@ REFACTORED: Uses DatabaseFactory for unified database access
 """
 import sqlite3
 import uuid
+import os
 from datetime import date, datetime
 from typing import Any, Optional, Dict, Tuple
 from utils.logger import get_logger
@@ -20,11 +21,11 @@ class InviteService:
     
     REWARD_QUOTA = 5  # Quota awarded per successful invite
     
-    def __init__(self, db_path: str = "data/stocks.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or os.getenv("DB_PATH", "data/stocks.db")
         self.db = DatabaseFactory
-        DatabaseFactory.initialize(db_path)
-        self.user_service = UserService(db_path=db_path)
+        DatabaseFactory.initialize(self.db_path)
+        self.user_service = UserService(db_path=self.db_path)
 
     def _resolve_canonical_user_id(self, user_id: Optional[str]) -> Optional[str]:
         if not user_id:

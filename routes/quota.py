@@ -30,7 +30,10 @@ class QuotaCheckResponse(BaseModel):
 @router.get("/quota/status")
 async def get_quota_status(user: UserContext = Depends(get_current_user)):
     try:
-        return quota_service.get_quota_status(user.user_id)
+        return quota_service.get_quota_status(
+            user.user_id,
+            is_authenticated=user.is_authenticated,
+        )
     except Exception as e:
         logger.error(f"Failed to get quota status: {str(e)}")
         raise HTTPException(
@@ -48,6 +51,7 @@ async def check_quota(
         allowed, reason, details = quota_service.check_quota(
             user_id=user.user_id,
             stock_code=request.stock_code,
+            is_authenticated=user.is_authenticated,
         )
         return QuotaCheckResponse(
             allowed=allowed,
