@@ -22,10 +22,10 @@ export function saveAnchorToken(token: string): void {
 }
 
 /**
- * Check if the user has bound their email.
+ * Check if the user has an active email-bound session (token + masked email).
  */
 export function hasAnchorToken(): boolean {
-    return !!localStorage.getItem(MASKED_EMAIL_KEY);
+    return !!localStorage.getItem('token') && !!localStorage.getItem(MASKED_EMAIL_KEY);
 }
 
 /**

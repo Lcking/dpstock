@@ -82,6 +82,23 @@
       </div>
     </n-alert>
 
+    <n-alert
+      v-if="needsSessionRestore && watchlistState.isTemporary"
+      type="warning"
+      :bordered="false"
+      class="restore-session-alert"
+    >
+      <template #header>
+        换设备了？
+      </template>
+      <div class="trial-alert-content">
+        <span>你曾在其他设备绑定邮箱。在当前设备再次验证邮箱，即可恢复观察列表与判断记录。</span>
+        <n-button type="primary" size="small" @click="showBindDialog = true">
+          验证邮箱恢复
+        </n-button>
+      </div>
+    </n-alert>
+
     <!-- 筛选与排序 -->
     <watchlist-filters
       :sort="currentSort"
@@ -318,6 +335,7 @@ import AnchorBindDialog from '../AnchorBindDialog.vue'
 import { apiService } from '@/services/api'
 import type { WatchlistSummary, Watchlist, WatchlistItemSummary, WatchlistRiskAlert } from '@/types/watchlist'
 import { applyPageSeo } from '@/utils/seo'
+import { syncAnchorSession } from '@/utils/anchorSession'
 import { useNotificationStore } from '@/stores/notification'
 
 const router = useRouter()
@@ -344,6 +362,7 @@ const watchlistState = ref({
   trialMessage: null as string | null
 })
 const riskAlerts = ref<WatchlistRiskAlert[]>([])
+const needsSessionRestore = ref(false)
 
 const applyWatchlistState = (source?: Partial<WatchlistSummary & Watchlist> | null) => {
   watchlistState.value = {
@@ -795,6 +814,7 @@ async function scrollToRiskPanel() {
 }
 
 const handleBindSuccess = async () => {
+  needsSessionRestore.value = false
   message.success('已绑定邮箱，你的观察列表现在会长期保存')
   await initWatchlist()
 }
@@ -831,6 +851,7 @@ onMounted(async () => {
     canonicalPath: '/watchlist',
     robots: 'noindex, nofollow',
   })
+  needsSessionRestore.value = (await syncAnchorSession()) === 'restore'
   await initWatchlist()
   await loadRiskAlerts()
   if (route.query.focus === 'risk') {

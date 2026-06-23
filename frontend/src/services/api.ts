@@ -54,6 +54,7 @@ axiosInstance.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
+      localStorage.removeItem('aguai_masked_email');
     }
     return Promise.reject(error);
   },

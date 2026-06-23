@@ -125,8 +125,13 @@ const error = ref('');
 const inviteUrl = ref('');
 const inviteCode = ref('');
 
-const inviteQuota = computed(() => props.quotaStatus?.invite_quota || 0);
-const totalQuota = computed(() => props.quotaStatus?.total_quota || 5);
+const inviteQuota = computed(() => props.quotaStatus?.invite_quota ?? 0);
+const totalQuota = computed(() => {
+  if (!props.quotaStatus) return 3;
+  return props.quotaStatus.total_quota ?? (
+    (props.quotaStatus.base_quota ?? 3) + (props.quotaStatus.invite_quota ?? 0)
+  );
+});
 
 const canShare = computed(() => {
   return navigator.share !== undefined;

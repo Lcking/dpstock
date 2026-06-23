@@ -22,9 +22,15 @@
         <div style="max-width: 250px;">
           <div><strong>今日分析额度</strong></div>
           <div style="margin-top: 4px;">
-            基础: {{ status?.base_quota || 5 }} 次<br/>
-            邀请奖励: {{ status?.invite_quota || 0 }} 次<br/>
-            已用: {{ status?.used_quota || 0 }} 次
+            基础: {{ status?.base_quota ?? DEFAULT_BASE_QUOTA }} 次<br/>
+            邀请奖励: {{ status?.invite_quota ?? 0 }} 次<br/>
+            已用: {{ status?.used_quota ?? 0 }} 次
+          </div>
+          <div v-if="status?.is_authenticated" style="margin-top: 6px; font-size: 12px; opacity: 0.85;">
+            已绑定邮箱：基础额度 {{ status?.base_quota ?? DEFAULT_BASE_QUOTA }} 次/日
+          </div>
+          <div v-else style="margin-top: 6px; font-size: 12px; opacity: 0.85;">
+            未绑定：基础额度 {{ status?.base_quota ?? DEFAULT_BASE_QUOTA }} 次/日
           </div>
           <div style="margin-top: 8px; font-size: 12px; opacity: 0.8;">
             当前额度与邀请奖励会按统一账户归集，绑定后不会因设备切换丢失
@@ -53,6 +59,8 @@ import { NSpace, NTag, NTooltip, NButton, NIcon } from 'naive-ui';
 import { AnalyticsOutline, ShareSocialOutline } from '@vicons/ionicons5';
 import { apiService } from '@/services/api';
 
+const DEFAULT_BASE_QUOTA = 3;
+
 const emit = defineEmits(['openInvite', 'quotaClick']);
 
 const status = ref<any>(null);
@@ -60,15 +68,15 @@ const loading = ref(false);
 
 const quotaText = computed(() => {
   if (!status.value) return '加载中…';
-  const remaining = status.value.remaining_quota || 0;
-  const total = status.value.total_quota || 5;
+  const remaining = status.value.remaining_quota ?? 0;
+  const total = status.value.total_quota ?? DEFAULT_BASE_QUOTA;
   return `${remaining}/${total}`;
 });
 
 const getQuotaType = () => {
   if (!status.value) return 'default';
-  const remaining = status.value.remaining_quota || 0;
-  const total = status.value.total_quota || 5;
+  const remaining = status.value.remaining_quota ?? 0;
+  const total = status.value.total_quota ?? DEFAULT_BASE_QUOTA;
   const percentage = (remaining / total) * 100;
   
   if (percentage > 50) return 'success';

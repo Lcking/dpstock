@@ -7,6 +7,13 @@
       </n-button>
     </n-text>
     
+    <n-text v-else-if="mode === 'restore'" depth="3" :style="{ fontSize: textSize }">
+      保存方式: <n-text type="warning">需重新验证</n-text>
+      <n-button text type="primary" size="small" @click="emit('show-bind')">
+        验证邮箱恢复
+      </n-button>
+    </n-text>
+
     <n-text v-else depth="3" :style="{ fontSize: textSize }">
       保存方式: <n-text type="success">已绑定邮箱</n-text> (长期保存)
       <n-tag size="small" :bordered="false" style="margin-left: 8px;">
@@ -19,7 +26,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { NText, NButton, NTag } from 'naive-ui';
-import { hasAnchorToken, getMaskedEmail } from '@/utils/anchorToken';
+import { getMaskedEmail } from '@/utils/anchorToken';
+import { syncAnchorSession, type AnchorSessionMode } from '@/utils/anchorSession';
 
 interface Props {
   textSize?: string;
@@ -31,27 +39,20 @@ withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits(['show-bind']);
 
-// State
-const mode = ref<'anonymous' | 'anchor'>('anonymous');
+const mode = ref<AnchorSessionMode>('anonymous');
 const maskedEmail = ref<string>('');
 
-// Check anchor status on mount
-onMounted(() => {
-  if (hasAnchorToken()) {
-    mode.value = 'anchor';
-    maskedEmail.value = getMaskedEmail() || '';
-  }
-});
-
-// Expose method to update status after binding
-function updateStatus() {
-  if (hasAnchorToken()) {
-    mode.value = 'anchor';
-    maskedEmail.value = getMaskedEmail() || '';
-  }
+async function refreshStatus() {
+  const session = await syncAnchorSession();
+  mode.value = session;
+  maskedEmail.value = session === 'anchor' ? (getMaskedEmail() || '') : '';
 }
 
-defineExpose({ updateStatus });
+onMounted(() => {
+  void refreshStatus();
+});
+
+defineExpose({ updateStatus: refreshStatus });
 </script>
 
 <style scoped>

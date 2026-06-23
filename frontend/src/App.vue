@@ -32,6 +32,7 @@ import {
 } from 'naive-ui'
 import { getOrCreateUserId } from '@/utils/cookies'
 import { getOrCreateAnonymousId } from '@/utils/anonymousId'
+import { syncAnchorSession } from '@/utils/anchorSession'
 import { useNotificationStore } from '@/stores/notification'
 
 // 主题设置 (默认使用亮色主题)
@@ -46,6 +47,9 @@ onMounted(() => {
   
   // Initialize anonymous ID (for anchor system)
   getOrCreateAnonymousId();
+
+  // Align email-binding UI with server session (avoid stale masked_email without JWT)
+  void syncAnchorSession();
   
   // Start polling for notifications
   notificationStore.startPolling();

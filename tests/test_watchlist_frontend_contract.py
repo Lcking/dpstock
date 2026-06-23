@@ -25,6 +25,32 @@ def test_watchlist_binding_prompt_uses_server_temporary_state_only():
     assert "hasAnchorToken" not in watchlist_view
 
 
+def test_watchlist_page_prompts_email_restore_on_new_device():
+    watchlist_view = (REPO_ROOT / "frontend/src/components/Watchlist/WatchlistList.vue").read_text(encoding="utf-8")
+    anchor_session = (REPO_ROOT / "frontend/src/utils/anchorSession.ts").read_text(encoding="utf-8")
+
+    assert "needsSessionRestore" in watchlist_view
+    assert "验证邮箱恢复" in watchlist_view
+    assert "syncAnchorSession" in anchor_session
+    assert "masked_email alone is not proof" in anchor_session
+
+
+def test_quota_status_ui_does_not_default_to_five():
+    quota_view = (REPO_ROOT / "frontend/src/components/QuotaStatus.vue").read_text(encoding="utf-8")
+    invite_view = (REPO_ROOT / "frontend/src/components/InviteDialog.vue").read_text(encoding="utf-8")
+
+    assert "DEFAULT_BASE_QUOTA = 3" in quota_view
+    assert "|| 5" not in quota_view
+    assert "total_quota || 5" not in invite_view
+
+
+def test_anchor_token_requires_jwt_for_bound_state():
+    anchor_token = (REPO_ROOT / "frontend/src/utils/anchorToken.ts").read_text(encoding="utf-8")
+
+    assert "localStorage.getItem('token')" in anchor_token
+    assert "MASKED_EMAIL_KEY" in anchor_token
+
+
 def test_watchlist_page_supports_two_phase_summary_loading():
     watchlist_types = (REPO_ROOT / "frontend/src/types/watchlist.ts").read_text(encoding="utf-8")
     watchlist_view = (REPO_ROOT / "frontend/src/components/Watchlist/WatchlistList.vue").read_text(encoding="utf-8")
