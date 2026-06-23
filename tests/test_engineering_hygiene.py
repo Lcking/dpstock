@@ -7,6 +7,7 @@ def test_conftest_provides_isolated_db_fixture():
     conftest = (REPO_ROOT / "tests/conftest.py").read_text(encoding="utf-8")
     assert "def isolated_db" in conftest
     assert "INTEGRATION_MIGRATIONS" in conftest
+    assert "def isolate_default_db_path" in conftest
 
 
 def test_gitignore_blocks_test_db_artifacts_in_data_dir():

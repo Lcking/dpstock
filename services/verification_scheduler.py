@@ -88,6 +88,9 @@ class VerificationScheduler:
     @classmethod
     def _run_verification_job(cls):
         """Execute the verification job"""
+        from services.job_health_tracker import job_health_tracker
+
+        job_id = "verification_scheduler"
         try:
             logger.info("[VerificationScheduler] Running scheduled verification...")
             
@@ -116,8 +119,10 @@ class VerificationScheduler:
                 f"[VerificationScheduler] Completed - "
                 f"owners={len(pending)}, checked={total_checked}, updated={total_updated}"
             )
+            job_health_tracker.record_success(job_id)
             
         except Exception as e:
+            job_health_tracker.record_failure(job_id, str(e))
             logger.error(f"[VerificationScheduler] Job failed: {e}")
     
     @classmethod

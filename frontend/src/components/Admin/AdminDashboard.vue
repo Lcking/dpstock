@@ -120,6 +120,40 @@
         <n-h3 prefix="bar" style="margin-top: 16px">最近奖励</n-h3>
         <n-data-table :columns="rewardCols" :data="rewardRows" :bordered="false" />
       </n-tab-pane>
+
+      <n-tab-pane name="ops" tab="运维">
+        <n-space style="margin-bottom: 12px">
+          <n-button size="small" @click="loadOps">刷新</n-button>
+          <n-text depth="3">Analyze SLO、调度任务健康、LLM 调用量（近 7 天）</n-text>
+        </n-space>
+        <n-spin :show="opsLoading">
+          <template v-if="opsSummary">
+            <n-descriptions bordered size="small" title="Analyze SLO" :column="2" style="max-width: 720px">
+              <n-descriptions-item label="样本数">{{ opsSummary.analyze_slo?.total_requests ?? 0 }}</n-descriptions-item>
+              <n-descriptions-item label="完成">{{ opsSummary.analyze_slo?.status_counts?.completed ?? 0 }}</n-descriptions-item>
+              <n-descriptions-item label="超时">{{ opsSummary.analyze_slo?.status_counts?.timeout ?? 0 }}</n-descriptions-item>
+              <n-descriptions-item label="错误">{{ opsSummary.analyze_slo?.status_counts?.error ?? 0 }}</n-descriptions-item>
+              <n-descriptions-item label="首包 p95">{{ opsSummary.analyze_slo?.first_chunk_ms?.p95 ?? '—' }} ms</n-descriptions-item>
+              <n-descriptions-item label="总耗时 p95">{{ opsSummary.analyze_slo?.duration_ms?.p95 ?? '—' }} ms</n-descriptions-item>
+            </n-descriptions>
+
+            <n-h3 prefix="bar" style="margin-top: 16px">调度任务</n-h3>
+            <n-alert v-if="opsSummary.job_health?.degraded" type="warning" style="margin-bottom: 8px">
+              存在连续失败任务，请检查日志或配置 OPS_ALERT_WEBHOOK_URL。
+            </n-alert>
+            <n-data-table :columns="opsJobCols" :data="opsSummary.job_health?.jobs || []" :bordered="false" />
+
+            <n-h3 prefix="bar" style="margin-top: 16px">LLM 调用量（近 7 天汇总）</n-h3>
+            <n-descriptions bordered size="small" :column="2" style="max-width: 520px">
+              <n-descriptions-item label="匿名 · 请求">{{ opsSummary.llm_usage?.totals?.anonymous?.call_count ?? 0 }}</n-descriptions-item>
+              <n-descriptions-item label="匿名 · 标的">{{ opsSummary.llm_usage?.totals?.anonymous?.stock_count ?? 0 }}</n-descriptions-item>
+              <n-descriptions-item label="绑定 · 请求">{{ opsSummary.llm_usage?.totals?.authenticated?.call_count ?? 0 }}</n-descriptions-item>
+              <n-descriptions-item label="绑定 · 标的">{{ opsSummary.llm_usage?.totals?.authenticated?.stock_count ?? 0 }}</n-descriptions-item>
+            </n-descriptions>
+            <n-data-table style="margin-top: 12px" :columns="opsUsageCols" :data="opsSummary.llm_usage?.daily || []" :bordered="false" />
+          </template>
+        </n-spin>
+      </n-tab-pane>
     </n-tabs>
 
     <n-modal v-model:show="inviteDiagnosisModal" preset="card" style="width: 720px" title="邀请奖励排查">
@@ -487,6 +521,25 @@ const inviteDiagnosisModal = ref(false);
 const inviteDiagnosisLoading = ref(false);
 const inviteDiagnosis = ref<any>(null);
 
+const opsLoading = ref(false);
+const opsSummary = ref<any>(null);
+
+const opsJobCols: DataTableColumns<any> = [
+  { title: '任务', key: 'job_id', ellipsis: { tooltip: true } },
+  { title: '状态', key: 'last_status', width: 80 },
+  { title: '连续失败', key: 'consecutive_failures', width: 90 },
+  { title: '最近运行', key: 'last_run_at', width: 180 },
+  { title: '最近成功', key: 'last_success_at', width: 180 },
+  { title: '错误', key: 'last_error', ellipsis: { tooltip: true } },
+];
+
+const opsUsageCols: DataTableColumns<any> = [
+  { title: '日期', key: 'usage_date', width: 120 },
+  { title: '用户类型', key: 'user_type', width: 120 },
+  { title: '请求数', key: 'call_count', width: 90 },
+  { title: '标的数', key: 'stock_count', width: 90 },
+];
+
 function formatRate(value: number | null | undefined) {
   if (typeof value !== 'number') return '—';
   return `${value.toFixed(1)}%`;
@@ -537,6 +590,18 @@ function formatAcceptanceStatus(status: string) {
   return map[status] || status || '—';
 }
 
+async function loadOps() {
+  opsLoading.value = true;
+  try {
+    const { data } = await adminApi.opsSummary(7);
+    opsSummary.value = data;
+  } catch {
+    message.error('加载运维数据失败');
+  } finally {
+    opsLoading.value = false;
+  }
+}
+
 async function loadInvites() {
   try {
     const [s, a, r] = await Promise.all([
@@ -579,7 +644,7 @@ onMounted(async () => {
     router.replace('/admin/login');
     return;
   }
-  await Promise.all([loadSettings(), loadNav(), loadArticles(), loadUsers(), loadInvites()]);
+  await Promise.all([loadSettings(), loadNav(), loadArticles(), loadUsers(), loadInvites(), loadOps()]);
 });
 </script>
 

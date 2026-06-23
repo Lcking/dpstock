@@ -11,6 +11,8 @@ import logging
 from typing import Optional, List, Dict, Any, Tuple
 from contextlib import contextmanager
 
+from config.database import DatabaseConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,10 +49,18 @@ class DatabaseFactory:
     def initialize(cls, db_path: str = None):
         """Initialize database path from environment or default"""
         if db_path is None:
-            db_path = os.getenv('DB_PATH', 'data/stocks.db')
-        
+            db_path = DatabaseConfig.db_path()
+
+        DatabaseConfig.validate()
         cls._db_path = db_path
         logger.info(f"[DatabaseFactory] Initialized with path: {db_path}")
+    
+    @classmethod
+    def _configure_connection(cls, conn: sqlite3.Connection) -> None:
+        busy_timeout_ms = max(int(DatabaseConfig.timeout() * 1000), 1000)
+        conn.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
+        if DatabaseConfig.enable_wal():
+            conn.execute("PRAGMA journal_mode=WAL")
     
     @classmethod
     def get_connection(cls) -> sqlite3.Connection:
@@ -61,11 +71,9 @@ class DatabaseFactory:
         if cls._db_path is None:
             cls.initialize()
         
-        conn = sqlite3.connect(cls._db_path, timeout=30.0)
+        conn = sqlite3.connect(cls._db_path, timeout=DatabaseConfig.timeout())
         conn.row_factory = dict_factory  # KEY: Use dict_factory, not sqlite3.Row
-        
-        # Enable WAL mode for better concurrency
-        conn.execute('PRAGMA journal_mode=WAL')
+        cls._configure_connection(conn)
         
         return conn
     

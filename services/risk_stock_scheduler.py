@@ -63,6 +63,9 @@ class RiskStockScheduler:
 
     @classmethod
     def _run_refresh_job(cls):
+        from services.job_health_tracker import job_health_tracker
+
+        job_id = "risk_stock_scheduler"
         try:
             from services.risk_stock_service import RiskStockService
 
@@ -72,7 +75,9 @@ class RiskStockScheduler:
                 f"[RiskStockScheduler] Completed trade_date={result.get('trade_date')} "
                 f"count={result.get('count')} alerts_created={result.get('alerts_created', 0)}"
             )
+            job_health_tracker.record_success(job_id)
         except Exception as exc:
+            job_health_tracker.record_failure(job_id, str(exc))
             logger.error(f"[RiskStockScheduler] Refresh failed: {exc}")
 
     @classmethod

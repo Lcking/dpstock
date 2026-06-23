@@ -28,6 +28,10 @@ services:
       - FROM_EMAIL=${FROM_EMAIL:-Aguai <noreply@aguai.net>}
       - STREAM=${STREAM:-true}
       - DB_PATH=/app/data/stocks.db
+      - DB_TIMEOUT=${DB_TIMEOUT:-30}
+      - DB_ENABLE_WAL=${DB_ENABLE_WAL:-true}
+      - OPS_ALERT_WEBHOOK_URL=${OPS_ALERT_WEBHOOK_URL:-}
+      - OPS_ALERT_FAILURE_THRESHOLD=${OPS_ALERT_FAILURE_THRESHOLD:-3}
     volumes:
       # IMPORTANT: persist SQLite DB outside container
       # You can override with DATA_DIR=/var/lib/aguai/data

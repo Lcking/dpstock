@@ -4,6 +4,7 @@ Prevents tests from writing sqlite WAL/SHM files into data/.
 """
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from database.db_factory import DatabaseFactory
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS_DIR = REPO_ROOT / "migrations"
+DATA_DIR = REPO_ROOT / "data"
 
 INTEGRATION_MIGRATIONS = [
     "004_create_watchlist_tables.sql",
@@ -20,6 +22,14 @@ INTEGRATION_MIGRATIONS = [
     "008_create_user_tables.sql",
     "013_add_watchlist_item_weight.sql",
 ]
+
+
+@pytest.fixture(autouse=True)
+def isolate_default_db_path(tmp_path, monkeypatch):
+    """Route accidental DB writes away from repo data/ during tests."""
+    db_path = tmp_path / "pytest_default.db"
+    monkeypatch.setenv("DB_PATH", str(db_path))
+    DatabaseFactory._db_path = str(db_path)
 
 
 def apply_migrations(db_path: Path, migration_names: list[str]) -> None:

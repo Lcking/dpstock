@@ -62,12 +62,17 @@ class JudgmentRecapScheduler:
 
     @classmethod
     def _run_weekly_job(cls):
+        from services.job_health_tracker import job_health_tracker
+
+        job_id = "judgment_recap_scheduler"
         try:
             from services.judgment_recap_service import JudgmentRecapService
 
             result = JudgmentRecapService().log_weekly_snapshot(window_days=7)
             logger.info(f"[JudgmentRecapScheduler] Completed {result}")
+            job_health_tracker.record_success(job_id)
         except Exception as exc:
+            job_health_tracker.record_failure(job_id, str(exc))
             logger.error(f"[JudgmentRecapScheduler] Weekly job failed: {exc}")
 
 

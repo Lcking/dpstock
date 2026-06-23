@@ -69,4 +69,6 @@ export const adminApi = {
   patchNavLink: (id: number, body: Record<string, unknown>) =>
     adminAxios.patch(`/nav-links/${id}`, body),
   deleteNavLink: (id: number) => adminAxios.delete(`/nav-links/${id}`),
+
+  opsSummary: (days = 7) => adminAxios.get('/ops/summary', { params: { days } }),
 };

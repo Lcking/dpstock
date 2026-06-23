@@ -20,7 +20,10 @@ from auth.admin_auth import (
     _rate_limit_ok,
 )
 from database.db_factory import DatabaseFactory
+from services.analyze_slo_tracker import analyze_slo_tracker
 from services.app_settings_service import PATCHABLE_KEYS, AppSettingsService, ai_effective_for_admin_display
+from services.job_health_tracker import job_health_tracker
+from services.llm_usage_service import llm_usage_service
 from services.archive_service import ArchiveService
 from services.journal import journal_service
 from services.nav_links_service import NavLinksService
@@ -481,3 +484,20 @@ async def admin_nav_delete(link_id: int, _: dict = Depends(require_admin)):
     if not ok:
         raise HTTPException(status_code=404, detail="链接不存在")
     return {"ok": True}
+
+
+@router.get("/ops/summary")
+async def admin_ops_summary(days: int = 7, _: dict = Depends(require_admin)):
+    """Ops dashboard: analyze SLO, scheduler health, LLM usage rollup."""
+    days = max(1, min(int(days), 90))
+    return {
+        "analyze_slo": analyze_slo_tracker.snapshot(),
+        "job_health": job_health_tracker.snapshot(),
+        "llm_usage": llm_usage_service.get_summary(days=days),
+    }
+
+
+@router.get("/ops/llm-usage")
+async def admin_ops_llm_usage(days: int = 7, _: dict = Depends(require_admin)):
+    days = max(1, min(int(days), 90))
+    return llm_usage_service.get_summary(days=days)

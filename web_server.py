@@ -24,6 +24,8 @@ from services.verification_scheduler import start_verification_scheduler
 from services.risk_stock_scheduler import RiskStockScheduler, start_risk_stock_scheduler
 from services.judgment_recap_scheduler import start_judgment_recap_scheduler
 from services.analyze_slo_tracker import analyze_slo_tracker
+from services.job_health_tracker import job_health_tracker
+from services.llm_usage_service import llm_usage_service
 from auth.dependencies import (
     require_login,
     create_user_token,
@@ -96,7 +98,9 @@ async def startup_event():
         logger.info("[Startup] Running database migrations...")
         await asyncio.to_thread(run_migrations)
         logger.info("[Startup] Database migrations completed.")
+        job_health_tracker.record_success("startup_migrations")
     except Exception as e:
+        job_health_tracker.record_failure("startup_migrations", str(e))
         logger.error(f"[Startup] Failed to run migrations: {e}")
         
     start_verification_scheduler()
@@ -120,14 +124,18 @@ async def _preload_industry_map_background():
 async def _refresh_risk_stocks_background():
     try:
         await asyncio.to_thread(RiskStockScheduler.refresh_if_missing)
+        job_health_tracker.record_success("risk_stock_startup_refresh")
     except Exception as e:
+        job_health_tracker.record_failure("risk_stock_startup_refresh", str(e))
         logger.warning(f"[Startup] Failed to refresh risk stock list: {e}")
 
 
 async def _refresh_search_snapshot_background():
     try:
         await asyncio.to_thread(search_snapshot_service.refresh_a_share_snapshot)
+        job_health_tracker.record_success("search_snapshot_refresh")
     except Exception as e:
+        job_health_tracker.record_failure("search_snapshot_refresh", str(e))
         logger.warning(f"[Startup] Failed to refresh search snapshot: {e}")
 
 # 初始化异步服务
@@ -252,6 +260,19 @@ async def health():
     except Exception:
         checks["admin_login"] = "unknown"
 
+    try:
+        from services.tushare.client import TushareClient
+
+        client = TushareClient()
+        client.ensure_initialized(log_missing_token=False)
+        checks["tushare"] = "ok" if client.is_available else "not_configured"
+    except Exception as e:
+        checks["tushare"] = f"fail: {type(e).__name__}"
+
+    scheduler_checks = job_health_tracker.snapshot_for_health()
+    checks["schedulers"] = scheduler_checks
+    degraded = job_health_tracker.is_degraded()
+
     # 3) 数据目录磁盘余量：日志/归档表写入路径阻塞是常见月度复发原因
     try:
         data_dir = os.path.dirname(db_path) or "/app/data"
@@ -268,6 +289,7 @@ async def health():
 
     body = {
         "ok": overall_ok,
+        "degraded": degraded,
         "ts": datetime.utcnow().isoformat() + "Z",
         "checks": checks,
     }
@@ -277,8 +299,8 @@ async def health():
 
 
 @app.get("/api/ops/analyze-slo")
-async def analyze_slo(user: UserContext = Depends(require_login)):
-    """Runtime SLO snapshot for /api/analyze."""
+async def analyze_slo_legacy(user: UserContext = Depends(require_login)):
+    """Deprecated: use /api/admin/ops/summary with admin token."""
     return analyze_slo_tracker.snapshot()
     
 # AI分析股票
@@ -479,6 +501,10 @@ async def analyze(
                             user_id=canonical_user_id,
                             stock_code=target_code
                         )
+                        llm_usage_service.record_analyze(
+                            is_authenticated=user.is_authenticated,
+                            stock_count=1,
+                        )
                         logger.info(f"Recorded analysis for user {canonical_user_id}, stock {target_code}")
                     
                         if aguai_ref:
@@ -534,6 +560,10 @@ async def analyze(
                         quota_service_instance.record_analyses(
                             user_id=canonical_user_id,
                             stock_codes=resolved_codes,
+                        )
+                        llm_usage_service.record_analyze(
+                            is_authenticated=user.is_authenticated,
+                            stock_count=len(resolved_codes),
                         )
                         logger.info(
                             f"Recorded batch analysis for user {canonical_user_id}, "
