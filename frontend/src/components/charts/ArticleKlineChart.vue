@@ -12,33 +12,11 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { NSpin } from 'naive-ui'
-import {
-  BarChart,
-  CandlestickChart,
-  LineChart,
-  type BarSeriesOption,
-  type CandlestickSeriesOption,
-  type LineSeriesOption,
-} from 'echarts/charts'
-import {
-  GridComponent,
-  TooltipComponent,
-  type GridComponentOption,
-  type TooltipComponentOption,
-} from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
-import { init as initECharts, use, type ComposeOption, type EChartsType } from 'echarts/core'
+import { createStockChart, type StockChartOption } from '@/utils/echartsLoader'
+import type { EChartsType } from 'echarts/core'
 import { apiService } from '@/services/api'
 
-use([CandlestickChart, LineChart, BarChart, GridComponent, TooltipComponent, CanvasRenderer])
-
-type ArticleChartOption = ComposeOption<
-  | GridComponentOption
-  | TooltipComponentOption
-  | BarSeriesOption
-  | CandlestickSeriesOption
-  | LineSeriesOption
->
+type ArticleChartOption = StockChartOption
 
 const props = defineProps<{
   stockCode: string
@@ -66,8 +44,8 @@ async function initChart() {
 
     if (chartInstance.value) {
       chartInstance.value.dispose()
+      chartInstance.value = null
     }
-    chartInstance.value = initECharts(chartRef.value)
 
     const macdData = data.macd && data.macd.macd ? data.macd.macd : (data.macd || [])
     const option: ArticleChartOption = {
@@ -116,7 +94,7 @@ async function initChart() {
       ],
     }
 
-    chartInstance.value.setOption(option, true)
+    chartInstance.value = await createStockChart(chartRef.value, option)
   } catch (error) {
     chartError.value = '图表加载失败，请稍后重试'
     console.error('ArticleKlineChart 初始化图表失败:', error)

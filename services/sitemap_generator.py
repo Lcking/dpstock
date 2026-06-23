@@ -43,6 +43,7 @@ class SitemapGenerator:
             self._add_url(urlset, "/analysis", priority="0.9", changefreq="daily")
             self._add_url(urlset, "/stocks", priority="0.85", changefreq="weekly")
             self._add_url(urlset, "/risk-stocks", priority="0.8", changefreq="daily")
+            self._add_url(urlset, "/review/weekly", priority="0.75", changefreq="weekly")
 
             hot_stocks = self.stock_page_service.list_hot_stocks()
             for stock in hot_stocks:

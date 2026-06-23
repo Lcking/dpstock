@@ -37,4 +37,5 @@ jobs:
             tests/test_seo_injection.py \
             tests/test_risk_stock_frontend_contract.py \
             tests/test_risk_alert_email.py \
+            tests/test_judgment_recap.py \
             -q --tb=short

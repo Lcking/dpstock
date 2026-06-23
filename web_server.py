@@ -22,6 +22,7 @@ from services.invite_service import InviteService
 from services.user_service import UserService
 from services.verification_scheduler import start_verification_scheduler
 from services.risk_stock_scheduler import RiskStockScheduler, start_risk_stock_scheduler
+from services.judgment_recap_scheduler import start_judgment_recap_scheduler
 from services.analyze_slo_tracker import analyze_slo_tracker
 from auth.dependencies import (
     require_login,
@@ -100,6 +101,7 @@ async def startup_event():
         
     start_verification_scheduler()
     start_risk_stock_scheduler()
+    start_judgment_recap_scheduler()
 
     asyncio.create_task(_refresh_search_snapshot_background())
     asyncio.create_task(_refresh_risk_stocks_background())
@@ -755,6 +757,19 @@ async def stock_index_page(page: int = 1):
             "Cache-Control": "public, max-age=600",
         },
     )
+
+
+@app.api_route("/review/weekly", methods=["GET", "HEAD"])
+async def judgment_weekly_recap_page(request: Request):
+    from services.judgment_recap_service import JudgmentRecapService
+
+    html_content = JudgmentRecapService(base_url="https://aguai.net").render_weekly_recap_page(
+        window_days=7
+    )
+    headers = {"Cache-Control": "public, max-age=1800"}
+    if request.method == "HEAD":
+        return Response(status_code=200, headers=headers)
+    return Response(content=html_content, media_type="text/html", headers=headers)
 
 
 @app.get("/baidu_verify_codeva-m2d0KFsWXV.html")
