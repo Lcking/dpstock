@@ -95,6 +95,7 @@ import {
 } from 'naive-ui';
 import { apiService } from '@/services/api';
 import { saveAnchorToken, saveMaskedEmail } from '@/utils/anchorToken';
+import { emitBindSuccess } from '@/utils/bindEvents';
 
 interface Props {
   show: boolean;
@@ -203,12 +204,15 @@ async function verifyAndBind() {
     
     message.success(`绑定成功!已迁移 ${response.migrated_count} 条判断`);
     
-    // Emit success event
-    emit('bind-success', {
+    const payload = {
       anchor_id: response.anchor_id,
       migrated_count: response.migrated_count,
-      masked_email: response.masked_email
-    });
+      masked_email: response.masked_email,
+    };
+
+    // Notify parent dialog hosts and global listeners (NavBar bind → /watchlist refresh)
+    emit('bind-success', payload);
+    emitBindSuccess(payload);
     
     // Close modal
     handleClose();

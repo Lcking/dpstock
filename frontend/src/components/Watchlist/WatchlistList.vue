@@ -75,26 +75,9 @@
       class="bind-value-alert"
     >
       <div class="trial-alert-content">
-        <span>绑定邮箱，保存你的观察资产。绑定后资产不会因换设备或清缓存而丢失。</span>
+        <span>绑定邮箱后可跨设备同步观察列表。若你已在其他设备绑定过，请在本页用<strong>同一邮箱</strong>验证，即可恢复数据。</span>
         <n-button tertiary type="primary" size="small" @click="showBindDialog = true">
-          立即绑定
-        </n-button>
-      </div>
-    </n-alert>
-
-    <n-alert
-      v-if="needsSessionRestore && watchlistState.isTemporary"
-      type="warning"
-      :bordered="false"
-      class="restore-session-alert"
-    >
-      <template #header>
-        换设备了？
-      </template>
-      <div class="trial-alert-content">
-        <span>你曾在其他设备绑定邮箱。在当前设备再次验证邮箱，即可恢复观察列表与判断记录。</span>
-        <n-button type="primary" size="small" @click="showBindDialog = true">
-          验证邮箱恢复
+          绑定 / 验证邮箱
         </n-button>
       </div>
     </n-alert>
@@ -315,13 +298,12 @@
 
     <AnchorBindDialog
       v-model:show="showBindDialog"
-      @bind-success="handleBindSuccess"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted, nextTick } from 'vue'
+import { ref, computed, h, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   NButton, NIcon, NText, NModal, NForm, NFormItem,
@@ -336,6 +318,7 @@ import { apiService } from '@/services/api'
 import type { WatchlistSummary, Watchlist, WatchlistItemSummary, WatchlistRiskAlert } from '@/types/watchlist'
 import { applyPageSeo } from '@/utils/seo'
 import { syncAnchorSession } from '@/utils/anchorSession'
+import { onBindSuccess } from '@/utils/bindEvents'
 import { useNotificationStore } from '@/stores/notification'
 
 const router = useRouter()
@@ -362,12 +345,55 @@ const watchlistState = ref({
   trialMessage: null as string | null
 })
 const riskAlerts = ref<WatchlistRiskAlert[]>([])
-const needsSessionRestore = ref(false)
+
+function pickPrimaryWatchlist(watchlists: Watchlist[]): Watchlist | null {
+  if (watchlists.length === 0) return null
+  return watchlists.reduce((best, current) => {
+    const bestCount = best.items_count ?? 0
+    const currentCount = current.items_count ?? 0
+    return currentCount > bestCount ? current : best
+  })
+}
+
+async function ensureWatchlistId(): Promise<boolean> {
+  if (watchlistId.value) return true
+
+  const watchlists = await apiService.getWatchlists()
+  const primary = pickPrimaryWatchlist(watchlists)
+  if (primary) {
+    watchlistId.value = primary.id
+    applyWatchlistState(primary)
+    return true
+  }
+
+  const newList = await apiService.createWatchlist('默认自选')
+  watchlistId.value = newList.id
+  applyWatchlistState(newList)
+  return true
+}
 
 const applyWatchlistState = (source?: Partial<WatchlistSummary & Watchlist> | null) => {
   watchlistState.value = {
     isTemporary: Boolean(source?.is_temporary),
     trialMessage: source?.trial_message || null
+  }
+}
+
+async function applyGuestWatchlistState() {
+  try {
+    const anchor = await apiService.getAnchorStatus()
+    const isGuest = anchor?.mode !== 'anchor'
+    watchlistState.value = {
+      isTemporary: isGuest,
+      trialMessage: isGuest
+        ? '当前观察仅临时保存在本设备，绑定后长期保存，并支持跨设备同步。'
+        : null,
+    }
+  } catch {
+    watchlistState.value = {
+      isTemporary: true,
+      trialMessage: null,
+    }
   }
 }
 
@@ -685,23 +711,22 @@ const loadSummary = async () => {
   }
 }
 
-// 初始化：创建或获取默认自选股
+// 初始化：优先选用含标的的观察列表，不在进入页面时创建空列表
 const initWatchlist = async () => {
-  loading.value = true // Ensure loading state covers initialization
+  loading.value = true
   try {
-    // 获取用户的自选股列表
     const watchlists = await apiService.getWatchlists()
-    
-    if (watchlists.length === 0) {
-      // 创建默认自选股
-      const newList = await apiService.createWatchlist('默认自选')
-      watchlistId.value = newList.id
-      applyWatchlistState(newList)
-    } else {
-      watchlistId.value = watchlists[0].id
-      applyWatchlistState(watchlists[0])
+    const primary = pickPrimaryWatchlist(watchlists)
+
+    if (!primary) {
+      watchlistId.value = ''
+      summaryData.value = null
+      await applyGuestWatchlistState()
+      return
     }
-    
+
+    watchlistId.value = primary.id
+    applyWatchlistState(primary)
     await loadSummary()
   } catch (error) {
     console.error('Init watchlist error:', error)
@@ -736,6 +761,7 @@ const handleAdd = async () => {
   
   adding.value = true
   try {
+    await ensureWatchlistId()
     const result = await apiService.addWatchlistSymbols(watchlistId.value, codes)
     message.success(`成功添加 ${result.added} 只`)
     checkAndTriggerBindAfterAdd(result.added)
@@ -814,10 +840,11 @@ async function scrollToRiskPanel() {
 }
 
 const handleBindSuccess = async () => {
-  needsSessionRestore.value = false
-  message.success('已绑定邮箱，你的观察列表现在会长期保存')
+  message.success('已绑定邮箱，正在同步观察列表…')
   await initWatchlist()
 }
+
+let unsubscribeBindSuccess: (() => void) | null = null
 
 async function loadRiskAlerts() {
   try {
@@ -851,12 +878,19 @@ onMounted(async () => {
     canonicalPath: '/watchlist',
     robots: 'noindex, nofollow',
   })
-  needsSessionRestore.value = (await syncAnchorSession()) === 'restore'
+  await syncAnchorSession()
+  unsubscribeBindSuccess = onBindSuccess(() => {
+    void handleBindSuccess()
+  })
   await initWatchlist()
   await loadRiskAlerts()
   if (route.query.focus === 'risk') {
     await scrollToRiskPanel()
   }
+})
+
+onBeforeUnmount(() => {
+  unsubscribeBindSuccess?.()
 })
 </script>
 

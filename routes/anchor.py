@@ -20,6 +20,7 @@ from auth.dependencies import (
 from services.anchor_service import AnchorService
 from services.journal import journal_service
 from services.user_service import UserService
+from services.watchlist import watchlist_service
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -150,6 +151,11 @@ async def verify_and_bind(
         anchor_id=anchor_id,
         email=email,
     )
+
+    try:
+        watchlist_service.consolidate_duplicate_watchlists(target_user_id)
+    except Exception as e:
+        logger.warning(f"[Anchor] Watchlist consolidation skipped: {e}")
 
     migrated_count = anchor_service.migrate_anonymous_to_anchor(
         anonymous_id=x_anonymous_id,

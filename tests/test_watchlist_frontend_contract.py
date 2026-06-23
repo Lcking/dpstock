@@ -27,12 +27,13 @@ def test_watchlist_binding_prompt_uses_server_temporary_state_only():
 
 def test_watchlist_page_prompts_email_restore_on_new_device():
     watchlist_view = (REPO_ROOT / "frontend/src/components/Watchlist/WatchlistList.vue").read_text(encoding="utf-8")
-    anchor_session = (REPO_ROOT / "frontend/src/utils/anchorSession.ts").read_text(encoding="utf-8")
+    bind_events = (REPO_ROOT / "frontend/src/utils/bindEvents.ts").read_text(encoding="utf-8")
 
-    assert "needsSessionRestore" in watchlist_view
-    assert "验证邮箱恢复" in watchlist_view
-    assert "syncAnchorSession" in anchor_session
-    assert "masked_email alone is not proof" in anchor_session
+    assert "绑定 / 验证邮箱" in watchlist_view
+    assert "同一邮箱" in watchlist_view
+    assert "pickPrimaryWatchlist" in watchlist_view
+    assert "onBindSuccess" in watchlist_view
+    assert "BIND_SUCCESS_EVENT" in bind_events
 
 
 def test_quota_status_ui_does_not_default_to_five():

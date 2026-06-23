@@ -355,6 +355,43 @@ class UserService:
         finally:
             db.close()
 
+    def _select_bind_target_user_id(
+        self,
+        *,
+        normalized_identities: list[tuple[str, str]],
+        existing_user_ids: list[str],
+        email: str,
+    ) -> str:
+        """Prefer the existing email-bound account so cross-device bind lands on the same user."""
+        normalized_email = email.strip().lower()
+
+        for identity_type, identity_value in normalized_identities:
+            if identity_type != "email_anchor":
+                continue
+            resolved = self.resolve_identity(identity_type, identity_value)
+            if not resolved:
+                continue
+            user = self.get_user(resolved) or {}
+            if user.get("email_verified") or user.get("primary_email"):
+                return resolved
+            return resolved
+
+        for user_id in existing_user_ids:
+            user = self.get_user(user_id) or {}
+            primary_email = (user.get("primary_email") or "").strip().lower()
+            if primary_email and primary_email == normalized_email:
+                return user_id
+            if user.get("email_verified"):
+                return user_id
+
+        if existing_user_ids:
+            return existing_user_ids[0]
+
+        return self.create_user(
+            primary_email=normalized_email,
+            email_verified=True,
+        )
+
     def bind_email_identity(
         self,
         *,
@@ -386,9 +423,10 @@ class UserService:
             if resolved and resolved not in existing_user_ids:
                 existing_user_ids.append(resolved)
 
-        target_user_id = existing_user_ids[0] if existing_user_ids else self.create_user(
-            primary_email=normalized_email,
-            email_verified=True,
+        target_user_id = self._select_bind_target_user_id(
+            normalized_identities=normalized_identities,
+            existing_user_ids=existing_user_ids,
+            email=normalized_email,
         )
 
         now = self._now()

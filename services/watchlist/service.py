@@ -115,6 +115,54 @@ class WatchlistService:
             trial_message=trial_message,
         )
     
+    def consolidate_duplicate_watchlists(self, user_id: str) -> None:
+        """Merge duplicate lists and drop empty shells left by other-device page visits."""
+        if not user_id:
+            return
+
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT w.id,
+                       (SELECT COUNT(*) FROM watchlist_items wi WHERE wi.watchlist_id = w.id) AS items_count,
+                       w.created_at
+                FROM watchlists w
+                WHERE w.user_id = ?
+                ORDER BY items_count DESC, w.created_at ASC
+                """,
+                (user_id,),
+            )
+            rows = cursor.fetchall()
+            if len(rows) <= 1:
+                return
+
+            primary_id = rows[0].get("id")
+            for row in rows[1:]:
+                duplicate_id = row.get("id")
+                items_count = int(row.get("items_count") or 0)
+                if items_count == 0:
+                    cursor.execute("DELETE FROM watchlists WHERE id = ?", (duplicate_id,))
+                    continue
+
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO watchlist_items (watchlist_id, ts_code, name, added_at)
+                    SELECT ?, ts_code, name, added_at
+                    FROM watchlist_items
+                    WHERE watchlist_id = ?
+                    """,
+                    (primary_id, duplicate_id),
+                )
+                cursor.execute("DELETE FROM watchlists WHERE id = ?", (duplicate_id,))
+
+            now = datetime.utcnow().isoformat() + "Z"
+            cursor.execute(
+                "UPDATE watchlists SET updated_at = ? WHERE id = ?",
+                (now, primary_id),
+            )
+            conn.commit()
+
     def get_user_watchlists(self, user_id: str) -> List[Watchlist]:
         """获取用户的所有自选股列表"""
         is_temporary, trial_message = self._get_watchlist_trial_state(user_id)
@@ -125,7 +173,7 @@ class WatchlistService:
                        (SELECT COUNT(*) FROM watchlist_items WHERE watchlist_id = w.id) as items_count
                 FROM watchlists w
                 WHERE w.user_id = ?
-                ORDER BY w.created_at DESC
+                ORDER BY items_count DESC, w.created_at ASC
             """, (user_id,))
             rows = cursor.fetchall()
         

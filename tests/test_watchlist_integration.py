@@ -140,19 +140,57 @@ def test_second_device_bind_restores_watchlist_from_first_device(tmp_path):
         user_id=device_a_user_id,
         data=WatchlistCreate(name="跨设备观察"),
     )
+    watchlist_service.add_symbols(created.id, ["600519.SH"])
 
-    device_b_user_id = user_service.bind_email_identity(
+    device_b_user_id = user_service.get_or_create_user_by_identity(
+        identity_type="anonymous",
+        identity_value="device_b_anon",
+    )
+    watchlist_service.create_watchlist(
+        user_id=device_b_user_id,
+        data=WatchlistCreate(name="默认自选"),
+    )
+
+    merged_user_id = user_service.bind_email_identity(
         anonymous_id="device_b_anon",
         cookie_uid="device_b_cookie",
         anchor_id="shared_anchor_id",
         email="cross-device@example.com",
     )
 
-    assert device_b_user_id == device_a_user_id
-    lists = watchlist_service.get_user_watchlists(device_b_user_id)
+    assert merged_user_id == device_a_user_id
+    watchlist_service.consolidate_duplicate_watchlists(merged_user_id)
+    lists = watchlist_service.get_user_watchlists(merged_user_id)
     assert len(lists) == 1
-    assert lists[0].id == created.id
-    assert lists[0].name == "跨设备观察"
+    assert lists[0].items_count == 1
+
+
+def test_bind_prefers_existing_email_anchor_user_as_target(tmp_path):
+    db_path = tmp_path / "watchlist_bind_target.db"
+    _setup_watchlist_db(db_path)
+    DatabaseFactory.initialize(str(db_path))
+
+    user_service = UserService(db_path=str(db_path))
+    canonical_user_id = user_service.bind_email_identity(
+        anonymous_id="device_a_anon",
+        cookie_uid="device_a_cookie",
+        anchor_id="shared_anchor_id",
+        email="target@example.com",
+    )
+    device_b_user_id = user_service.get_or_create_user_by_identity(
+        identity_type="anonymous",
+        identity_value="device_b_anon",
+    )
+
+    merged_user_id = user_service.bind_email_identity(
+        anonymous_id="device_b_anon",
+        cookie_uid="device_b_cookie",
+        anchor_id="shared_anchor_id",
+        email="target@example.com",
+    )
+
+    assert merged_user_id == canonical_user_id
+    assert merged_user_id != device_b_user_id
 
 
 def test_watchlist_route_falls_back_to_single_bound_user_with_assets(tmp_path):
