@@ -486,11 +486,48 @@ async def admin_nav_delete(link_id: int, _: dict = Depends(require_admin)):
     return {"ok": True}
 
 
+def _risk_alert_email_summary(days: int = 7) -> dict:
+    days = max(1, min(int(days), 90))
+    with DatabaseFactory.get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT status, COUNT(*) AS c
+            FROM risk_alert_email_log
+            WHERE created_at >= datetime('now', ?)
+            GROUP BY status
+            """,
+            (f"-{days} days",),
+        )
+        counts = {str(row["status"]): int(row["c"]) for row in cur.fetchall()}
+        cur.execute(
+            """
+            SELECT trade_date, email, item_count, status, error_message, created_at
+            FROM risk_alert_email_log
+            ORDER BY created_at DESC
+            LIMIT 10
+            """
+        )
+        recent = [dict(row) for row in cur.fetchall()]
+    return {
+        "days": days,
+        "counts": counts,
+        "recent": recent,
+    }
+
+
 @router.get("/ops/summary")
 async def admin_ops_summary(days: int = 7, _: dict = Depends(require_admin)):
     """Ops dashboard: analyze SLO, scheduler health, LLM usage rollup."""
     days = max(1, min(int(days), 90))
     slo = analyze_slo_tracker.snapshot()
+    from services.email_service import RESEND_API_KEY, SEND_REAL_EMAIL, FROM_EMAIL
+
+    email_config = {
+        "send_real_email": SEND_REAL_EMAIL,
+        "resend_configured": bool(RESEND_API_KEY),
+        "from_email": FROM_EMAIL,
+    }
     return {
         "analyze_slo": {
             **slo,
@@ -499,6 +536,8 @@ async def admin_ops_summary(days: int = 7, _: dict = Depends(require_admin)):
         },
         "job_health": job_health_tracker.snapshot(),
         "llm_usage": llm_usage_service.get_summary(days=days),
+        "email_config": email_config,
+        "risk_alert_email": _risk_alert_email_summary(days=days),
     }
 
 

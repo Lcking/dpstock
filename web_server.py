@@ -276,6 +276,20 @@ async def health():
     except Exception as e:
         checks["tushare"] = f"fail: {type(e).__name__}"
 
+    try:
+        from services.email_service import test_email_service, RESEND_API_KEY, SEND_REAL_EMAIL
+
+        if RESEND_API_KEY and SEND_REAL_EMAIL and test_email_service():
+            checks["email"] = "ok"
+        elif not RESEND_API_KEY:
+            checks["email"] = "missing_api_key"
+        elif not SEND_REAL_EMAIL:
+            checks["email"] = "log_only_mode"
+        else:
+            checks["email"] = "misconfigured"
+    except Exception as e:
+        checks["email"] = f"fail: {type(e).__name__}"
+
     scheduler_checks = job_health_tracker.snapshot_for_health()
     checks["schedulers"] = scheduler_checks
     degraded = job_health_tracker.is_degraded()

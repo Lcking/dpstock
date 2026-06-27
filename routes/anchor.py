@@ -119,6 +119,7 @@ async def send_verification_code(request: SendCodeRequest):
     success, message = send_email(email, code, email_masked)
     if not success:
         logger.warning(f"Email send failed for {email_masked}, but code is saved")
+        raise HTTPException(status_code=502, detail=message)
 
     return SendCodeResponse(ok=True, message=message)
 

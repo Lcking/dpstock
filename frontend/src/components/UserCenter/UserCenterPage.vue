@@ -204,8 +204,8 @@ const guestAssetSummary = computed(() => {
   return `你当前已有 ${parts.join('、')}，绑定邮箱后可跨设备长期保存。`
 })
 
-const riskAlertEmailEnabled = computed(() =>
-  Boolean(overview.value?.user?.notify_pref?.risk_alert_email)
+const riskAlertEmailEnabled = computed(
+  () => overview.value?.user?.notify_pref?.risk_alert_email ?? true
 )
 
 const notifyPrefDisabled = computed(() => {
