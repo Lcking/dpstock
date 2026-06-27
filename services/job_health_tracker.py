@@ -30,6 +30,21 @@ class JobHealthTracker:
         ).fetchone()
         return bool(row)
 
+    def ensure_registered(self, job_id: str, *, detail: str = "awaiting first run") -> None:
+        self._load_from_db()
+        with self._lock:
+            if job_id in self._memory:
+                return
+            self._memory[job_id] = {
+                "job_id": job_id,
+                "last_run_at": None,
+                "last_success_at": None,
+                "last_status": "scheduled",
+                "last_error": detail,
+                "consecutive_failures": 0,
+            }
+        self._persist(job_id)
+
     def record_success(self, job_id: str, *, detail: str = "") -> None:
         now = _utc_now()
         with self._lock:
@@ -146,6 +161,8 @@ class JobHealthTracker:
                 checks[job_id] = f"fail: {failures} consecutive"
             elif status == "fail":
                 checks[job_id] = f"degraded: last run failed"
+            elif status == "scheduled":
+                checks[job_id] = "scheduled"
             else:
                 checks[job_id] = "ok"
         return checks

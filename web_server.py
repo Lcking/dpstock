@@ -107,6 +107,13 @@ async def startup_event():
     start_risk_stock_scheduler()
     start_judgment_recap_scheduler()
 
+    for scheduled_job in (
+        "risk_stock_scheduler",
+        "verification_scheduler",
+        "judgment_recap_scheduler",
+    ):
+        job_health_tracker.ensure_registered(scheduled_job)
+
     asyncio.create_task(_refresh_search_snapshot_background())
     asyncio.create_task(_refresh_risk_stocks_background())
     asyncio.create_task(_preload_industry_map_background())

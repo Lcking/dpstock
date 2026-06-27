@@ -68,8 +68,82 @@ class LlmUsageService:
             logger.warning(f"[LlmUsage] get_daily_usage skipped: {exc}")
             return []
 
+    def _analysis_records_table_exists(self, cursor) -> bool:
+        row = cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='analysis_records'"
+        ).fetchone()
+        return bool(row)
+
+    def rollup_from_analysis_records(self, *, days: int = 7) -> List[Dict[str, Any]]:
+        """Historical analyze usage from quota records (available before llm_usage_daily)."""
+        days = max(1, min(int(days), 90))
+        start_date = (date.today() - timedelta(days=days - 1)).isoformat()
+        try:
+            with DatabaseFactory.get_connection() as conn:
+                cursor = conn.cursor()
+                if not self._analysis_records_table_exists(cursor):
+                    return []
+                rows = cursor.execute(
+                    """
+                    WITH sessions AS (
+                        SELECT
+                            ar.analysis_date AS usage_date,
+                            ar.user_id,
+                            COUNT(*) AS stock_count,
+                            CASE
+                                WHEN u.email_verified = 1
+                                  OR (u.primary_email IS NOT NULL AND TRIM(u.primary_email) != '')
+                                THEN ?
+                                ELSE ?
+                            END AS user_type
+                        FROM analysis_records ar
+                        LEFT JOIN users u ON u.user_id = ar.user_id
+                        WHERE ar.analysis_date >= ?
+                        GROUP BY ar.analysis_date, ar.user_id, user_type
+                    )
+                    SELECT
+                        usage_date,
+                        user_type,
+                        COUNT(*) AS call_count,
+                        SUM(stock_count) AS stock_count
+                    FROM sessions
+                    GROUP BY usage_date, user_type
+                    ORDER BY usage_date DESC, user_type ASC
+                    """,
+                    (
+                        USER_TYPE_AUTHENTICATED,
+                        USER_TYPE_ANONYMOUS,
+                        start_date,
+                    ),
+                ).fetchall()
+            return [dict(row) for row in rows or []]
+        except Exception as exc:
+            logger.warning(f"[LlmUsage] rollup_from_analysis_records skipped: {exc}")
+            return []
+
     def get_summary(self, *, days: int = 7) -> Dict[str, Any]:
-        rows = self.get_daily_usage(days=days)
+        days = max(1, min(int(days), 90))
+        tracked_rows = self.get_daily_usage(days=days)
+        historical_rows = self.rollup_from_analysis_records(days=days)
+
+        # Prefer historical rollup for dashboard; overlay today's tracked counters when present.
+        daily_by_key = {
+            (row.get("usage_date"), row.get("user_type")): dict(row)
+            for row in historical_rows
+        }
+        for row in tracked_rows:
+            key = (row.get("usage_date"), row.get("user_type"))
+            if key in daily_by_key and row.get("usage_date") == date.today().isoformat():
+                daily_by_key[key] = dict(row)
+            elif key not in daily_by_key:
+                daily_by_key[key] = dict(row)
+
+        rows = sorted(
+            daily_by_key.values(),
+            key=lambda item: (item.get("usage_date") or "", item.get("user_type") or ""),
+            reverse=True,
+        )
+
         totals = {
             USER_TYPE_AUTHENTICATED: {"call_count": 0, "stock_count": 0},
             USER_TYPE_ANONYMOUS: {"call_count": 0, "stock_count": 0},
@@ -80,10 +154,19 @@ class LlmUsageService:
                 continue
             totals[user_type]["call_count"] += int(row.get("call_count") or 0)
             totals[user_type]["stock_count"] += int(row.get("stock_count") or 0)
+
+        source = "analysis_records"
+        if tracked_rows and not historical_rows:
+            source = "llm_usage_daily"
+        elif tracked_rows and historical_rows:
+            source = "analysis_records+llm_usage_daily"
+
         return {
             "days": days,
+            "source": source,
             "daily": rows,
             "totals": totals,
+            "tracked_today": [row for row in tracked_rows if row.get("usage_date") == date.today().isoformat()],
             "generated_at": datetime.utcnow().isoformat() + "Z",
         }
 

@@ -74,6 +74,36 @@ def test_llm_usage_service_aggregates_by_user_type(tmp_path):
     assert summary["totals"]["authenticated"]["stock_count"] == 1
 
 
+def test_llm_usage_summary_backfills_from_analysis_records(tmp_path):
+    db_path = tmp_path / "llm_usage_history.db"
+    apply_migrations(db_path, ["002_create_quota_tables.sql", "008_create_user_tables.sql", "015_create_ops_tables.sql"])
+    DatabaseFactory.initialize(str(db_path))
+
+    with DatabaseFactory.get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO users (user_id, primary_email, email_verified, profile_completed,
+                               is_public_analysis_enabled, status, created_at, last_active_at)
+            VALUES ('bound_user', 'bound@example.com', 1, 0, 0, 'active', '2026-06-01', '2026-06-01')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO analysis_records (user_id, stock_code, analysis_date)
+            VALUES ('bound_user', '600519.SH', date('now')),
+                   ('anon_user', '000001.SZ', date('now')),
+                   ('anon_user', '000002.SZ', date('now'))
+            """
+        )
+        conn.commit()
+
+    summary = LlmUsageService().get_summary(days=7)
+    assert summary["source"].startswith("analysis_records")
+    assert summary["totals"]["authenticated"]["stock_count"] == 1
+    assert summary["totals"]["anonymous"]["stock_count"] == 2
+    assert summary["totals"]["anonymous"]["call_count"] == 1
+
+
 def test_ops_alert_service_sends_webhook_on_threshold(monkeypatch):
     sent = []
 

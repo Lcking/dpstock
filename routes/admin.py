@@ -490,8 +490,13 @@ async def admin_nav_delete(link_id: int, _: dict = Depends(require_admin)):
 async def admin_ops_summary(days: int = 7, _: dict = Depends(require_admin)):
     """Ops dashboard: analyze SLO, scheduler health, LLM usage rollup."""
     days = max(1, min(int(days), 90))
+    slo = analyze_slo_tracker.snapshot()
     return {
-        "analyze_slo": analyze_slo_tracker.snapshot(),
+        "analyze_slo": {
+            **slo,
+            "scope": "since_process_restart",
+            "note": "内存统计，容器重启后清零；下方「分析用量」来自数据库历史记录。",
+        },
         "job_health": job_health_tracker.snapshot(),
         "llm_usage": llm_usage_service.get_summary(days=days),
     }

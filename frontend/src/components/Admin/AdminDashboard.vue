@@ -124,11 +124,11 @@
       <n-tab-pane name="ops" tab="运维">
         <n-space style="margin-bottom: 12px">
           <n-button size="small" @click="loadOps">刷新</n-button>
-          <n-text depth="3">Analyze SLO、调度任务健康、LLM 调用量（近 7 天）</n-text>
+          <n-text depth="3">SLO 看本进程实时表现；分析用量看近 7 天数据库记录</n-text>
         </n-space>
         <n-spin :show="opsLoading">
           <template v-if="opsSummary">
-            <n-descriptions bordered size="small" title="Analyze SLO" :column="2" style="max-width: 720px">
+            <n-descriptions bordered size="small" title="Analyze SLO（本进程重启后）" :column="2" style="max-width: 720px">
               <n-descriptions-item label="样本数">{{ opsSummary.analyze_slo?.total_requests ?? 0 }}</n-descriptions-item>
               <n-descriptions-item label="完成">{{ opsSummary.analyze_slo?.status_counts?.completed ?? 0 }}</n-descriptions-item>
               <n-descriptions-item label="超时">{{ opsSummary.analyze_slo?.status_counts?.timeout ?? 0 }}</n-descriptions-item>
@@ -136,6 +136,9 @@
               <n-descriptions-item label="首包 p95">{{ opsSummary.analyze_slo?.first_chunk_ms?.p95 ?? '—' }} ms</n-descriptions-item>
               <n-descriptions-item label="总耗时 p95">{{ opsSummary.analyze_slo?.duration_ms?.p95 ?? '—' }} ms</n-descriptions-item>
             </n-descriptions>
+            <n-text depth="3" style="display: block; margin-top: 6px; font-size: 12px;">
+              {{ opsSummary.analyze_slo?.note || '部署/重启后若尚未有人分析，这里会是 0，属于正常现象。' }}
+            </n-text>
 
             <n-h3 prefix="bar" style="margin-top: 16px">调度任务</n-h3>
             <n-alert v-if="opsSummary.job_health?.degraded" type="warning" style="margin-bottom: 8px">
@@ -143,7 +146,10 @@
             </n-alert>
             <n-data-table :columns="opsJobCols" :data="opsSummary.job_health?.jobs || []" :bordered="false" />
 
-            <n-h3 prefix="bar" style="margin-top: 16px">LLM 调用量（近 7 天汇总）</n-h3>
+            <n-h3 prefix="bar" style="margin-top: 16px">分析用量（近 7 天）</n-h3>
+            <n-text depth="3" style="display: block; margin-bottom: 8px; font-size: 12px;">
+              数据来源：{{ opsSummary.llm_usage?.source || 'analysis_records' }}。请求数按「用户·日期」会话估算，标的数为实际分析股票只数。
+            </n-text>
             <n-descriptions bordered size="small" :column="2" style="max-width: 520px">
               <n-descriptions-item label="匿名 · 请求">{{ opsSummary.llm_usage?.totals?.anonymous?.call_count ?? 0 }}</n-descriptions-item>
               <n-descriptions-item label="匿名 · 标的">{{ opsSummary.llm_usage?.totals?.anonymous?.stock_count ?? 0 }}</n-descriptions-item>
