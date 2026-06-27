@@ -1,6 +1,11 @@
 import axios from 'axios';
 import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse, MarketOverviewItem } from '@/types';
-import type { JournalListResponse, JournalReviewStats, JournalSystemEvaluation } from '@/types/journal';
+import type {
+  JournalListResponse,
+  JournalRecord,
+  JournalReviewStats,
+  JournalSystemEvaluation,
+} from '@/types/journal';
 import type { Watchlist, WatchlistSummary, WatchlistRiskAlertsResponse } from '@/types/watchlist';
 import type { RiskStockListResponse } from '@/types/riskStock';
 
@@ -369,6 +374,16 @@ export const apiService = {
     }
   },
 
+  getJournalRecord: async (recordId: string): Promise<JournalRecord> => {
+    try {
+      const response = await axiosInstance.get(`/journal/${recordId}`);
+      return response.data;
+    } catch (error) {
+      console.error('获取判断记录时出错:', error);
+      throw error;
+    }
+  },
+
   getRecordEvaluation: async (recordId: string): Promise<JournalSystemEvaluation> => {
     try {
       const response = await axiosInstance.get(`/journal/${recordId}/evaluation`);
@@ -427,6 +442,13 @@ export const apiService = {
 
   getUserCenterOverview: async () => {
     const response = await axiosInstance.get('/user-center/overview');
+    return response.data;
+  },
+
+  updateNotifyPref: async (riskAlertEmail: boolean) => {
+    const response = await axiosInstance.patch('/user-center/notify-pref', {
+      risk_alert_email: riskAlertEmail,
+    });
     return response.data;
   },
 

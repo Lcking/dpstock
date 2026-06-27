@@ -100,6 +100,22 @@ def test_user_center_surfaces_trust_stats_and_risk_unread():
     assert "n-skeleton" in user_center_page.lower()
 
 
+def test_user_center_surfaces_notify_pref_and_clickable_judgments():
+    user_center_page = (REPO_ROOT / "frontend/src/components/UserCenter/UserCenterPage.vue").read_text(encoding="utf-8")
+    api_service = (REPO_ROOT / "frontend/src/services/api.ts").read_text(encoding="utf-8")
+    journal_list = (REPO_ROOT / "frontend/src/components/Journal/JournalList.vue").read_text(encoding="utf-8")
+
+    assert "通知设置" in user_center_page
+    assert "邮件风险提醒" in user_center_page
+    assert "updateNotifyPref" in user_center_page
+    assert "handleJudgmentClick" in user_center_page
+    assert "judgment-item-clickable" in user_center_page
+    assert "updateNotifyPref" in api_service
+    assert "getJournalRecord" in api_service
+    assert "openRecordFromQuery" in journal_list
+    assert "route.query.record" in journal_list
+
+
 def test_watchlist_page_surfaces_risk_alert_panel_and_notification_polling():
     watchlist_types = (REPO_ROOT / "frontend/src/types/watchlist.ts").read_text(encoding="utf-8")
     watchlist_view = (REPO_ROOT / "frontend/src/components/Watchlist/WatchlistList.vue").read_text(encoding="utf-8")

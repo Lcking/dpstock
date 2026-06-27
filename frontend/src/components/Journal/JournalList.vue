@@ -294,6 +294,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, h } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { apiService } from '@/services/api'
 import { 
   NButton,
@@ -319,6 +320,8 @@ import { applyPageSeo } from '@/utils/seo'
 
 const message = useMessage()
 const dialog = useDialog()
+const route = useRoute()
+const router = useRouter()
 
 // State
 const loading = ref(false)
@@ -414,6 +417,39 @@ const handleOpenReview = (record: JournalRecord) => {
   showDetail.value = false
   selectedRecord.value = record
   showReview.value = true
+}
+
+const clearRecordQuery = () => {
+  if (!route.query.record && !route.query.action) return
+  const nextQuery = { ...route.query }
+  delete nextQuery.record
+  delete nextQuery.action
+  router.replace({ path: route.path, query: nextQuery })
+}
+
+const openRecordFromQuery = async () => {
+  const recordId = route.query.record as string | undefined
+  if (!recordId) return
+
+  let record = records.value.find(item => item.id === recordId) || null
+  if (!record) {
+    try {
+      record = await apiService.getJournalRecord(recordId)
+    } catch (error) {
+      console.error('Open journal record from query error:', error)
+      message.warning('未找到这条判断记录')
+      clearRecordQuery()
+      return
+    }
+  }
+
+  selectedRecord.value = record
+  if (route.query.action === 'review') {
+    showReview.value = true
+  } else {
+    showDetail.value = true
+  }
+  clearRecordQuery()
 }
 
 // After reviewed
@@ -744,16 +780,17 @@ const formatSupportRate = (support_rate: number | null) => {
   return `${support_rate.toFixed(1)}%`
 }
 
-onMounted(() => {
+onMounted(async () => {
   applyPageSeo({
     title: '判断日记 | Agu AI',
     description: '查看你的结构化判断记录与复盘状态。',
     canonicalPath: '/journal',
     robots: 'noindex, nofollow',
   })
-  loadRecords()
+  await loadRecords()
   loadDueCount()
   loadReviewStats()
+  await openRecordFromQuery()
 })
 </script>
 

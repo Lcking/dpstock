@@ -79,7 +79,11 @@
                 <div
                   v-for="record in overview.recent_judgments"
                   :key="record.id"
-                  class="judgment-item"
+                  class="judgment-item judgment-item-clickable"
+                  role="button"
+                  tabindex="0"
+                  @click="handleJudgmentClick(record)"
+                  @keydown.enter.prevent="handleJudgmentClick(record)"
                 >
                   <div class="judgment-item-header">
                     <strong>{{ record.ts_code }}</strong>
@@ -98,7 +102,29 @@
         </n-grid-item>
 
         <n-grid-item>
-          <n-card title="下一步动作" size="small">
+          <n-card title="通知设置" size="small" class="settings-card">
+            <n-space vertical :size="10">
+              <div class="notify-pref-row">
+                <div>
+                  <div class="notify-pref-title">邮件风险提醒</div>
+                  <n-text depth="3" class="notify-pref-hint">
+                    自选股命中 ST / 连板等风险标签时，收盘后发送摘要邮件。
+                  </n-text>
+                </div>
+                <n-switch
+                  :value="riskAlertEmailEnabled"
+                  :disabled="notifyPrefDisabled"
+                  :loading="notifyPrefSaving"
+                  @update:value="handleNotifyPrefChange"
+                />
+              </div>
+              <n-text v-if="notifyPrefHint" depth="3" class="notify-pref-note">
+                {{ notifyPrefHint }}
+              </n-text>
+            </n-space>
+          </n-card>
+
+          <n-card title="下一步动作" size="small" class="actions-card">
             <n-space vertical :size="12">
               <n-button
                 v-if="overview.risk_alert_unread_count > 0"
@@ -146,7 +172,9 @@ import {
   NGridItem,
   NSkeleton,
   NSpace,
+  NSwitch,
   NTag,
+  NText,
   useMessage,
 } from 'naive-ui'
 import { apiService } from '@/services/api'
@@ -163,6 +191,7 @@ const overview = ref<any>(null)
 const errorMessage = ref('')
 const showBindDialog = ref(false)
 const showInviteDialog = ref(false)
+const notifyPrefSaving = ref(false)
 
 const guestAssetSummary = computed(() => {
   if (!overview.value?.user?.is_temporary) return ''
@@ -174,6 +203,61 @@ const guestAssetSummary = computed(() => {
   if (judgmentCount > 0) parts.push(`${judgmentCount} 条判断记录`)
   return `你当前已有 ${parts.join('、')}，绑定邮箱后可跨设备长期保存。`
 })
+
+const riskAlertEmailEnabled = computed(() =>
+  Boolean(overview.value?.user?.notify_pref?.risk_alert_email)
+)
+
+const notifyPrefDisabled = computed(() => {
+  if (!overview.value?.user) return true
+  if (overview.value.user.is_temporary) return true
+  if (!overview.value.user.email_verified) return true
+  return false
+})
+
+const notifyPrefHint = computed(() => {
+  if (!overview.value?.user) return ''
+  if (overview.value.user.is_temporary) {
+    return '绑定并验证邮箱后，可接收自选风险邮件提醒。'
+  }
+  if (!overview.value.user.email_verified) {
+    return '邮箱验证完成后即可开启邮件提醒。'
+  }
+  return ''
+})
+
+const handleJudgmentClick = (record: { id: string; status?: string }) => {
+  router.push({
+    path: '/journal',
+    query: {
+      record: record.id,
+      ...(record.status === 'due' ? { action: 'review' } : {}),
+    },
+  })
+}
+
+const handleNotifyPrefChange = async (enabled: boolean) => {
+  if (notifyPrefDisabled.value || notifyPrefSaving.value) return
+  notifyPrefSaving.value = true
+  try {
+    const data = await apiService.updateNotifyPref(enabled)
+    if (overview.value?.user) {
+      overview.value = {
+        ...overview.value,
+        user: {
+          ...overview.value.user,
+          notify_pref: data.notify_pref,
+        },
+      }
+    }
+    message.success(enabled ? '已开启邮件风险提醒' : '已关闭邮件风险提醒')
+  } catch (error) {
+    console.error('Update notify pref error:', error)
+    message.error('更新通知设置失败')
+  } finally {
+    notifyPrefSaving.value = false
+  }
+}
 
 const handleGoWatchlist = (payload?: { focus?: string }) => {
   if (payload?.focus === 'risk') {
@@ -281,6 +365,40 @@ onMounted(() => {
   border: 1px solid var(--n-border-color);
   border-radius: 10px;
   background: var(--n-color-embedded);
+}
+
+.judgment-item-clickable {
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.judgment-item-clickable:hover,
+.judgment-item-clickable:focus-visible {
+  border-color: var(--n-primary-color);
+  background: var(--n-color-hover);
+  outline: none;
+}
+
+.settings-card {
+  margin-bottom: 16px;
+}
+
+.notify-pref-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.notify-pref-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.notify-pref-hint,
+.notify-pref-note {
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .judgment-item-header {
