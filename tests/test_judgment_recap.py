@@ -96,3 +96,48 @@ def test_core_sitemap_includes_weekly_recap_page(tmp_path, monkeypatch):
     xml = asyncio.run(SitemapGenerator(base_url="https://aguai.net").generate_core_sitemap())
     assert "https://aguai.net/review/weekly" in xml
 
+
+def test_publish_weekly_recap_article_writes_to_archive(tmp_path):
+    db_path = tmp_path / "judgment_recap_publish.db"
+    DatabaseFactory.initialize(str(db_path))
+    _create_judgments_table(db_path)
+
+    from services.archive_service import ArchiveService
+
+    ArchiveService(db_path=str(db_path))
+
+    created_at = (datetime.utcnow() - timedelta(days=2)).isoformat() + "Z"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO judgments (
+                id, user_id, stock_code, candidate, selected_premises,
+                selected_risk_checks, constraints, snapshot, validation_date,
+                status, review, created_at, updated_at
+            ) VALUES (?, 'u1', '600519', 'A', '[]', '[]', '{}', '{}', ?, 'reviewed', ?, ?, ?)
+            """,
+            (
+                "jr1",
+                created_at,
+                json.dumps({"outcome": "supported"}, ensure_ascii=False),
+                created_at,
+                created_at,
+            ),
+        )
+        conn.commit()
+
+    service = JudgmentRecapService(base_url="https://aguai.net", db_path=str(db_path))
+    published = service.publish_weekly_recap_article(window_days=7)
+
+    assert published["article_id"] > 0
+    assert "判断验证周报" in published["title"]
+
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT title, stock_code, market_type FROM articles WHERE title = ?",
+            (published["title"],),
+        ).fetchone()
+    assert row is not None
+    assert row[1] == "WEEKLY_RECAP"
+    assert row[2] == "META"
+

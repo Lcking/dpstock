@@ -140,7 +140,15 @@
       :expand-by-default="false"
     />
 
-    <div v-if="!hideJudgmentZone" class="analysis-section judgment-zone">
+    <div v-if="!hideJudgmentZone" ref="judgmentZoneRef" class="analysis-section judgment-zone">
+      <n-alert v-if="!lastSavedRecordId" type="info" :bordered="false" class="judgment-funnel-banner">
+        <template #header>下一步：保存结构化判断</template>
+        选择候选与风险检查项后保存，系统将在验证期结束后自动判卷，并提醒你复盘沉淀记录。
+        <div style="margin-top: 8px">
+          <n-button size="tiny" tertiary type="primary" @click="scrollToJudgmentZone">查看判断区</n-button>
+        </div>
+      </n-alert>
+
       <h3 class="section-title">🎯 判断区</h3>
       
       <n-radio-group v-model:value="selectedCandidate" class="candidates-group">
@@ -195,6 +203,7 @@
       </n-alert>
 
       <n-button
+        v-if="!lastSavedRecordId"
         type="primary"
         size="large"
         block
@@ -208,6 +217,17 @@
         </template>
         保存我的判断
       </n-button>
+
+      <div v-else class="judgment-saved-panel">
+        <n-alert type="success" :bordered="false">
+          判断已保存。验证期 {{ selectedPeriod }} 天结束后可复盘，系统会自动判卷。
+        </n-alert>
+        <n-space class="judgment-saved-actions" :size="12">
+          <n-button type="primary" @click="goToJournal">去判断日记</n-button>
+          <n-button tertiary @click="goToMe">查看我的复盘表现</n-button>
+          <n-button quaternary @click="resetSavedState">继续保存另一条</n-button>
+        </n-space>
+      </div>
     </div>
 
     <!-- Wyckoff II Judgment Confirm Dialog -->
@@ -230,7 +250,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import JudgmentConfirmDialog from '@/components/WyckoffGuide/JudgmentConfirmDialog.vue';
 import JudgmentPreReminder from '@/components/WyckoffGuide/JudgmentPreReminder.vue';
 import AnchorBindDialog from '@/components/AnchorBindDialog.vue';
@@ -285,6 +306,7 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits(['saved']);
 
+const router = useRouter();
 const message = useMessage();
 const selectedCandidate = ref<string>('');
 const selectedRiskChecks = ref<string[]>([]);
@@ -292,6 +314,8 @@ const selectedPeriod = ref(7); // 默认7天
 const saving = ref(false);
 const showJudgmentConfirm = ref(false);
 const showBindDialog = ref(false);
+const lastSavedRecordId = ref('');
+const judgmentZoneRef = ref<HTMLElement | null>(null);
 
 // Judgment count for bind trigger
 const JUDGMENT_COUNT_KEY = 'aguai_judgment_count';
@@ -319,6 +343,31 @@ const turnoverActivityLabel = computed(() => {
 
 const plainLanguageSummary = computed(() => buildPlainLanguageSummary());
 const evidenceItems = computed(() => buildEvidenceItems());
+
+watch(
+  () => props.stockCode,
+  () => {
+    lastSavedRecordId.value = '';
+    selectedCandidate.value = '';
+    selectedRiskChecks.value = [];
+  },
+);
+
+function goToJournal() {
+  router.push('/journal');
+}
+
+function goToMe() {
+  router.push('/me');
+}
+
+function resetSavedState() {
+  lastSavedRecordId.value = '';
+}
+
+function scrollToJudgmentZone() {
+  judgmentZoneRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 function buildPlainLanguageSummary(): string {
   const structure = props.data?.structure_snapshot || {};
@@ -528,13 +577,15 @@ async function confirmSaveJudgment() {
     const response = await apiService.saveJudgment(recordRequest);
     
     if (response && (response.id || response.judgment_id)) {
+      const recordId = response.id || response.judgment_id;
+      lastSavedRecordId.value = recordId;
       if (response.is_temporary) {
         message.success('判断已保存到临时日记，绑定后可长期追踪与复盘');
         message.info('绑定后可持续追踪复盘，绑定后资产不会因换设备或清缓存而丢失。');
       } else {
         message.success('判断已保存！可在"判断日记"中查看');
       }
-      emit('saved', response.id || response.judgment_id);
+      emit('saved', recordId);
       
       // Trigger bind dialog on 2nd judgment
       checkAndTriggerBind();
@@ -844,6 +895,19 @@ function handleBindSuccess(data: any) {
 
 .save-judgment-button {
   margin-top: 16px;
+}
+
+.judgment-funnel-banner {
+  margin-bottom: 16px;
+}
+
+.judgment-saved-panel {
+  margin-top: 16px;
+}
+
+.judgment-saved-actions {
+  margin-top: 12px;
+  flex-wrap: wrap;
 }
 
 /* Markdown 渲染内容样式 */

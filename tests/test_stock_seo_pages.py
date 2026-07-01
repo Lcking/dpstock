@@ -31,6 +31,7 @@ def test_stock_landing_page_returns_server_rendered_html():
     assert "/?code=600519&amp;market=A&amp;focus=search" in html
     assert "/journal?ts_code=600519.SH" in html
     assert "判断历史" in html
+    assert "/review/weekly" in html
     assert "<style>" in html
     assert "linear-gradient" in html
     assert "最近 AI 诊断沉淀" in html

@@ -21,6 +21,7 @@ class JudgmentRecapService:
         self.base_url = base_url.rstrip("/")
         if db_path:
             DatabaseFactory.initialize(db_path)
+        self.db_path = db_path or DatabaseFactory.get_db_path()
         self.db = DatabaseFactory
         self.accuracy_service = JudgmentAccuracyService()
 
@@ -212,6 +213,84 @@ class JudgmentRecapService:
             "period_label": payload["period_label"],
             "reviewed_count": reviewed,
             "cases": len(payload["highlight_cases"]),
+        }
+
+    def build_weekly_recap_article(self, window_days: int = 7) -> Dict[str, Any]:
+        payload = self.get_weekly_recap_payload(window_days=window_days)
+        stats = payload["stats"]
+        reviewed_count = int(stats.get("reviewed_count") or 0)
+        support_rate = stats.get("support_rate")
+        outcome_counts = stats.get("outcome_counts") or {}
+        lines = [
+            f"# Agu AI 判断验证周报 · {payload['period_label']}",
+            "",
+            f"> {payload['disclaimer']}",
+            "",
+            "## 本周概览",
+            "",
+        ]
+        if reviewed_count > 0 and support_rate is not None:
+            lines.append(
+                f"近 {payload['window_days']} 天共复盘 **{reviewed_count}** 条判断，"
+                f"系统支持率 **{support_rate}%**。"
+            )
+        else:
+            lines.append("本周复盘样本仍在积累中，欢迎先在判断日记完成到期复盘。")
+        lines.extend(
+            [
+                "",
+                f"- 前提得到支持：{outcome_counts.get('supported', 0)} 条",
+                f"- 前提被否定：{outcome_counts.get('falsified', 0)} 条",
+                f"- 结果不确定：{outcome_counts.get('uncertain', 0)} 条",
+                "",
+                "## 典型复盘案例",
+                "",
+            ]
+        )
+        cases = payload.get("highlight_cases") or []
+        if cases:
+            for case in cases[:6]:
+                stock_code = case.get("stock_code") or ""
+                lines.append(
+                    f"- **{case.get('outcome_label')}** · {stock_code} · "
+                    f"{case.get('condition') or '结构前提判断'} "
+                    f"（{case.get('reviewed_at') or ''}）"
+                )
+        else:
+            lines.append("- 暂无足够案例，完成更多复盘后将自动纳入周报。")
+        lines.extend(
+            [
+                "",
+                "## 延伸阅读",
+                "",
+                f"- [查看完整周报页面]({self.base_url}/review/weekly)",
+                f"- [打开判断日记]({self.base_url}/journal)",
+                "",
+                f"*生成时间：{payload['generated_at']}*",
+            ]
+        )
+        title = f"Agu AI 判断验证周报 · {payload['period_label']}"
+        return {
+            "title": title,
+            "stock_code": "WEEKLY_RECAP",
+            "stock_name": "判断验证周报",
+            "market_type": "META",
+            "content": "\n".join(lines),
+            "publish_date": payload["period_end"],
+        }
+
+    def publish_weekly_recap_article(self, window_days: int = 7) -> Dict[str, Any]:
+        from services.archive_service import ArchiveService
+
+        article = self.build_weekly_recap_article(window_days=window_days)
+        article_id = ArchiveService(db_path=str(self.db_path)).save_article_sync(article)
+        logger.info(
+            f"[JudgmentRecap] published weekly article id={article_id} title={article['title']}"
+        )
+        return {
+            "article_id": article_id,
+            "title": article["title"],
+            "publish_date": article["publish_date"],
         }
 
     def _render_cases(self, cases: List[Dict[str, Any]]) -> str:

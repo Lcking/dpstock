@@ -9,7 +9,7 @@ def test_frontend_index_has_modern_seo_defaults():
     repo_root = Path(__file__).resolve().parents[1]
     index_text = (repo_root / "frontend/index.html").read_text(encoding="utf-8")
 
-    assert '<title>免费AI在线股票分析平台系统 - 智能诊股助手_软件</title>' in index_text
+    assert '<!--SSR:TITLE-->免费AI在线股票分析平台系统 - 智能诊股助手_软件<!--/SSR:TITLE-->' in index_text
     assert '<meta name="description"' in index_text
     assert '<link rel="canonical"' in index_text
     assert 'property="og:title"' in index_text

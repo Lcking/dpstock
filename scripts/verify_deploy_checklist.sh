@@ -40,11 +40,11 @@ failures=0
 check_status "/api/health" || failures=$((failures + 1))
 check_status "/sitemap.xml" || failures=$((failures + 1))
 check_status "/stock/600519" || failures=$((failures + 1))
-check_status "/judgment/recap/weekly" || failures=$((failures + 1))
+check_status "/review/weekly" || failures=$((failures + 1))
 check_status "/risk-stocks" || failures=$((failures + 1))
 
 check_grep "/stock/600519" "FAQPage|常见问题|600519" || failures=$((failures + 1))
-check_grep "/judgment/recap/weekly" "历史验证|仅供参考" || failures=$((failures + 1))
+check_grep "/review/weekly" "历史验证|仅供参考" || failures=$((failures + 1))
 
 echo
 if [[ "${failures}" -gt 0 ]]; then

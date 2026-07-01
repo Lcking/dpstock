@@ -27,24 +27,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run core regression suite
-        run: |
-          python -m pytest \
-            tests/test_instrument_resolver.py \
-            tests/test_etf_article_names.py \
-            tests/test_analyze_quota_and_limit.py \
-            tests/test_judgment_verifier.py \
-            tests/test_seo_injection.py \
-            tests/test_risk_stock_frontend_contract.py \
-            tests/test_risk_alert_email.py \
-            tests/test_judgment_recap.py \
-            tests/test_journal_due_email.py \
-            tests/test_journal_stock_timeline.py \
-            tests/test_journal_frontend_contract.py \
-            tests/test_review_suggestions.py \
-            tests/test_user_center_contract.py \
-            tests/test_ops_observability.py \
-            -q --tb=short
+      - name: Run test suite
+        run: python -m pytest tests/ -q --tb=short
 
   frontend-build:
     runs-on: ubuntu-latest

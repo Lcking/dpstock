@@ -398,6 +398,21 @@ class StockPageService:
       background: #3157d5;
       font-weight: 700;
     }}
+    .cta-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 14px;
+    }}
+    .cta-secondary {{
+      display: inline-flex;
+      padding: 10px 16px;
+      border-radius: 999px;
+      color: #3157d5;
+      background: rgba(49, 87, 213, 0.08);
+      font-weight: 600;
+      text-decoration: none;
+    }}
     .grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -482,7 +497,10 @@ class StockPageService:
       {f'<p class="disclaimer">{self._escape(accuracy_line)}</p>' if accuracy_line else ''}
       {f'<p class="disclaimer">{self._escape(condition_line)}</p>' if condition_line else ''}
       <a class="cta" href="{self._escape(realtime_url)}">实时 AI 诊断这只股票</a>
-      <p style="margin-top: 14px;"><a href="{self._escape(journal_url)}">查看我对这只股票的判断历史</a></p>
+      <div class="cta-row">
+        <a class="cta-secondary" href="{self._escape(journal_url)}">查看我对这只股票的判断历史</a>
+        <a class="cta-secondary" href="/review/weekly">平台判断验证周报</a>
+      </div>
     </header>
     <section>
       <h2>可以分析哪些维度？</h2>

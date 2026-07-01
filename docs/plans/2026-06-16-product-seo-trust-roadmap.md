@@ -426,6 +426,9 @@
 | 2026-06-18 | N4: CI 门禁扩展 | local_done | pending | pending |
 | 2026-06-18 | N5: 前端构建体积预算 | local_done | pending | pending |
 | 2026-06-18 | N7: Ops 邮件/LLM 看板补全 | local_done | pending | pending |
+| 2026-06-18 | 判断闭环 2.5: 诊股→判断→复盘转化漏斗 | local_done | pending | pending |
+| 2026-06-18 | N6: 周报自动归档文章 | local_done | pending | pending |
+| 2026-06-18 | N8: 全量 pytest CI | local_done | pending | pending |
 
 ---
 

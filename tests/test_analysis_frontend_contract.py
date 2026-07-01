@@ -26,3 +26,19 @@ def test_analysis_v1_display_surfaces_plain_language_summary_without_advice_word
     assert "买入" not in summary_section
     assert "卖出" not in summary_section
     assert "推荐" not in summary_section
+
+
+def test_analysis_v1_display_surfaces_judgment_funnel_cta_and_post_save_actions():
+    component_text = (REPO_ROOT / "frontend/src/components/AnalysisV1Display.vue").read_text(encoding="utf-8")
+    user_center = (REPO_ROOT / "frontend/src/components/UserCenter/UserCenterPage.vue").read_text(encoding="utf-8")
+    review_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalReviewDialog.vue").read_text(encoding="utf-8")
+    footer = (REPO_ROOT / "frontend/src/components/Footer.vue").read_text(encoding="utf-8")
+
+    assert "judgment-funnel-banner" in component_text
+    assert "lastSavedRecordId" in component_text
+    assert "goToJournal" in component_text
+    assert "goToMe" in component_text
+    assert "查看我的复盘表现" in component_text
+    assert "me_overview_refresh" in user_center
+    assert "me_overview_refresh" in review_dialog
+    assert "/review/weekly" in footer

@@ -101,6 +101,36 @@ class ArchiveService:
             logger.error(f"保存文章时出错: {str(e)}, 数据: {article_data}")
             return -1
 
+    def save_article_sync(self, article_data: Dict[str, Any]) -> int:
+        """Synchronous article save for schedulers and background jobs."""
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    REPLACE INTO articles
+                    (title, stock_code, stock_name, market_type, content, score, legacy_score, score_version, ai_score_json, publish_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        article_data["title"],
+                        article_data["stock_code"],
+                        article_data["stock_name"],
+                        article_data["market_type"],
+                        article_data["content"],
+                        article_data.get("score"),
+                        article_data.get("legacy_score"),
+                        article_data.get("score_version"),
+                        article_data.get("ai_score_json"),
+                        article_data.get("publish_date", datetime.now().strftime("%Y-%m-%d")),
+                    ),
+                )
+                conn.commit()
+                return int(cursor.lastrowid or 0)
+        except Exception as e:
+            logger.error(f"[Archive] save_article_sync failed: {e}")
+            return -1
+
     async def get_articles(self, limit: int = 20, offset: int = 0, keyword: str = None) -> List[Dict[str, Any]]:
         """获取文章列表，支持关键字搜索"""
         try:

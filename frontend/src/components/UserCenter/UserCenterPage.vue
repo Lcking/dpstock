@@ -175,7 +175,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, onActivated, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NAlert,
@@ -304,6 +304,12 @@ const loadOverview = async () => {
   }
 }
 
+const maybeRefreshOverview = () => {
+  if (!sessionStorage.getItem('me_overview_refresh')) return
+  sessionStorage.removeItem('me_overview_refresh')
+  loadOverview()
+}
+
 const handleBindSuccess = async () => {
   message.success('邮箱已绑定，个人资产已升级为长期保存')
   await loadOverview()
@@ -331,8 +337,10 @@ onMounted(() => {
     canonicalPath: '/me',
     robots: 'noindex, nofollow',
   })
-  loadOverview()
+  loadOverview().then(maybeRefreshOverview)
 })
+
+onActivated(maybeRefreshOverview)
 </script>
 
 <style scoped>

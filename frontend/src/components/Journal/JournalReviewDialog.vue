@@ -223,6 +223,7 @@ const handleReview = async () => {
     )
 
     message.success('复盘完成')
+    sessionStorage.setItem('me_overview_refresh', String(Date.now()))
     emit('reviewed')
     emit('update:show', false)
   } catch (error) {

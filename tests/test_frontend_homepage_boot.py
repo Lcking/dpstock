@@ -39,7 +39,10 @@ def test_homepage_boot_smoke_script_passes_when_preview_running():
         text=True,
         timeout=60,
     )
-    if result.returncode != 0 and "ECONNREFUSED" in (result.stderr + result.stdout):
+    if result.returncode != 0 and (
+        "ECONNREFUSED" in (result.stderr + result.stdout)
+        or "CONNECTION_REFUSED" in (result.stderr + result.stdout)
+    ):
         import pytest
 
         pytest.skip("preview server not running on :4173; start with `npm run preview`")
