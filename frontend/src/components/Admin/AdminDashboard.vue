@@ -157,6 +157,30 @@
               <n-descriptions-item label="绑定 · 标的">{{ opsSummary.llm_usage?.totals?.authenticated?.stock_count ?? 0 }}</n-descriptions-item>
             </n-descriptions>
             <n-data-table style="margin-top: 12px" :columns="opsUsageCols" :data="opsSummary.llm_usage?.daily || []" :bordered="false" />
+
+            <n-h3 prefix="bar" style="margin-top: 16px">邮件投递</n-h3>
+            <n-descriptions bordered size="small" :column="2" style="max-width: 720px">
+              <n-descriptions-item label="真实发信">
+                {{ opsSummary.email_config?.send_real_email ? '开启' : '仅日志' }}
+              </n-descriptions-item>
+              <n-descriptions-item label="Resend">
+                {{ opsSummary.email_config?.resend_configured ? '已配置' : '未配置' }}
+              </n-descriptions-item>
+              <n-descriptions-item label="发件人" :span="2">
+                {{ opsSummary.email_config?.from_email || '—' }}
+              </n-descriptions-item>
+            </n-descriptions>
+            <n-text depth="3" style="display: block; margin: 8px 0; font-size: 12px;">
+              近 {{ opsSummary.risk_alert_email?.days || 7 }} 日风险提醒：
+              已发送 {{ opsSummary.risk_alert_email?.counts?.sent || 0 }}，
+              跳过 {{ opsSummary.risk_alert_email?.counts?.skipped || 0 }}，
+              失败 {{ opsSummary.risk_alert_email?.counts?.failed || 0 }}
+            </n-text>
+            <n-data-table
+              :columns="opsRiskEmailCols"
+              :data="opsSummary.risk_alert_email?.recent || []"
+              :bordered="false"
+            />
           </template>
         </n-spin>
       </n-tab-pane>
@@ -544,6 +568,15 @@ const opsUsageCols: DataTableColumns<any> = [
   { title: '用户类型', key: 'user_type', width: 120 },
   { title: '请求数', key: 'call_count', width: 90 },
   { title: '标的数', key: 'stock_count', width: 90 },
+];
+
+const opsRiskEmailCols: DataTableColumns<any> = [
+  { title: '交易日', key: 'trade_date', width: 110 },
+  { title: '邮箱', key: 'email', ellipsis: { tooltip: true } },
+  { title: '命中数', key: 'item_count', width: 80 },
+  { title: '状态', key: 'status', width: 90 },
+  { title: '错误', key: 'error_message', ellipsis: { tooltip: true } },
+  { title: '时间', key: 'created_at', width: 180 },
 ];
 
 function formatRate(value: number | null | undefined) {

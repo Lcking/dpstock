@@ -80,6 +80,22 @@ def _reset_rate_limits():
     reset_analyze_rate_limits()
 
 
+def test_analyze_request_rejects_empty_stock_codes(tmp_path, monkeypatch):
+    db_path = _setup_db(tmp_path)
+    _bind_test_db(monkeypatch, db_path)
+    _mock_analyzer(monkeypatch)
+    from web_server import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/analyze",
+            json={"stock_codes": [""], "market_type": "A"},
+            headers={"X-Anonymous-Id": "anon_empty_code"},
+        )
+
+    assert response.status_code == 422
+
+
 def test_analyze_request_rejects_more_than_batch_max(tmp_path, monkeypatch):
     db_path = _setup_db(tmp_path)
     _bind_test_db(monkeypatch, db_path)

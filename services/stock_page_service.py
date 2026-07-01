@@ -3,8 +3,10 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from services.archive_service import ArchiveService
+from services.watchlist.service import WatchlistService
 
 
 @dataclass(frozen=True)
@@ -273,6 +275,7 @@ class StockPageService:
                 f"支持率 {top_condition['support_rate']}%（仅供参考）"
             )
         realtime_url = f"/?code={stock.code}&market={stock.market}&focus=search"
+        journal_url = f"/journal?ts_code={quote(WatchlistService._normalize_ts_code(stock.code))}"
         if recent_articles is None:
             recent_articles = await self._get_recent_articles(stock)
 
@@ -479,6 +482,7 @@ class StockPageService:
       {f'<p class="disclaimer">{self._escape(accuracy_line)}</p>' if accuracy_line else ''}
       {f'<p class="disclaimer">{self._escape(condition_line)}</p>' if condition_line else ''}
       <a class="cta" href="{self._escape(realtime_url)}">实时 AI 诊断这只股票</a>
+      <p style="margin-top: 14px;"><a href="{self._escape(journal_url)}">查看我对这只股票的判断历史</a></p>
     </header>
     <section>
       <h2>可以分析哪些维度？</h2>

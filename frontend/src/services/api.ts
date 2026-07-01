@@ -4,6 +4,7 @@ import type {
   JournalListResponse,
   JournalRecord,
   JournalReviewStats,
+  JournalStockTimeline,
   JournalSystemEvaluation,
 } from '@/types/journal';
 import type { Watchlist, WatchlistSummary, WatchlistRiskAlertsResponse } from '@/types/watchlist';
@@ -332,6 +333,18 @@ export const apiService = {
       return response.data;
     } catch (error) {
       console.error('获取日记列表时出错:', error);
+      throw error;
+    }
+  },
+
+  getJournalStockTimeline: async (tsCode: string, limit: number = 20): Promise<JournalStockTimeline> => {
+    try {
+      const response = await axiosInstance.get('/journal/stock-timeline', {
+        params: { ts_code: tsCode, limit },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('获取单股判断历史时出错:', error);
       throw error;
     }
   },

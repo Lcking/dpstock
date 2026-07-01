@@ -78,13 +78,28 @@ app.add_middleware(
 
 # 添加验证错误处理器
 from fastapi.exceptions import RequestValidationError
+
+
+def _json_safe_validation_errors(errors: list) -> list:
+    safe_errors = []
+    for error in errors:
+        item = dict(error)
+        ctx = item.get("ctx")
+        if isinstance(ctx, dict):
+            item["ctx"] = {key: str(value) for key, value in ctx.items()}
+        safe_errors.append(item)
+    return safe_errors
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     logger.error(f"Validation error for {request.url}: {exc.errors()}")
-    logger.error(f"Request body: {await request.body()}")
+    body = exc.body
+    if body is not None:
+        logger.error(f"Request body: {body}")
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "body": str(await request.body())},
+        content={"detail": _json_safe_validation_errors(exc.errors()), "body": body},
     )
 
 @app.on_event("startup")

@@ -100,3 +100,20 @@ def test_journal_review_captures_failure_reason():
     assert "failure_reason" in api_service
     assert "failureReasonLabel" in detail_dialog
     assert "失败原因" in detail_dialog
+
+
+def test_journal_list_supports_stock_timeline_filter():
+    api_service = (REPO_ROOT / "frontend/src/services/api.ts").read_text(encoding="utf-8")
+    journal_types = (REPO_ROOT / "frontend/src/types/journal.ts").read_text(encoding="utf-8")
+    list_view = (REPO_ROOT / "frontend/src/components/Journal/JournalList.vue").read_text(encoding="utf-8")
+    admin_view = (REPO_ROOT / "frontend/src/components/Admin/AdminDashboard.vue").read_text(encoding="utf-8")
+
+    assert "JournalStockTimeline" in journal_types
+    assert "getJournalStockTimeline" in api_service
+    assert "/journal/stock-timeline" in api_service
+    assert "stockFilter" in list_view
+    assert "stock-timeline-panel" in list_view
+    assert "clearStockFilter" in list_view
+    assert "route.query.ts_code" in list_view
+    assert "邮件投递" in admin_view
+    assert "opsRiskEmailCols" in admin_view

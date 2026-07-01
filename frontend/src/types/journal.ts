@@ -51,6 +51,17 @@ export interface JournalListResponse {
     trial_message: string | null
 }
 
+export interface JournalStockTimeline {
+    ts_code: string
+    stock_name: string | null
+    total_count: number
+    reviewed_count: number
+    due_count: number
+    active_count: number
+    support_rate: number | null
+    records: JournalRecord[]
+}
+
 export interface JournalReviewStats {
     limit: number
     sample_size: number

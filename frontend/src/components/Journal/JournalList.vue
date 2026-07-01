@@ -45,6 +45,29 @@
       </n-alert>
     </div>
 
+    <!-- Stock timeline filter -->
+    <div v-if="stockFilter" class="stock-timeline-panel">
+      <n-alert type="info" :bordered="false">
+        <n-space vertical :size="10" style="width: 100%">
+          <n-space justify="space-between" align="center" wrap>
+            <div>
+              <div class="stock-timeline-title">
+                {{ stockTimeline?.stock_name || stockFilter }} 判断历史
+              </div>
+              <n-text depth="3">{{ stockFilter }}</n-text>
+            </div>
+            <n-button size="small" @click="clearStockFilter">查看全部日记</n-button>
+          </n-space>
+          <div v-if="stockTimeline" class="stock-timeline-stats">
+            <span>共 {{ stockTimeline.total_count }} 条</span>
+            <span>已复盘 {{ stockTimeline.reviewed_count }}</span>
+            <span>待复盘 {{ stockTimeline.due_count }}</span>
+            <span>支持率 {{ formatSupportRate(stockTimeline.support_rate) }}</span>
+          </div>
+        </n-space>
+      </n-alert>
+    </div>
+
     <!-- Due Notification -->
     <div v-if="dueCount > 0" class="due-notification">
       <n-alert type="warning" :show-icon="true">
@@ -58,7 +81,7 @@
     </div>
 
     <!-- Review Stats -->
-    <div v-if="reviewStats" class="stats-panel">
+    <div v-if="reviewStats && !stockFilter" class="stats-panel">
       <div class="stats-header">
         <div>
           <div class="stats-title">复盘统计</div>
@@ -306,6 +329,7 @@ import {
   NCheckbox,
   NDataTable,
   NProgress,
+  NText,
   useDialog,
   useMessage 
 } from 'naive-ui'
@@ -315,7 +339,7 @@ import JournalDetailDialog from './JournalDetailDialog.vue'
 import AnchorStatus from '../AnchorStatus.vue'
 import AnchorBindDialog from '../AnchorBindDialog.vue'
 import EmptyState from '../common/EmptyState.vue'
-import type { JournalRecord, JournalReviewStats } from '@/types/journal'
+import type { JournalRecord, JournalReviewStats, JournalStockTimeline } from '@/types/journal'
 import { applyPageSeo } from '@/utils/seo'
 
 const message = useMessage()
@@ -333,6 +357,8 @@ const conditionLeaderboard = computed(
 )
 const errorMessage = ref('')
 const statusFilter = ref<string>('')
+const stockFilter = ref('')
+const stockTimeline = ref<JournalStockTimeline | null>(null)
 const showReview = ref(false)
 const showDetail = ref(false)
 const showBindDialog = ref(false)
@@ -363,7 +389,8 @@ const loadRecords = async () => {
   errorMessage.value = ''
   try {
     const data = await apiService.getJournalRecords({
-      status: statusFilter.value || undefined
+      status: statusFilter.value || undefined,
+      ts_code: stockFilter.value || undefined,
     })
     records.value = data.records || []
     journalState.value = {
@@ -392,12 +419,49 @@ const loadDueCount = async () => {
 }
 
 const loadReviewStats = async () => {
+  if (stockFilter.value) return
   try {
     reviewStats.value = await apiService.getJournalStats(30)
   } catch (error) {
     console.error('Load review stats error:', error)
     reviewStats.value = null
   }
+}
+
+const loadStockTimeline = async () => {
+  if (!stockFilter.value) {
+    stockTimeline.value = null
+    return
+  }
+  try {
+    stockTimeline.value = await apiService.getJournalStockTimeline(stockFilter.value, 20)
+  } catch (error) {
+    console.error('Load stock timeline error:', error)
+    stockTimeline.value = null
+  }
+}
+
+const applyStockFilterFromRoute = async () => {
+  const rawCode = route.query.ts_code
+  const nextCode = typeof rawCode === 'string' ? rawCode.trim() : ''
+  stockFilter.value = nextCode
+  if (!nextCode) {
+    stockTimeline.value = null
+    return
+  }
+  await loadStockTimeline()
+}
+
+const clearStockFilter = async () => {
+  stockFilter.value = ''
+  stockTimeline.value = null
+  if (route.query.ts_code) {
+    const nextQuery = { ...route.query }
+    delete nextQuery.ts_code
+    await router.replace({ path: route.path, query: nextQuery })
+  }
+  await loadRecords()
+  await loadReviewStats()
 }
 
 // Record click - show detail dialog
@@ -787,6 +851,7 @@ onMounted(async () => {
     canonicalPath: '/journal',
     robots: 'noindex, nofollow',
   })
+  await applyStockFilterFromRoute()
   await loadRecords()
   loadDueCount()
   loadReviewStats()
@@ -834,6 +899,24 @@ onMounted(async () => {
 
 .due-notification {
   margin-bottom: 20px;
+}
+
+.stock-timeline-panel {
+  margin-bottom: 20px;
+}
+
+.stock-timeline-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.stock-timeline-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--n-text-color-2);
 }
 
 .stats-panel {

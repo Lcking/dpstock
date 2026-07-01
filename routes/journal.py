@@ -146,6 +146,25 @@ async def get_public_accuracy_stats(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/stock-timeline")
+async def get_stock_timeline(
+    ts_code: str = Query(..., min_length=1, description="股票代码"),
+    limit: int = Query(20, ge=1, le=100),
+    user: UserContext = Depends(get_current_user),
+):
+    try:
+        user_id = _resolve_journal_user(user)
+        journal_service.run_due_check()
+        return journal_service.get_stock_timeline(
+            user_id=user_id,
+            ts_code=ts_code,
+            limit=limit,
+        )
+    except Exception as e:
+        logger.error(f"Get stock timeline error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{record_id}")
 async def get_record(
     record_id: str,

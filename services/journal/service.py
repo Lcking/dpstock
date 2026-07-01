@@ -18,6 +18,7 @@ from services.journal.failure_reasons import (
     normalize_failure_reason,
 )
 from services.watchlist import watchlist_service
+from services.watchlist.service import WatchlistService
 from services.user_service import UserService
 from utils.logger import get_logger
 
@@ -65,6 +66,7 @@ class JournalService:
         now = datetime.utcnow()
         asof = now.strftime('%Y-%m-%d')
         due_at = now + timedelta(days=validation_period_days)
+        ts_code = WatchlistService._normalize_ts_code(ts_code)
         
         record_id = f"jr_{uuid.uuid4().hex[:12]}"
         
@@ -130,6 +132,15 @@ class JournalService:
             "event_count_30d": summary.events.event_count_30d
         }
     
+    def _stock_code_variants(self, ts_code: str) -> List[str]:
+        raw = str(ts_code or "").strip().upper()
+        canonical = WatchlistService._normalize_ts_code(raw)
+        variants = {raw, canonical}
+        base = canonical.split(".")[0] if "." in canonical else canonical
+        if base.isdigit():
+            variants.add(base)
+        return sorted(v for v in variants if v)
+
     def get_records(
         self,
         user_id: str,
@@ -140,15 +151,17 @@ class JournalService:
     ) -> List[Dict[str, Any]]:
         """获取判断记录列表"""
         conditions = ["user_id = ?"]
-        params = [user_id]
+        params: List[Any] = [user_id]
         
         if status:
             conditions.append("status = ?")
             params.append(status)
         
         if ts_code:
-            conditions.append("stock_code = ?")
-            params.append(ts_code)
+            variants = self._stock_code_variants(ts_code)
+            placeholders = ",".join("?" * len(variants))
+            conditions.append(f"stock_code IN ({placeholders})")
+            params.extend(variants)
         
         offset = (page - 1) * page_size
         
@@ -163,6 +176,73 @@ class JournalService:
             rows = cursor.fetchall()
         
         return [self._row_to_record(row) for row in rows]
+
+    def get_stock_timeline(
+        self,
+        user_id: str,
+        ts_code: str,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """Return judgment history and review stats for one stock."""
+        variants = self._stock_code_variants(ts_code)
+        canonical = WatchlistService._normalize_ts_code(ts_code)
+        limit = min(max(int(limit or 20), 1), 100)
+
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            placeholders = ",".join("?" * len(variants))
+            cursor.execute(
+                f"""
+                SELECT * FROM judgments
+                WHERE user_id = ? AND stock_code IN ({placeholders})
+                ORDER BY created_at DESC
+                """,
+                [user_id, *variants],
+            )
+            rows = cursor.fetchall()
+
+        records = [self._row_to_record(row) for row in rows]
+        reviewed_count = 0
+        supported_count = 0
+        due_count = 0
+        active_count = 0
+        stock_name = None
+
+        for record in records:
+            if not stock_name:
+                snapshot = record.get("snapshot") or {}
+                summary = snapshot.get("watchlist_summary") or {}
+                name = summary.get("name")
+                if isinstance(name, str) and name.strip():
+                    stock_name = name.strip()
+
+            status = str(record.get("status") or "")
+            if status == "due":
+                due_count += 1
+            elif status == "active":
+                active_count += 1
+            elif status == "reviewed":
+                review = record.get("review") or {}
+                outcome = review.get("outcome")
+                if outcome:
+                    reviewed_count += 1
+                    if outcome == "supported":
+                        supported_count += 1
+
+        support_rate = None
+        if reviewed_count > 0:
+            support_rate = round(supported_count / reviewed_count * 100, 2)
+
+        return {
+            "ts_code": canonical,
+            "stock_name": stock_name,
+            "total_count": len(records),
+            "reviewed_count": reviewed_count,
+            "due_count": due_count,
+            "active_count": active_count,
+            "support_rate": support_rate,
+            "records": records[:limit],
+        }
 
     def delete_record(self, record_id: str, user_id: str) -> bool:
         """删除判断记录（硬删除）"""
