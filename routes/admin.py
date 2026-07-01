@@ -516,6 +516,36 @@ def _risk_alert_email_summary(days: int = 7) -> dict:
     }
 
 
+def _journal_due_email_summary(days: int = 7) -> dict:
+    days = max(1, min(int(days), 90))
+    with DatabaseFactory.get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT status, COUNT(*) AS c
+            FROM journal_due_email_log
+            WHERE created_at >= datetime('now', ?)
+            GROUP BY status
+            """,
+            (f"-{days} days",),
+        )
+        counts = {str(row["status"]): int(row["c"]) for row in cur.fetchall()}
+        cur.execute(
+            """
+            SELECT digest_date, email, item_count, status, error_message, created_at
+            FROM journal_due_email_log
+            ORDER BY created_at DESC
+            LIMIT 10
+            """
+        )
+        recent = [dict(row) for row in cur.fetchall()]
+    return {
+        "days": days,
+        "counts": counts,
+        "recent": recent,
+    }
+
+
 @router.get("/ops/summary")
 async def admin_ops_summary(days: int = 7, _: dict = Depends(require_admin)):
     """Ops dashboard: analyze SLO, scheduler health, LLM usage rollup."""
@@ -538,6 +568,7 @@ async def admin_ops_summary(days: int = 7, _: dict = Depends(require_admin)):
         "llm_usage": llm_usage_service.get_summary(days=days),
         "email_config": email_config,
         "risk_alert_email": _risk_alert_email_summary(days=days),
+        "journal_due_email": _journal_due_email_summary(days=days),
     }
 
 

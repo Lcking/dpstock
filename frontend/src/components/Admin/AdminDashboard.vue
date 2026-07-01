@@ -181,6 +181,17 @@
               :data="opsSummary.risk_alert_email?.recent || []"
               :bordered="false"
             />
+            <n-text depth="3" style="display: block; margin: 16px 0 8px; font-size: 12px;">
+              近 {{ opsSummary.journal_due_email?.days || 7 }} 日待复盘提醒：
+              已发送 {{ opsSummary.journal_due_email?.counts?.sent || 0 }}，
+              跳过 {{ opsSummary.journal_due_email?.counts?.skipped || 0 }}，
+              失败 {{ opsSummary.journal_due_email?.counts?.failed || 0 }}
+            </n-text>
+            <n-data-table
+              :columns="opsJournalDueEmailCols"
+              :data="opsSummary.journal_due_email?.recent || []"
+              :bordered="false"
+            />
           </template>
         </n-spin>
       </n-tab-pane>
@@ -574,6 +585,15 @@ const opsRiskEmailCols: DataTableColumns<any> = [
   { title: '交易日', key: 'trade_date', width: 110 },
   { title: '邮箱', key: 'email', ellipsis: { tooltip: true } },
   { title: '命中数', key: 'item_count', width: 80 },
+  { title: '状态', key: 'status', width: 90 },
+  { title: '错误', key: 'error_message', ellipsis: { tooltip: true } },
+  { title: '时间', key: 'created_at', width: 180 },
+];
+
+const opsJournalDueEmailCols: DataTableColumns<any> = [
+  { title: '日期', key: 'digest_date', width: 110 },
+  { title: '邮箱', key: 'email', ellipsis: { tooltip: true } },
+  { title: '待复盘数', key: 'item_count', width: 90 },
   { title: '状态', key: 'status', width: 90 },
   { title: '错误', key: 'error_message', ellipsis: { tooltip: true } },
   { title: '时间', key: 'created_at', width: 180 },

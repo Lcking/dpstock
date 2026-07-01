@@ -107,6 +107,8 @@ def test_user_center_surfaces_notify_pref_and_clickable_judgments():
 
     assert "通知设置" in user_center_page
     assert "邮件风险提醒" in user_center_page
+    assert "待复盘邮件提醒" in user_center_page
+    assert "journal_due_email" in user_center_page
     assert "updateNotifyPref" in user_center_page
     assert "handleJudgmentClick" in user_center_page
     assert "judgment-item-clickable" in user_center_page

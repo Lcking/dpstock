@@ -23,6 +23,7 @@ from services.user_service import UserService
 from services.verification_scheduler import start_verification_scheduler
 from services.risk_stock_scheduler import RiskStockScheduler, start_risk_stock_scheduler
 from services.judgment_recap_scheduler import start_judgment_recap_scheduler
+from services.journal_due_scheduler import start_journal_due_scheduler
 from services.analyze_slo_tracker import analyze_slo_tracker
 from services.job_health_tracker import job_health_tracker
 from services.llm_usage_service import llm_usage_service
@@ -121,11 +122,13 @@ async def startup_event():
     start_verification_scheduler()
     start_risk_stock_scheduler()
     start_judgment_recap_scheduler()
+    start_journal_due_scheduler()
 
     for scheduled_job in (
         "risk_stock_scheduler",
         "verification_scheduler",
         "judgment_recap_scheduler",
+        "journal_due_scheduler",
     ):
         job_health_tracker.ensure_registered(scheduled_job)
 

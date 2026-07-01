@@ -25,6 +25,7 @@ def test_user_center_overview_endpoint_exists():
         assert "reviewed_count" in data["personal_review_stats"]
         assert "notify_pref" in data["user"]
         assert "risk_alert_email" in data["user"]["notify_pref"]
+        assert "journal_due_email" in data["user"]["notify_pref"]
 
 
 def test_frontend_has_me_route_and_my_menu_entries():

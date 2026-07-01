@@ -422,6 +422,10 @@
 | 2026-06-18 | Task 11: GEO 问答块 | local_done | pending | pending |
 | 2026-06-18 | 判断闭环 2.2: 条件质量榜单（/me + 单股时间线） | local_done | pending | pending |
 | 2026-06-18 | 判断闭环 2.3: 复盘结构化建议 | local_done | pending | pending |
+| 2026-06-18 | 判断闭环 2.4: 待复盘邮件提醒 | local_done | pending | pending |
+| 2026-06-18 | N4: CI 门禁扩展 | local_done | pending | pending |
+| 2026-06-18 | N5: 前端构建体积预算 | local_done | pending | pending |
+| 2026-06-18 | N7: Ops 邮件/LLM 看板补全 | local_done | pending | pending |
 
 ---
 

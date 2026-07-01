@@ -259,3 +259,112 @@ def send_risk_alert_digest(
     except Exception as exc:
         logger.error(f"发送风险提醒邮件失败 ({masked}): {exc}")
         return False, str(exc)
+
+
+def _render_due_record_rows(due_records: list) -> str:
+    rows = []
+    for item in due_records or []:
+        name = str(item.get("stock_name") or item.get("ts_code") or "").strip()
+        ts_code = str(item.get("ts_code") or "").strip()
+        candidate = str(item.get("candidate") or "").strip()
+        rows.append(
+            f"""
+            <tr>
+                <td style="padding: 12px 0; border-bottom: 1px solid #eef0f4;">
+                    <div style="font-size: 15px; font-weight: 600; color: #1f2937;">{name}</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">{ts_code}</div>
+                </td>
+                <td style="padding: 12px 0; border-bottom: 1px solid #eef0f4; color: #4b5563; font-size: 13px;">
+                    候选 {candidate or '—'}
+                </td>
+            </tr>
+            """
+        )
+    return "".join(rows)
+
+
+def send_journal_due_digest(
+    email: str,
+    digest_date: str,
+    due_records: list,
+    *,
+    journal_url: str,
+    unsubscribe_url: str,
+    site_base_url: str = "https://aguai.net",
+) -> tuple[bool, str]:
+    """Send a digest when judgment records are waiting for review."""
+    masked = email
+    if "@" in email:
+        local, domain = email.split("@", 1)
+        masked = f"{local[0]}***@{domain}" if local else email
+
+    count = len(due_records or [])
+    record_rows = _render_due_record_rows(due_records or [])
+
+    if not SEND_REAL_EMAIL or not RESEND_API_KEY:
+        logger.info("=== 待复盘提醒邮件 (开发模式) ===")
+        logger.info(f"邮箱: {masked}")
+        logger.info(f"日期: {digest_date}")
+        logger.info(f"待复盘数量: {count}")
+        for item in due_records or []:
+            logger.info(f"- {item.get('stock_name')} ({item.get('ts_code')})")
+        logger.info(f"日记链接: {journal_url}")
+        logger.info(f"退订链接: {unsubscribe_url}")
+        logger.info("=" * 40)
+        return True, f"待复盘提醒已记录到日志 ({masked})"
+
+    try:
+        params = {
+            "from": FROM_EMAIL,
+            "to": [email],
+            "subject": f"Aguai 判断待复盘提醒 · {count} 条已到验证期",
+            "html": f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:640px;margin:32px auto;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.08);overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0ea5e9 0%,#6366f1 100%);padding:28px 24px;color:#fff;">
+      <h1 style="margin:0;font-size:22px;">判断待复盘提醒</h1>
+      <p style="margin:10px 0 0;font-size:14px;opacity:0.92;">你有 {count} 条判断已到验证期，建议及时复盘沉淀记录</p>
+    </div>
+    <div style="padding:24px;">
+      <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">
+        以下判断记录等待你复盘。系统会根据 A/B/C 条件自动判卷，你可以补充笔记与学习总结。
+      </p>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th align="left" style="font-size:12px;color:#6b7280;padding-bottom:8px;">标的</th>
+            <th align="left" style="font-size:12px;color:#6b7280;padding-bottom:8px;">候选</th>
+          </tr>
+        </thead>
+        <tbody>{record_rows}</tbody>
+      </table>
+      <div style="margin-top:24px;">
+        <a href="{journal_url}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;">去判断日记复盘</a>
+        <a href="{site_base_url.rstrip('/')}/me" style="display:inline-block;margin-left:8px;color:#6366f1;text-decoration:none;font-size:14px;">打开用户中心</a>
+      </div>
+      <p style="margin:24px 0 0;color:#9ca3af;font-size:12px;line-height:1.7;">
+        免责声明：本邮件基于你的结构化判断记录自动生成，仅供参考，不构成任何投资建议。
+      </p>
+    </div>
+    <div style="background:#f8f9fa;padding:18px 24px;border-top:1px solid #e9ecef;">
+      <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;text-align:center;">
+        不想再收到此类邮件？<a href="{unsubscribe_url}" style="color:#6366f1;">点此退订待复盘提醒</a><br/>
+        © 2026 Aguai - 智能股票分析平台
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+            """,
+        }
+        response = resend.Emails.send(params)
+        logger.info(
+            f"待复盘提醒邮件已发送到 {masked}, items={count}, Resend ID: {response.get('id', 'N/A')}"
+        )
+        return True, f"待复盘提醒已发送到 {masked}"
+    except Exception as exc:
+        logger.error(f"发送待复盘提醒邮件失败 ({masked}): {exc}")
+        return False, str(exc)

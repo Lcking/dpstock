@@ -458,10 +458,11 @@ export const apiService = {
     return response.data;
   },
 
-  updateNotifyPref: async (riskAlertEmail: boolean) => {
-    const response = await axiosInstance.patch('/user-center/notify-pref', {
-      risk_alert_email: riskAlertEmail,
-    });
+  updateNotifyPref: async (prefs: {
+    risk_alert_email?: boolean;
+    journal_due_email?: boolean;
+  }) => {
+    const response = await axiosInstance.patch('/user-center/notify-pref', prefs);
     return response.data;
   },
 

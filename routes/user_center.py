@@ -1,8 +1,9 @@
 """
 User Center API Routes — uses unified auth
 """
-from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from auth.dependencies import get_current_user, UserContext
@@ -25,7 +26,8 @@ notify_pref_service = NotifyPrefService()
 
 
 class NotifyPrefUpdateRequest(BaseModel):
-    risk_alert_email: bool
+    risk_alert_email: Optional[bool] = None
+    journal_due_email: Optional[bool] = None
 
 
 def _mask_email(email: Optional[str]) -> Optional[str]:
@@ -91,5 +93,8 @@ async def update_notify_pref(
     body: NotifyPrefUpdateRequest,
     user: UserContext = Depends(get_current_user),
 ):
-    pref = notify_pref_service.set_risk_alert_email(user.user_id, body.risk_alert_email)
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="无更新字段")
+    pref = notify_pref_service.update_notify_pref(user.user_id, updates)
     return {"notify_pref": pref}

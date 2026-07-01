@@ -583,6 +583,12 @@ class JournalService:
         
         if updated > 0:
             logger.info(f"[Journal] Marked {updated} records as due")
+            try:
+                from services.journal_due_email_service import JournalDueEmailService
+
+                JournalDueEmailService().send_daily_digests()
+            except Exception as e:
+                logger.warning(f"[Journal] Failed to send due digest emails: {e}")
         
         return updated
 

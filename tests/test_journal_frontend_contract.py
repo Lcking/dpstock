@@ -117,6 +117,8 @@ def test_journal_list_supports_stock_timeline_filter():
     assert "route.query.ts_code" in list_view
     assert "邮件投递" in admin_view
     assert "opsRiskEmailCols" in admin_view
+    assert "opsJournalDueEmailCols" in admin_view
+    assert "journal_due_email" in admin_view
 
 
 def test_condition_quality_leaderboard_component_is_reused():

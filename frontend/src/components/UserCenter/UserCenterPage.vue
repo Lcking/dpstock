@@ -114,8 +114,22 @@
                 <n-switch
                   :value="riskAlertEmailEnabled"
                   :disabled="notifyPrefDisabled"
-                  :loading="notifyPrefSaving"
-                  @update:value="handleNotifyPrefChange"
+                  :loading="notifyPrefSavingKey === 'risk_alert_email'"
+                  @update:value="(v) => handleNotifyPrefChange('risk_alert_email', v)"
+                />
+              </div>
+              <div class="notify-pref-row">
+                <div>
+                  <div class="notify-pref-title">待复盘邮件提醒</div>
+                  <n-text depth="3" class="notify-pref-hint">
+                    判断记录到验证期后，每日发送待复盘摘要邮件。
+                  </n-text>
+                </div>
+                <n-switch
+                  :value="journalDueEmailEnabled"
+                  :disabled="notifyPrefDisabled"
+                  :loading="notifyPrefSavingKey === 'journal_due_email'"
+                  @update:value="(v) => handleNotifyPrefChange('journal_due_email', v)"
                 />
               </div>
               <n-text v-if="notifyPrefHint" depth="3" class="notify-pref-note">
@@ -191,7 +205,7 @@ const overview = ref<any>(null)
 const errorMessage = ref('')
 const showBindDialog = ref(false)
 const showInviteDialog = ref(false)
-const notifyPrefSaving = ref(false)
+const notifyPrefSavingKey = ref<'risk_alert_email' | 'journal_due_email' | null>(null)
 
 const guestAssetSummary = computed(() => {
   if (!overview.value?.user?.is_temporary) return ''
@@ -206,6 +220,10 @@ const guestAssetSummary = computed(() => {
 
 const riskAlertEmailEnabled = computed(
   () => overview.value?.user?.notify_pref?.risk_alert_email ?? true
+)
+
+const journalDueEmailEnabled = computed(
+  () => overview.value?.user?.notify_pref?.journal_due_email ?? true
 )
 
 const notifyPrefDisabled = computed(() => {
@@ -236,11 +254,14 @@ const handleJudgmentClick = (record: { id: string; status?: string }) => {
   })
 }
 
-const handleNotifyPrefChange = async (enabled: boolean) => {
-  if (notifyPrefDisabled.value || notifyPrefSaving.value) return
-  notifyPrefSaving.value = true
+const handleNotifyPrefChange = async (
+  key: 'risk_alert_email' | 'journal_due_email',
+  enabled: boolean,
+) => {
+  if (notifyPrefDisabled.value || notifyPrefSavingKey.value) return
+  notifyPrefSavingKey.value = key
   try {
-    const data = await apiService.updateNotifyPref(enabled)
+    const data = await apiService.updateNotifyPref({ [key]: enabled })
     if (overview.value?.user) {
       overview.value = {
         ...overview.value,
@@ -250,12 +271,13 @@ const handleNotifyPrefChange = async (enabled: boolean) => {
         },
       }
     }
-    message.success(enabled ? '已开启邮件风险提醒' : '已关闭邮件风险提醒')
+    const label = key === 'risk_alert_email' ? '邮件风险提醒' : '待复盘邮件提醒'
+    message.success(enabled ? `已开启${label}` : `已关闭${label}`)
   } catch (error) {
     console.error('Update notify pref error:', error)
     message.error('更新通知设置失败')
   } finally {
-    notifyPrefSaving.value = false
+    notifyPrefSavingKey.value = null
   }
 }
 

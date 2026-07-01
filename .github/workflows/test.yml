@@ -38,4 +38,46 @@ jobs:
             tests/test_risk_stock_frontend_contract.py \
             tests/test_risk_alert_email.py \
             tests/test_judgment_recap.py \
+            tests/test_journal_due_email.py \
+            tests/test_journal_stock_timeline.py \
+            tests/test_journal_frontend_contract.py \
+            tests/test_review_suggestions.py \
+            tests/test_user_center_contract.py \
+            tests/test_ops_observability.py \
             -q --tb=short
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Check build budget
+        run: npm run check:build-budget
+
+      - name: Homepage smoke (no echarts on first paint)
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 &
+          sleep 3
+          npm run smoke:homepage
