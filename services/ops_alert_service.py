@@ -54,5 +54,13 @@ class OpsAlertService:
         except urllib.error.URLError as exc:
             logger.warning(f"[OpsAlert] Webhook delivery failed: {exc}")
 
+    def send_llm_usage_alert(self, alert: dict) -> None:
+        message = f"[Agu AI Ops] {alert.get('message') or 'LLM usage alert'}"
+        logger.warning(message)
+        if not self.webhook_url:
+            return
+        payload = {"text": message, "alert": alert}
+        self._post_webhook(payload)
+
 
 ops_alert_service = OpsAlertService()

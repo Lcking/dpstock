@@ -11,6 +11,10 @@
           <span class="btn-text">分析专栏</span>
         </router-link>
 
+        <a href="/review/weekly" class="nav-btn">
+          <span class="btn-text">验证周报</span>
+        </a>
+
         <router-link to="/risk-stocks" class="nav-btn">
           <span class="btn-text">风险股清单</span>
         </router-link>

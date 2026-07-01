@@ -104,6 +104,54 @@ def test_llm_usage_summary_backfills_from_analysis_records(tmp_path):
     assert summary["totals"]["anonymous"]["call_count"] == 1
 
 
+def test_llm_usage_check_alerts_flags_anonymous_spike(tmp_path, monkeypatch):
+    db_path = tmp_path / "llm_alerts.db"
+    _setup_ops_db(db_path)
+    DatabaseFactory.initialize(str(db_path))
+    monkeypatch.setenv("OPS_LLM_ANONYMOUS_STOCK_THRESHOLD", "2")
+
+    service = LlmUsageService()
+    service.record_analyze(is_authenticated=False, stock_count=2)
+
+    alerts = service.check_usage_alerts()
+    assert alerts["anonymous_stock_count"] == 2
+    assert len(alerts["alerts"]) == 1
+    assert alerts["alerts"][0]["key"] == "anonymous_stock_spike"
+
+
+def test_ops_alert_service_sends_llm_usage_webhook(monkeypatch):
+    payloads = []
+
+    class FakeResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_urlopen(request, timeout=10):
+        import json
+
+        payloads.append(json.loads(request.data.decode("utf-8")))
+        return FakeResponse()
+
+    monkeypatch.setenv("OPS_ALERT_WEBHOOK_URL", "https://example.com/hook")
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    service = OpsAlertService()
+    service.send_llm_usage_alert(
+        {
+            "level": "warning",
+            "message": "今日匿名分析标的数 250 已达到阈值 200",
+        }
+    )
+
+    assert payloads[0]["text"].startswith("[Agu AI Ops]")
+    assert payloads[0]["alert"]["level"] == "warning"
+
+
 def test_ops_alert_service_sends_webhook_on_threshold(monkeypatch):
     sent = []
 

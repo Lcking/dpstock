@@ -95,6 +95,24 @@ class JudgmentRecapService:
                 break
         return cases
 
+    def get_latest_weekly_recap_article(self) -> Optional[Dict[str, Any]]:
+        try:
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                row = cursor.execute(
+                    """
+                    SELECT id, title, publish_date, stock_code, stock_name
+                    FROM articles
+                    WHERE stock_code = 'WEEKLY_RECAP'
+                    ORDER BY publish_date DESC, id DESC
+                    LIMIT 1
+                    """
+                ).fetchone()
+            return dict(row) if row else None
+        except Exception as exc:
+            logger.warning(f"[JudgmentRecap] latest article lookup failed: {exc}")
+            return None
+
     def render_weekly_recap_page(self, window_days: int = 7) -> str:
         payload = self.get_weekly_recap_payload(window_days=window_days)
         stats = payload["stats"]
@@ -121,6 +139,13 @@ class JudgmentRecapService:
             },
             ensure_ascii=False,
         )
+        latest_article = self.get_latest_weekly_recap_article()
+        archive_cta = ""
+        if latest_article:
+            archive_cta = (
+                f'<a class="cta cta-secondary" href="{self.base_url}/analysis/{latest_article["id"]}">'
+                f'阅读归档文章</a>'
+            )
 
         return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -153,6 +178,8 @@ class JudgmentRecapService:
     .tag-uncertain {{ background: #f2f4f7; color: #475467; }}
     .disclaimer {{ color: #667085; font-size: 14px; line-height: 1.7; }}
     .cta {{ display: inline-block; margin-top: 12px; padding: 10px 16px; background: #3d5bcc; color: #fff; text-decoration: none; border-radius: 10px; }}
+    .cta-secondary {{ background: #eef2ff; color: #3d5bcc; margin-left: 10px; }}
+    .cta-row {{ margin-top: 12px; }}
   </style>
 </head>
 <body>
@@ -172,7 +199,11 @@ class JudgmentRecapService:
       <h1>AI 判断验证周报</h1>
       <p>{self._escape(stats_summary)}</p>
       <p class="disclaimer">{self._escape(payload['disclaimer'])}</p>
-      <a class="cta" href="/journal">打开判断日记</a>
+      <div class="cta-row">
+        <a class="cta" href="/journal">打开判断日记</a>
+        <a class="cta cta-secondary" href="/analysis">分析专栏</a>
+        {archive_cta}
+      </div>
     </header>
     <section>
       <h2>复盘结果分布</h2>

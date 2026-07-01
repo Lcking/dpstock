@@ -6,6 +6,23 @@
       <a href="/stocks" class="stock-index-link">浏览热门个股 AI 诊股清单</a>
     </div>
 
+    <div v-if="!searchQuery" class="weekly-recap-banner">
+      <div class="weekly-recap-copy">
+        <h2 class="weekly-recap-title">判断验证周报</h2>
+        <p class="weekly-recap-desc">汇总近一周复盘结果与条件表现，辅助检验判断质量。</p>
+      </div>
+      <div class="weekly-recap-actions">
+        <a href="/review/weekly" class="weekly-recap-link primary">查看周报</a>
+        <router-link
+          v-if="latestWeeklyArticle"
+          :to="`/analysis/${latestWeeklyArticle.id}`"
+          class="weekly-recap-link secondary"
+        >
+          最新归档
+        </router-link>
+      </div>
+    </div>
+
     <div class="search-bar">
       <n-input
         v-model:value="searchQuery"
@@ -38,10 +55,20 @@
         v-for="article in articles"
         :key="article.id"
         class="article-card-link"
+        :class="{ 'article-card-link--weekly': article.stock_code === 'WEEKLY_RECAP' }"
       >
-        <n-card class="article-card">
+        <n-card class="article-card" :class="{ 'article-card--weekly': article.stock_code === 'WEEKLY_RECAP' }">
           <div class="article-meta">
-            <n-tag :type="getMarketType(article.market_type)" size="small" round :bordered="false">
+            <n-tag
+              v-if="article.stock_code === 'WEEKLY_RECAP'"
+              type="warning"
+              size="small"
+              round
+              :bordered="false"
+            >
+              周报
+            </n-tag>
+            <n-tag v-else :type="getMarketType(article.market_type)" size="small" round :bordered="false">
               {{ article.market_type }}
             </n-tag>
             <span class="publish-date">{{ article.publish_date }}</span>
@@ -85,12 +112,21 @@ import { applyPageSeo, getArticlePreview } from '@/utils/seo';
 import { useDebounceFn } from '@vueuse/core';
 
 const articles = ref<any[]>([]);
+const latestWeeklyArticle = ref<{ id: number; title: string } | null>(null);
 const loading = ref(true);
 const loadingMore = ref(false);
 const searchQuery = ref('');
 const offset = ref(0);
 const hasMore = ref(true);
 const LIMIT = 20;
+
+function sortWeeklyRecapFirst(list: any[]) {
+  return [...list].sort((a, b) => {
+    const aWeekly = a.stock_code === 'WEEKLY_RECAP' ? 1 : 0;
+    const bWeekly = b.stock_code === 'WEEKLY_RECAP' ? 1 : 0;
+    return bWeekly - aWeekly;
+  });
+}
 
 const handleSearch = useDebounceFn(() => {
   // 搜索时重置分页
@@ -109,11 +145,12 @@ async function fetchArticles(append = false) {
   
   try {
     const data = await apiService.getArticles(LIMIT, offset.value, searchQuery.value);
+    const sorted = sortWeeklyRecapFirst(data);
     
     if (append) {
-      articles.value.push(...data);
+      articles.value.push(...sorted);
     } else {
-      articles.value = data;
+      articles.value = sorted;
     }
     
     // 如果返回数量少于请求数量，说明没有更多了
@@ -150,6 +187,9 @@ function getScoreClass(score: number) {
 
 onMounted(() => {
   fetchArticles(false);
+  apiService.getLatestWeeklyRecapArticle().then((article) => {
+    latestWeeklyArticle.value = article;
+  });
   applyPageSeo({
     title: '分析专栏 | Agu AI',
     description: '查看每日 AI 股票分析专栏，快速浏览重点标的、市场异动与结构化研判。',
@@ -199,6 +239,67 @@ onBeforeUnmount(() => {
   color: #5560d6;
   font-weight: 700;
   text-decoration: none;
+}
+
+.weekly-recap-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+  padding: 20px 22px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.10) 100%);
+  border: 1px solid rgba(102, 126, 234, 0.18);
+}
+
+.weekly-recap-title {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+  color: #334155;
+}
+
+.weekly-recap-desc {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.weekly-recap-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.weekly-recap-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 14px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.weekly-recap-link.primary {
+  background: #667eea;
+  color: #fff;
+}
+
+.weekly-recap-link.secondary {
+  background: #fff;
+  color: #667eea;
+  border: 1px solid rgba(102, 126, 234, 0.35);
+}
+
+.article-card--weekly {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: linear-gradient(180deg, #fffdf8 0%, #ffffff 100%);
+}
+
+.article-card-link--weekly .article-title {
+  color: #b45309;
 }
 
 .stock-index-link:hover {

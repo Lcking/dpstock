@@ -144,9 +144,31 @@
             <n-alert v-if="opsSummary.job_health?.degraded" type="warning" style="margin-bottom: 8px">
               存在连续失败任务，请检查日志或配置 OPS_ALERT_WEBHOOK_URL。
             </n-alert>
+            <n-descriptions bordered size="small" :column="2" style="max-width: 520px; margin-bottom: 8px">
+              <n-descriptions-item label="告警 Webhook">
+                {{ opsSummary.ops_alert?.webhook_configured ? '已配置' : '未配置' }}
+              </n-descriptions-item>
+              <n-descriptions-item label="连续失败阈值">
+                {{ opsSummary.ops_alert?.failure_threshold ?? 3 }}
+              </n-descriptions-item>
+            </n-descriptions>
             <n-data-table :columns="opsJobCols" :data="opsSummary.job_health?.jobs || []" :bordered="false" />
 
             <n-h3 prefix="bar" style="margin-top: 16px">分析用量（近 7 天）</n-h3>
+            <n-alert
+              v-for="alert in opsSummary.llm_alerts?.alerts || []"
+              :key="alert.key"
+              :type="alert.level === 'warning' ? 'warning' : 'info'"
+              style="margin-bottom: 8px"
+            >
+              {{ alert.message }}
+            </n-alert>
+            <n-text v-if="opsSummary.llm_alerts" depth="3" style="display: block; margin-bottom: 8px; font-size: 12px;">
+              今日匿名标的 {{ opsSummary.llm_alerts.anonymous_stock_count ?? 0 }} /
+              阈值 {{ opsSummary.llm_alerts.thresholds?.anonymous_stock_count ?? 200 }}；
+              绑定用户标的 {{ opsSummary.llm_alerts.authenticated_stock_count ?? 0 }} /
+              阈值 {{ opsSummary.llm_alerts.thresholds?.authenticated_stock_count ?? 500 }}
+            </n-text>
             <n-text depth="3" style="display: block; margin-bottom: 8px; font-size: 12px;">
               数据来源：{{ opsSummary.llm_usage?.source || 'analysis_records' }}。请求数按「用户·日期」会话估算，标的数为实际分析股票只数。
             </n-text>

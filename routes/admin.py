@@ -558,6 +558,12 @@ async def admin_ops_summary(days: int = 7, _: dict = Depends(require_admin)):
         "resend_configured": bool(RESEND_API_KEY),
         "from_email": FROM_EMAIL,
     }
+    llm_usage = llm_usage_service.get_summary(days=days)
+    llm_alerts = llm_usage_service.check_usage_alerts()
+    ops_alert = {
+        "webhook_configured": bool((os.getenv("OPS_ALERT_WEBHOOK_URL") or "").strip()),
+        "failure_threshold": int(os.getenv("OPS_ALERT_FAILURE_THRESHOLD", "3")),
+    }
     return {
         "analyze_slo": {
             **slo,
@@ -565,7 +571,9 @@ async def admin_ops_summary(days: int = 7, _: dict = Depends(require_admin)):
             "note": "内存统计，容器重启后清零；下方「分析用量」来自数据库历史记录。",
         },
         "job_health": job_health_tracker.snapshot(),
-        "llm_usage": llm_usage_service.get_summary(days=days),
+        "llm_usage": llm_usage,
+        "llm_alerts": llm_alerts,
+        "ops_alert": ops_alert,
         "email_config": email_config,
         "risk_alert_email": _risk_alert_email_summary(days=days),
         "journal_due_email": _journal_due_email_summary(days=days),

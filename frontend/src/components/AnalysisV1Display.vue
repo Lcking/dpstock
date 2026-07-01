@@ -250,7 +250,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import JudgmentConfirmDialog from '@/components/WyckoffGuide/JudgmentConfirmDialog.vue';
 import JudgmentPreReminder from '@/components/WyckoffGuide/JudgmentPreReminder.vue';
@@ -276,20 +276,27 @@ import {
 import { BookmarkOutline } from '@vicons/ionicons5';
 import { apiService } from '@/services/api';
 import { hasAnchorToken } from '@/utils/anchorToken';
-import MarkdownIt from 'markdown-it';
+import type MarkdownIt from 'markdown-it';
 
-// 初始化 Markdown 渲染器
-const md = new MarkdownIt({
-  html: false,        // 不允许 HTML 标签
-  breaks: true,       // 将换行符转换为 <br>
-  linkify: true,      // 自动转换 URL 为链接
-  typographer: true   // 启用智能引号和其他排版优化
+const md = shallowRef<MarkdownIt | null>(null);
+const markdownReady = ref(0);
+
+onMounted(async () => {
+  const { default: MarkdownItCtor } = await import('markdown-it');
+  md.value = new MarkdownItCtor({
+    html: false,
+    breaks: true,
+    linkify: true,
+    typographer: true,
+  });
+  markdownReady.value += 1;
 });
 
-// Markdown 渲染函数
 function renderMarkdown(text: string): string {
   if (!text) return '';
-  return md.render(text);
+  if (!md.value) return text;
+  void markdownReady.value;
+  return md.value.render(text);
 }
 
 function extractPlainText(text: string): string {

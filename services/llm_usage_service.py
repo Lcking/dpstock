@@ -170,5 +170,66 @@ class LlmUsageService:
             "generated_at": datetime.utcnow().isoformat() + "Z",
         }
 
+    def check_usage_alerts(self) -> Dict[str, Any]:
+        import os
+
+        anonymous_stock_threshold = max(
+            int(os.getenv("OPS_LLM_ANONYMOUS_STOCK_THRESHOLD", "200")),
+            1,
+        )
+        authenticated_stock_threshold = max(
+            int(os.getenv("OPS_LLM_AUTHENTICATED_STOCK_THRESHOLD", "500")),
+            1,
+        )
+        today = date.today().isoformat()
+        summary = self.get_summary(days=1)
+        anonymous_today = 0
+        authenticated_today = 0
+        for row in summary.get("daily") or []:
+            if row.get("usage_date") != today:
+                continue
+            if row.get("user_type") == USER_TYPE_ANONYMOUS:
+                anonymous_today += int(row.get("stock_count") or 0)
+            elif row.get("user_type") == USER_TYPE_AUTHENTICATED:
+                authenticated_today += int(row.get("stock_count") or 0)
+
+        alerts = []
+        if anonymous_today >= anonymous_stock_threshold:
+            alerts.append(
+                {
+                    "level": "warning",
+                    "key": "anonymous_stock_spike",
+                    "message": (
+                        f"今日匿名分析标的数 {anonymous_today} 已达到阈值 "
+                        f"{anonymous_stock_threshold}"
+                    ),
+                    "value": anonymous_today,
+                    "threshold": anonymous_stock_threshold,
+                }
+            )
+        if authenticated_today >= authenticated_stock_threshold:
+            alerts.append(
+                {
+                    "level": "info",
+                    "key": "authenticated_stock_spike",
+                    "message": (
+                        f"今日绑定用户分析标的数 {authenticated_today} 已达到阈值 "
+                        f"{authenticated_stock_threshold}"
+                    ),
+                    "value": authenticated_today,
+                    "threshold": authenticated_stock_threshold,
+                }
+            )
+        return {
+            "usage_date": today,
+            "anonymous_stock_count": anonymous_today,
+            "authenticated_stock_count": authenticated_today,
+            "thresholds": {
+                "anonymous_stock_count": anonymous_stock_threshold,
+                "authenticated_stock_count": authenticated_stock_threshold,
+            },
+            "alerts": alerts,
+        }
+
 
 llm_usage_service = LlmUsageService()
