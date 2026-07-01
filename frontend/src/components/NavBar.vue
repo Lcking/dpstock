@@ -11,10 +11,6 @@
           <span class="btn-text">分析专栏</span>
         </router-link>
 
-        <a href="/review/weekly" class="nav-btn">
-          <span class="btn-text">验证周报</span>
-        </a>
-
         <router-link to="/risk-stocks" class="nav-btn">
           <span class="btn-text">风险股清单</span>
         </router-link>
@@ -121,6 +117,7 @@ async function loadNavLinksFromConfig() {
 const myMenuOptions = [
   { label: '我的观察', key: '/watchlist' },
   { label: '判断日记', key: '/journal' },
+  { label: '判断验证周报', key: 'ssr:/review/weekly' },
   { label: '用户中心', key: '/me' },
   { label: '额度与邀请', key: 'quota-invite' }
 ];
@@ -141,6 +138,10 @@ const updateNavSpacerHeight = () => {
 const handleMyMenuSelect = (key: string) => {
   if (key === 'quota-invite') {
     showInviteDialog.value = true;
+    return;
+  }
+  if (key.startsWith('ssr:')) {
+    window.location.href = key.slice(4);
     return;
   }
   router.push(key);
