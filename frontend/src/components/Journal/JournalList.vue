@@ -442,6 +442,13 @@ const applyStockFilterFromRoute = async () => {
   await loadStockTimeline()
 }
 
+const applyStatusFilterFromRoute = () => {
+  const status = route.query.status
+  if (typeof status === 'string' && ['due', 'active', 'reviewed'].includes(status)) {
+    statusFilter.value = status
+  }
+}
+
 const clearStockFilter = async () => {
   stockFilter.value = ''
   stockTimeline.value = null
@@ -837,6 +844,7 @@ onMounted(async () => {
     robots: 'noindex, nofollow',
   })
   await applyStockFilterFromRoute()
+  applyStatusFilterFromRoute()
   await loadRecords()
   loadDueCount()
   loadReviewStats()

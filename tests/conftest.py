@@ -24,6 +24,33 @@ INTEGRATION_MIGRATIONS = [
 ]
 
 
+def cleanup_test_sqlite_artifacts_in_data_dir() -> list[str]:
+    """Remove leftover test sqlite files from repo data/ (legacy pollution)."""
+    if not DATA_DIR.exists():
+        return []
+
+    removed: list[str] = []
+    for path in DATA_DIR.iterdir():
+        if not path.name.startswith("test_"):
+            continue
+        try:
+            path.unlink()
+            removed.append(path.name)
+        except OSError:
+            pass
+    return removed
+
+
+@pytest.hookimpl(trylast=False)
+def pytest_sessionstart(session):
+    cleanup_test_sqlite_artifacts_in_data_dir()
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session, exitstatus):
+    cleanup_test_sqlite_artifacts_in_data_dir()
+
+
 @pytest.fixture(autouse=True)
 def isolate_default_db_path(tmp_path, monkeypatch):
     """Route accidental DB writes away from repo data/ during tests."""

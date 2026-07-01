@@ -337,6 +337,21 @@ export const apiService = {
     }
   },
 
+  getNotificationInbox: async () => {
+    try {
+      const response = await axiosInstance.get('/v1/notifications/inbox');
+      return response.data;
+    } catch (error) {
+      console.error('获取通知摘要时出错:', error);
+      return {
+        due_count: 0,
+        risk_alert_count: 0,
+        due_preview: [],
+        risk_preview: [],
+      };
+    }
+  },
+
   getJournalRecords: async (params: { status?: string, ts_code?: string, page?: number } = {}): Promise<JournalListResponse> => {
     try {
       const response = await axiosInstance.get('/journal', { params });

@@ -3,12 +3,15 @@ Notification preference and unsubscribe routes.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
+from auth.dependencies import UserContext, get_current_user
+from services.journal import journal_service
 from services.notify_pref_service import NotifyPrefService
 from services.risk_alert_email_service import verify_risk_alert_unsubscribe_token
 from services.journal_due_email_service import verify_journal_due_unsubscribe_token
+from services.watchlist_risk_alert_service import WatchlistRiskAlertService
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -16,6 +19,55 @@ logger = get_logger()
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 
 notify_pref_service = NotifyPrefService()
+watchlist_risk_alert_service = WatchlistRiskAlertService()
+
+
+@router.get("/inbox")
+async def get_notification_inbox(user: UserContext = Depends(get_current_user)):
+    user_id = user.user_id
+    due_count = journal_service.get_due_count(user_id)
+    due_preview = []
+    if due_count > 0:
+        due_preview = [
+            {
+                "id": record.get("id"),
+                "ts_code": record.get("ts_code"),
+                "candidate": record.get("candidate"),
+                "validation_date": record.get("validation_date"),
+            }
+            for record in journal_service.get_records(
+                user_id,
+                status="due",
+                page=1,
+                page_size=5,
+            )
+        ]
+
+    risk_alert_count = watchlist_risk_alert_service.get_unread_count(user_id)
+    risk_preview = []
+    if risk_alert_count > 0:
+        alerts = watchlist_risk_alert_service.list_alerts(
+            user_id,
+            limit=5,
+            unread_only=True,
+        )
+        risk_preview = [
+            {
+                "id": item.get("id"),
+                "stock_code": item.get("stock_code") or item.get("ts_code"),
+                "stock_name": item.get("stock_name"),
+                "trade_date": item.get("trade_date"),
+                "tags": item.get("tags") or [],
+            }
+            for item in alerts.get("items") or []
+        ]
+
+    return {
+        "due_count": due_count,
+        "risk_alert_count": risk_alert_count,
+        "due_preview": due_preview,
+        "risk_preview": risk_preview,
+    }
 
 
 @router.get("/unsubscribe", response_class=HTMLResponse)

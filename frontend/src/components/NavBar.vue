@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import QuotaStatus from './QuotaStatus.vue';
 import InviteDialog from './InviteDialog.vue';
@@ -114,13 +114,33 @@ async function loadNavLinksFromConfig() {
   }
 }
 
-const myMenuOptions = [
-  { label: '我的观察', key: '/watchlist' },
-  { label: '判断日记', key: '/journal' },
-  { label: '判断验证周报', key: 'ssr:/review/weekly' },
-  { label: '用户中心', key: '/me' },
-  { label: '额度与邀请', key: 'quota-invite' }
-];
+const myMenuOptions = computed(() => {
+  const notificationItems: Array<{ label: string; key: string; type?: 'divider' }> = [];
+  if (notificationStore.pendingReviewCount > 0) {
+    notificationItems.push({
+      label: `待复盘 (${notificationStore.pendingReviewCount})`,
+      key: '/journal?status=due',
+    });
+  }
+  if (notificationStore.riskAlertCount > 0) {
+    notificationItems.push({
+      label: `风险提醒 (${notificationStore.riskAlertCount})`,
+      key: '/watchlist?focus=risk',
+    });
+  }
+  if (notificationItems.length > 0) {
+    notificationItems.push({ label: 'divider', key: 'notify-divider', type: 'divider' });
+  }
+
+  return [
+    ...notificationItems,
+    { label: '我的观察', key: '/watchlist' },
+    { label: '判断日记', key: '/journal' },
+    { label: '判断验证周报', key: 'ssr:/review/weekly' },
+    { label: '用户中心', key: '/me' },
+    { label: '额度与邀请', key: 'quota-invite' },
+  ];
+});
 
 const showInviteDialog = ref(false);
 const showBindDialog = ref(false);
@@ -142,6 +162,12 @@ const handleMyMenuSelect = (key: string) => {
   }
   if (key.startsWith('ssr:')) {
     window.location.href = key.slice(4);
+    return;
+  }
+  if (key.includes('?')) {
+    const [path, queryString] = key.split('?', 2);
+    const query = Object.fromEntries(new URLSearchParams(queryString));
+    router.push({ path, query });
     return;
   }
   router.push(key);

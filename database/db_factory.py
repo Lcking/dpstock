@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from contextlib import contextmanager
 
 from config.database import DatabaseConfig
+from database.sqlite_utils import configure_sqlite_connection
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +58,7 @@ class DatabaseFactory:
     
     @classmethod
     def _configure_connection(cls, conn: sqlite3.Connection) -> None:
-        busy_timeout_ms = max(int(DatabaseConfig.timeout() * 1000), 1000)
-        conn.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
-        if DatabaseConfig.enable_wal():
-            conn.execute("PRAGMA journal_mode=WAL")
+        configure_sqlite_connection(conn)
     
     @classmethod
     def get_connection(cls) -> sqlite3.Connection:

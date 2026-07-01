@@ -114,6 +114,8 @@ def test_user_center_surfaces_notify_pref_and_clickable_judgments():
     assert "judgment-item-clickable" in user_center_page
     assert "updateNotifyPref" in api_service
     assert "getJournalRecord" in api_service
+    assert "applyStatusFilterFromRoute" in journal_list
+    assert "route.query.status" in journal_list
     assert "openRecordFromQuery" in journal_list
     assert "route.query.record" in journal_list
 
@@ -130,5 +132,6 @@ def test_watchlist_page_surfaces_risk_alert_panel_and_notification_polling():
     assert "/watchlists/risk-alerts" in api_service
     assert "自选风险提醒" in watchlist_view
     assert "loadRiskAlerts" in watchlist_view
-    assert "getWatchlistRiskAlertUnreadCount" in notification_store
-    assert "totalNotificationCount" in navbar
+    assert "getNotificationInbox" in notification_store
+    assert "待复盘" in navbar
+    assert "getNotificationInbox" in api_service

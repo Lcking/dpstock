@@ -17,14 +17,14 @@ export const useNotificationStore = defineStore('notification', () => {
         if (isLoading.value) return
 
         try {
-            const [dueCount, alertCount] = await Promise.all([
-                apiService.getDueCount(),
-                apiService.getWatchlistRiskAlertUnreadCount(),
-            ])
-            pendingReviewCount.value = dueCount
-            riskAlertCount.value = alertCount
+            isLoading.value = true
+            const inbox = await apiService.getNotificationInbox()
+            pendingReviewCount.value = inbox.due_count || 0
+            riskAlertCount.value = inbox.risk_alert_count || 0
         } catch (error) {
             console.error('Failed to check notifications:', error)
+        } finally {
+            isLoading.value = false
         }
     }
 

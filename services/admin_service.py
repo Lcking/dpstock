@@ -7,6 +7,7 @@ from typing import Dict, List, Any, Optional
 import sqlite3
 import os
 from utils.logger import get_logger
+from database.sqlite_utils import configure_sqlite_connection
 
 logger = get_logger()
 
@@ -36,6 +37,7 @@ class AdminService:
         """Get a direct database connection"""
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = dict_factory
+        configure_sqlite_connection(conn)
         return conn
     
     def _table_exists(self, conn: sqlite3.Connection, table_name: str) -> bool:

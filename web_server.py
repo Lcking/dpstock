@@ -259,8 +259,11 @@ async def health():
     # 1) DB 可读：SQLite 锁累积/损坏会让分析归档静默失败
     db_path = os.getenv("DB_PATH", "/app/data/stocks.db")
     def _ping_db():
+        from database.sqlite_utils import configure_sqlite_connection
+
         conn = sqlite3.connect(db_path, timeout=2.0)
         try:
+            configure_sqlite_connection(conn)
             conn.execute("SELECT 1").fetchone()
         finally:
             conn.close()

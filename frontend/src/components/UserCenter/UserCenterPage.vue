@@ -135,6 +135,9 @@
               <n-text v-if="notifyPrefHint" depth="3" class="notify-pref-note">
                 {{ notifyPrefHint }}
               </n-text>
+              <n-text depth="3" class="notify-pref-note">
+                导航栏「我的」徽章会显示站内待复盘与风险提醒；下方开关仅控制邮件摘要。
+              </n-text>
             </n-space>
           </n-card>
 
