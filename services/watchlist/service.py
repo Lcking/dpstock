@@ -135,6 +135,10 @@ class WatchlistService:
             )
             rows = cursor.fetchall()
             if len(rows) <= 1:
+                if rows:
+                    primary_only = rows[0].get("id")
+                    if primary_only:
+                        self.dedupe_watchlist_items(primary_only)
                 return
 
             primary_id = rows[0].get("id")
@@ -147,13 +151,29 @@ class WatchlistService:
 
                 cursor.execute(
                     """
-                    INSERT OR IGNORE INTO watchlist_items (watchlist_id, ts_code, name, added_at)
-                    SELECT ?, ts_code, name, added_at
+                    SELECT ts_code, name, added_at
                     FROM watchlist_items
                     WHERE watchlist_id = ?
                     """,
-                    (primary_id, duplicate_id),
+                    (duplicate_id,),
                 )
+                duplicate_items = cursor.fetchall()
+                for item in duplicate_items:
+                    norm_code = self._normalize_ts_code(str(item.get("ts_code") or ""))
+                    if not norm_code:
+                        continue
+                    cursor.execute(
+                        """
+                        INSERT OR IGNORE INTO watchlist_items (watchlist_id, ts_code, name, added_at)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (
+                            primary_id,
+                            norm_code,
+                            item.get("name"),
+                            item.get("added_at"),
+                        ),
+                    )
                 cursor.execute("DELETE FROM watchlists WHERE id = ?", (duplicate_id,))
 
             now = datetime.utcnow().isoformat() + "Z"
@@ -162,6 +182,8 @@ class WatchlistService:
                 (now, primary_id),
             )
             conn.commit()
+
+        self.dedupe_watchlist_items(primary_id)
 
     def get_user_watchlists(self, user_id: str) -> List[Watchlist]:
         """获取用户的所有自选股列表"""
@@ -208,6 +230,119 @@ class WatchlistService:
             return f"{digits}.BJ"
         return code
 
+    def _matching_stored_ts_codes(self, watchlist_id: str, ts_code: str) -> List[str]:
+        """Return raw DB keys that normalize to the same symbol as ts_code."""
+        normalized = self._normalize_ts_code(ts_code)
+        if not normalized:
+            return []
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT ts_code FROM watchlist_items WHERE watchlist_id = ?",
+                (watchlist_id,),
+            )
+            rows = cursor.fetchall()
+        return [
+            str(row.get("ts_code"))
+            for row in rows
+            if self._normalize_ts_code(str(row.get("ts_code") or "")) == normalized
+        ]
+
+    def _watchlist_items_supports_weight(self, cursor) -> bool:
+        cursor.execute("PRAGMA table_info(watchlist_items)")
+        for row in cursor.fetchall():
+            try:
+                col_name = row["name"]
+            except (KeyError, TypeError, IndexError):
+                col_name = row[1]
+            if str(col_name) == "weight_pct":
+                return True
+        return False
+
+    def dedupe_watchlist_items(self, watchlist_id: str) -> int:
+        """
+        Merge rows that normalize to the same ts_code (e.g. 600519 + 600519.SH).
+
+        Returns the number of redundant rows removed.
+        """
+        merged = 0
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            supports_weight = self._watchlist_items_supports_weight(cursor)
+            select_sql = (
+                "SELECT ts_code, name, weight_pct, added_at FROM watchlist_items WHERE watchlist_id = ?"
+                if supports_weight
+                else "SELECT ts_code, name, added_at FROM watchlist_items WHERE watchlist_id = ?"
+            )
+            cursor.execute(select_sql, (watchlist_id,))
+            rows = [dict(row) for row in cursor.fetchall()]
+            groups: Dict[str, List[Dict[str, Any]]] = {}
+            for row in rows:
+                norm = self._normalize_ts_code(str(row.get("ts_code") or ""))
+                if not norm:
+                    continue
+                groups.setdefault(norm, []).append(row)
+
+            changed = False
+            for norm, group in groups.items():
+                if len(group) == 1 and group[0].get("ts_code") == norm:
+                    continue
+
+                best_name = None
+                best_weight = None
+                best_added = None
+                for row in group:
+                    name = str(row.get("name") or "").strip() or None
+                    if name and (not best_name or len(name) > len(best_name)):
+                        best_name = name
+                    raw_weight = row.get("weight_pct")
+                    if raw_weight is not None and best_weight is None:
+                        try:
+                            best_weight = float(raw_weight)
+                        except (TypeError, ValueError):
+                            pass
+                    added = row.get("added_at")
+                    if added and (not best_added or str(added) < str(best_added)):
+                        best_added = added
+
+                for row in group:
+                    cursor.execute(
+                        "DELETE FROM watchlist_items WHERE watchlist_id = ? AND ts_code = ?",
+                        (watchlist_id, row.get("ts_code")),
+                    )
+                merged += max(0, len(group) - 1)
+                changed = True
+
+                added_at = best_added or datetime.utcnow().isoformat() + "Z"
+                if supports_weight:
+                    cursor.execute(
+                        """
+                        INSERT INTO watchlist_items (watchlist_id, ts_code, name, weight_pct, added_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (watchlist_id, norm, best_name, best_weight, added_at),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO watchlist_items (watchlist_id, ts_code, name, added_at)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (watchlist_id, norm, best_name, added_at),
+                    )
+
+            if changed:
+                now = datetime.utcnow().isoformat() + "Z"
+                cursor.execute(
+                    "UPDATE watchlists SET updated_at = ? WHERE id = ?",
+                    (now, watchlist_id),
+                )
+                conn.commit()
+
+        if merged > 0:
+            logger.info(f"[Watchlist] deduped {merged} alias rows in {watchlist_id}")
+        return merged
+
     def add_symbols(self, watchlist_id: str, ts_codes: List[str]) -> int:
         """添加标的到自选股列表"""
         now = datetime.utcnow().isoformat() + 'Z'
@@ -236,25 +371,30 @@ class WatchlistService:
         return added
     
     def remove_symbol(self, watchlist_id: str, ts_code: str) -> bool:
-        """从自选股列表移除标的"""
+        """从自选股列表移除标的（兼容 legacy 与规范化 ts_code 别名）"""
+        stored_codes = self._matching_stored_ts_codes(watchlist_id, ts_code)
+        if not stored_codes:
+            return False
+
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                DELETE FROM watchlist_items
-                WHERE watchlist_id = ? AND ts_code = ?
-            """, (watchlist_id, ts_code))
-            
-            removed = cursor.rowcount > 0
-            
-            if removed:
-                now = datetime.utcnow().isoformat() + 'Z'
-                cursor.execute("""
-                    UPDATE watchlists SET updated_at = ? WHERE id = ?
-                """, (now, watchlist_id))
-            
+            for stored_code in stored_codes:
+                cursor.execute(
+                    """
+                    DELETE FROM watchlist_items
+                    WHERE watchlist_id = ? AND ts_code = ?
+                    """,
+                    (watchlist_id, stored_code),
+                )
+
+            now = datetime.utcnow().isoformat() + "Z"
+            cursor.execute(
+                "UPDATE watchlists SET updated_at = ? WHERE id = ?",
+                (now, watchlist_id),
+            )
             conn.commit()
-        
-        return removed
+
+        return True
     
     def get_watchlist_item_weights(self, watchlist_id: str) -> Dict[str, Optional[float]]:
         with self.db.get_connection() as conn:
@@ -288,17 +428,25 @@ class WatchlistService:
         weight_pct: Optional[float],
     ) -> bool:
         normalized = self._normalize_ts_code(ts_code)
+        self.dedupe_watchlist_items(watchlist_id)
+        stored_codes = self._matching_stored_ts_codes(watchlist_id, normalized)
+        if not stored_codes:
+            return False
+
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                """
-                UPDATE watchlist_items
-                SET weight_pct = ?
-                WHERE watchlist_id = ? AND ts_code = ?
-                """,
-                (weight_pct, watchlist_id, normalized),
-            )
-            updated = cursor.rowcount > 0
+            updated = False
+            for stored_code in stored_codes:
+                cursor.execute(
+                    """
+                    UPDATE watchlist_items
+                    SET weight_pct = ?
+                    WHERE watchlist_id = ? AND ts_code = ?
+                    """,
+                    (weight_pct, watchlist_id, stored_code),
+                )
+                if cursor.rowcount > 0:
+                    updated = True
             if updated:
                 now = datetime.utcnow().isoformat() + "Z"
                 cursor.execute(
@@ -339,7 +487,9 @@ class WatchlistService:
         """
         if asof is None:
             asof = datetime.now().strftime('%Y-%m-%d')
-        
+
+        self.dedupe_watchlist_items(watchlist_id)
+
         # 获取标的列表
         item_records = self.get_watchlist_item_records(watchlist_id)
         ts_codes = [record["ts_code"] for record in item_records]
@@ -408,10 +558,12 @@ class WatchlistService:
             )
             rows = cursor.fetchall()
         records = []
+        seen_codes = set()
         for row in rows:
             ts_code = self._normalize_ts_code(str(row.get("ts_code") or ""))
-            if not ts_code:
+            if not ts_code or ts_code in seen_codes:
                 continue
+            seen_codes.add(ts_code)
             raw_weight = row.get("weight_pct")
             weight_pct = None
             if raw_weight is not None:

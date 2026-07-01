@@ -124,6 +124,37 @@ def test_bound_watchlist_is_not_marked_temporary(tmp_path):
     assert result.trial_message is None
 
 
+def test_remove_symbol_handles_legacy_ts_code_aliases(tmp_path):
+    db_path = tmp_path / "watchlist_alias_remove.db"
+    _setup_watchlist_db(db_path)
+    _apply_migration(db_path, "013_add_watchlist_item_weight.sql")
+    DatabaseFactory.initialize(str(db_path))
+
+    created = watchlist_service.create_watchlist(
+        user_id="user_alias",
+        data=WatchlistCreate(name="默认自选"),
+    )
+    now = "2026-06-01T00:00:00Z"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO watchlist_items (watchlist_id, ts_code, name, added_at) VALUES (?, ?, ?, ?)",
+            (created.id, "600519", "贵州茅台(legacy)", now),
+        )
+        conn.execute(
+            "INSERT INTO watchlist_items (watchlist_id, ts_code, name, added_at) VALUES (?, ?, ?, ?)",
+            (created.id, "600519.SH", "贵州茅台", now),
+        )
+        conn.commit()
+
+    records = watchlist_service.get_watchlist_item_records(created.id)
+    assert len(records) == 1
+    assert records[0]["ts_code"] == "600519.SH"
+
+    removed = watchlist_service.remove_symbol(created.id, "600519.SH")
+    assert removed is True
+    assert watchlist_service.get_watchlist_item_records(created.id) == []
+
+
 def test_second_device_bind_restores_watchlist_from_first_device(tmp_path):
     db_path = tmp_path / "watchlist_cross_device.db"
     _setup_watchlist_db(db_path)

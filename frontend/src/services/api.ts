@@ -460,7 +460,9 @@ export const apiService = {
   },
 
   removeWatchlistSymbol: async (watchlistId: string, tsCode: string) => {
-    const response = await axiosInstance.delete(`/watchlists/${watchlistId}/symbols/${tsCode}`);
+    const response = await axiosInstance.delete(
+      `/watchlists/${watchlistId}/symbols/${encodeURIComponent(tsCode)}`,
+    );
     return response.data;
   },
 
