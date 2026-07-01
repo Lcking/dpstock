@@ -42,6 +42,23 @@
         </n-alert>
       </div>
 
+      <!-- Review Suggestions -->
+      <div v-if="reviewSuggestions" class="notes-section">
+        <div class="section-title">{{ reviewSuggestions.title }}</div>
+        <ul class="suggestion-bullets">
+          <li v-for="(bullet, idx) in reviewSuggestions.bullets" :key="idx">{{ bullet }}</li>
+        </ul>
+        <n-button
+          v-if="reviewSuggestions.suggested_failure_reason && showFailureReasonPicker && !failureReason"
+          size="tiny"
+          tertiary
+          type="primary"
+          @click="failureReason = reviewSuggestions.suggested_failure_reason"
+        >
+          采用建议：{{ failureReasonLabel(reviewSuggestions.suggested_failure_reason) }}
+        </n-button>
+      </div>
+
       <!-- Failure Reason -->
       <div v-if="showFailureReasonPicker" class="notes-section">
         <div class="section-title">失败原因分类</div>
@@ -59,7 +76,7 @@
         <n-input
           v-model:value="notes"
           type="textarea"
-          placeholder="记录你的复盘思考（选填，不超过200字）"
+          :placeholder="notesPlaceholder"
           :rows="5"
           :maxlength="200"
           show-count
@@ -72,7 +89,7 @@
         <n-input
           v-model:value="lesson"
           type="textarea"
-          placeholder="用一句话总结这次判断给你的启发（选填，不超过120字）"
+          :placeholder="lessonPlaceholder"
           :rows="3"
           :maxlength="120"
           show-count
@@ -100,7 +117,12 @@
 import { computed, ref, watch } from 'vue'
 import { NModal, NInput, NTag, NButton, NSpace, NAlert, NSelect, useMessage } from 'naive-ui'
 import { apiService } from '@/services/api'
-import type { JournalRecord, JournalSystemEvaluation, JournalFailureReason } from '@/types/journal'
+import type {
+  JournalRecord,
+  JournalSystemEvaluation,
+  JournalFailureReason,
+  JournalReviewSuggestions,
+} from '@/types/journal'
 
 interface Props {
   show: boolean
@@ -142,6 +164,18 @@ const effectiveEvaluation = computed(() => {
   return props.record?.review?.system_evaluation || props.record?.evaluation_preview || previewEvaluation.value
 })
 
+const reviewSuggestions = computed<JournalReviewSuggestions | null>(() => {
+  return effectiveEvaluation.value?.review_suggestions ?? null
+})
+
+const notesPlaceholder = computed(() => {
+  return reviewSuggestions.value?.notes_prompt || '记录你的复盘思考（选填，不超过200字）'
+})
+
+const lessonPlaceholder = computed(() => {
+  return reviewSuggestions.value?.lesson_prompt || '用一句话总结这次判断给你的启发（选填，不超过120字）'
+})
+
 // Watch show prop to reset notes
 watch(() => props.show, (newShow) => {
   if (newShow) {
@@ -153,8 +187,14 @@ watch(() => props.show, (newShow) => {
 })
 
 const loadEvaluationPreview = async () => {
-  if (!props.record || props.record.review?.system_evaluation || props.record.evaluation_preview) {
+  if (!props.record || props.record.review?.system_evaluation) {
     previewEvaluation.value = null
+    return
+  }
+
+  const existing = props.record.evaluation_preview
+  if (existing?.review_suggestions) {
+    previewEvaluation.value = existing
     return
   }
 
@@ -219,6 +259,11 @@ const evaluationAlertType = (outcome?: string) => {
   if (!outcome) return 'warning'
   return map[outcome] || 'warning'
 }
+
+const failureReasonLabel = (reason: JournalFailureReason) => {
+  const option = failureReasonOptions.find((item) => item.value === reason)
+  return option?.label || reason
+}
 </script>
 
 <style scoped>
@@ -268,5 +313,13 @@ const evaluationAlertType = (outcome?: string) => {
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 8px;
+}
+
+.suggestion-bullets {
+  margin: 0 0 10px 18px;
+  padding: 0;
+  color: var(--n-text-color-2);
+  font-size: 13px;
+  line-height: 1.6;
 }
 </style>

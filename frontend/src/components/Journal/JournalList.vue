@@ -64,6 +64,13 @@
             <span>待复盘 {{ stockTimeline.due_count }}</span>
             <span>支持率 {{ formatSupportRate(stockTimeline.support_rate) }}</span>
           </div>
+          <ConditionQualityLeaderboard
+            v-if="stockTimelineLeaderboard.length > 0"
+            :items="stockTimelineLeaderboard"
+            title="该股条件质量"
+            hint="基于该股票全部已复盘判断统计各条件类型的支持率。"
+            compact
+          />
         </n-space>
       </n-alert>
     </div>
@@ -120,33 +127,11 @@
           <div class="stat-hint">证伪/不确定时的归因</div>
         </div>
       </div>
-      <div
+      <ConditionQualityLeaderboard
         v-if="conditionLeaderboard.length > 0"
-        class="condition-leaderboard"
-      >
-        <div class="leaderboard-title">条件质量榜单</div>
-        <div class="leaderboard-hint">按已复盘判断统计各条件类型的支持率，样本来自最近 {{ reviewStats?.limit }} 条记录。</div>
-        <div class="leaderboard-table">
-          <div class="leaderboard-head">
-            <span>条件类型</span>
-            <span>样本</span>
-            <span>支持率</span>
-            <span>结果分布</span>
-          </div>
-          <div
-            v-for="item in conditionLeaderboard"
-            :key="item.key"
-            class="leaderboard-row"
-          >
-            <span class="leaderboard-label">{{ item.label }}</span>
-            <span>{{ item.reviewed_count }}</span>
-            <span class="leaderboard-rate">{{ formatSupportRate(item.support_rate) }}</span>
-            <span class="leaderboard-breakdown">
-              支持 {{ item.supported_count }} / 证伪 {{ item.falsified_count }} / 不确定 {{ item.uncertain_count }}
-            </span>
-          </div>
-        </div>
-      </div>
+        :items="conditionLeaderboard"
+        :hint="`按已复盘判断统计各条件类型的支持率，样本来自最近 ${reviewStats?.limit} 条记录。`"
+      />
     </div>
 
     <!-- Loading: Skeletons -->
@@ -336,11 +321,13 @@ import {
 import type { DataTableColumns } from 'naive-ui'
 import JournalReviewDialog from './JournalReviewDialog.vue'
 import JournalDetailDialog from './JournalDetailDialog.vue'
+import ConditionQualityLeaderboard from './ConditionQualityLeaderboard.vue'
 import AnchorStatus from '../AnchorStatus.vue'
 import AnchorBindDialog from '../AnchorBindDialog.vue'
 import EmptyState from '../common/EmptyState.vue'
 import type { JournalRecord, JournalReviewStats, JournalStockTimeline } from '@/types/journal'
 import { applyPageSeo } from '@/utils/seo'
+import { formatSupportRate } from '@/utils/trustStats'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -354,6 +341,9 @@ const dueCount = ref(0)
 const reviewStats = ref<JournalReviewStats | null>(null)
 const conditionLeaderboard = computed(
   () => reviewStats.value?.condition_quality_leaderboard ?? []
+)
+const stockTimelineLeaderboard = computed(
+  () => stockTimeline.value?.condition_quality_leaderboard ?? []
 )
 const errorMessage = ref('')
 const statusFilter = ref<string>('')
@@ -837,11 +827,6 @@ const formatDate = (dateStr: string) => {
     month: '2-digit', 
     day: '2-digit' 
   })
-}
-
-const formatSupportRate = (support_rate: number | null) => {
-  if (support_rate === null || support_rate === undefined) return '—'
-  return `${support_rate.toFixed(1)}%`
 }
 
 onMounted(async () => {

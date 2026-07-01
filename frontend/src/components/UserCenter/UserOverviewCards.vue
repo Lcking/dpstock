@@ -69,6 +69,14 @@
       <n-text depth="3">我的复盘表现</n-text>
       <n-text v-if="personalSummary">{{ personalSummary }}</n-text>
       <n-text v-else depth="3">完成判断复盘后，这里会展示你的个人支持率与常用条件类型。</n-text>
+      <ConditionQualityLeaderboard
+        v-if="personalLeaderboard.length > 0"
+        :items="personalLeaderboard"
+        title="我的条件质量"
+        hint="按你已复盘的判断统计各条件类型的支持率。"
+        compact
+        :max-items="4"
+      />
       <n-divider style="margin: 4px 0" />
       <n-text depth="3">平台历史验证（全站参考）</n-text>
       <n-text v-if="platformSummary" depth="3">{{ platformSummary }}</n-text>
@@ -81,6 +89,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { NButton, NCard, NDivider, NGrid, NGridItem, NSpace, NTag, NText } from 'naive-ui'
+import ConditionQualityLeaderboard from '@/components/Journal/ConditionQualityLeaderboard.vue'
 import { buildPersonalReviewSummary, buildTrustSummary } from '@/utils/trustStats'
 
 const props = defineProps<{
@@ -96,6 +105,10 @@ defineEmits<{
 
 const personalSummary = computed(() =>
   buildPersonalReviewSummary(props.overview?.personal_review_stats)
+)
+
+const personalLeaderboard = computed(
+  () => props.overview?.personal_review_stats?.condition_quality_leaderboard ?? [],
 )
 
 const platformSummary = computed(() => buildTrustSummary(props.overview?.trust_stats))

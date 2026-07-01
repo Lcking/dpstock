@@ -418,8 +418,10 @@
 | 2026-06-17 | Task 7: 判断详情显示系统初判 | local_done | pending | pending |
 | 2026-06-17 | Task 8: 复盘学习总结 | local_done | pending | pending |
 | 2026-06-18 | Task 9: 自选股健康度总览 | local_done | pending | pending |
-|  | Task 10: 风险触发提醒 | pending |  |  |
-|  | Task 11: GEO 问答块 | pending |  |  |
+| 2026-06-18 | Task 10: 风险触发提醒 | local_done | pending | pending |
+| 2026-06-18 | Task 11: GEO 问答块 | local_done | pending | pending |
+| 2026-06-18 | 判断闭环 2.2: 条件质量榜单（/me + 单股时间线） | local_done | pending | pending |
+| 2026-06-18 | 判断闭环 2.3: 复盘结构化建议 | local_done | pending | pending |
 
 ---
 

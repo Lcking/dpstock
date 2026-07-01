@@ -102,6 +102,8 @@ def test_get_stock_timeline_matches_legacy_and_canonical_codes(tmp_path):
     assert timeline["total_count"] == 2
     assert timeline["reviewed_count"] == 2
     assert timeline["support_rate"] == 50.0
+    assert "condition_quality_leaderboard" in timeline
+    assert isinstance(timeline["condition_quality_leaderboard"], list)
     assert len(timeline["records"]) == 2
 
 

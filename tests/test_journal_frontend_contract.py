@@ -52,7 +52,7 @@ def test_journal_list_surfaces_review_stats_scorecard():
     assert "最常失败原因" in list_view
     assert "condition_quality_leaderboard" in journal_types
     assert "JournalConditionQualityItem" in journal_types
-    assert "条件质量榜单" in list_view
+    assert "ConditionQualityLeaderboard" in list_view
     assert "loadReviewStats" in list_view
 
 
@@ -117,3 +117,33 @@ def test_journal_list_supports_stock_timeline_filter():
     assert "route.query.ts_code" in list_view
     assert "邮件投递" in admin_view
     assert "opsRiskEmailCols" in admin_view
+
+
+def test_condition_quality_leaderboard_component_is_reused():
+    leaderboard = (
+        REPO_ROOT / "frontend/src/components/Journal/ConditionQualityLeaderboard.vue"
+    ).read_text(encoding="utf-8")
+    list_view = (REPO_ROOT / "frontend/src/components/Journal/JournalList.vue").read_text(encoding="utf-8")
+    overview_cards = (
+        REPO_ROOT / "frontend/src/components/UserCenter/UserOverviewCards.vue"
+    ).read_text(encoding="utf-8")
+
+    assert "condition-leaderboard" in leaderboard
+    assert "formatSupportRate" in leaderboard
+    assert "ConditionQualityLeaderboard" in list_view
+    assert "stockTimelineLeaderboard" in list_view
+    assert "ConditionQualityLeaderboard" in overview_cards
+    assert "personalLeaderboard" in overview_cards
+
+
+def test_journal_review_dialog_surfaces_review_suggestions():
+    journal_types = (REPO_ROOT / "frontend/src/types/journal.ts").read_text(encoding="utf-8")
+    review_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalReviewDialog.vue").read_text(encoding="utf-8")
+
+    assert "JournalReviewSuggestions" in journal_types
+    assert "review_suggestions" in journal_types
+    assert "reviewSuggestions" in review_dialog
+    assert "suggestion-bullets" in review_dialog
+    assert "notesPlaceholder" in review_dialog
+    assert "lessonPlaceholder" in review_dialog
+    assert "suggested_failure_reason" in review_dialog

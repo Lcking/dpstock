@@ -17,6 +17,7 @@ from services.journal.failure_reasons import (
     failure_reason_label,
     normalize_failure_reason,
 )
+from services.journal.review_suggestions import build_review_suggestions
 from services.watchlist import watchlist_service
 from services.watchlist.service import WatchlistService
 from services.user_service import UserService
@@ -207,6 +208,7 @@ class JournalService:
         due_count = 0
         active_count = 0
         stock_name = None
+        reviewed_condition_items: List[Dict[str, Any]] = []
 
         for record in records:
             if not stock_name:
@@ -228,6 +230,20 @@ class JournalService:
                     reviewed_count += 1
                     if outcome == "supported":
                         supported_count += 1
+                    normalized_outcome = outcome
+                    if normalized_outcome not in {"supported", "falsified", "uncertain"}:
+                        normalized_outcome = "uncertain"
+                    constraints = record.get("constraints") or {}
+                    candidate = str(record.get("candidate") or "").upper()
+                    reviewed_condition_items.append(
+                        {
+                            "outcome": normalized_outcome,
+                            "condition_description": extract_selected_condition_description(
+                                constraints,
+                                candidate,
+                            ),
+                        }
+                    )
 
         support_rate = None
         if reviewed_count > 0:
@@ -241,6 +257,9 @@ class JournalService:
             "due_count": due_count,
             "active_count": active_count,
             "support_rate": support_rate,
+            "condition_quality_leaderboard": build_condition_quality_leaderboard(
+                reviewed_condition_items
+            ),
             "records": records[:limit],
         }
 
@@ -684,10 +703,22 @@ class JournalService:
 
         preview = self._get_evaluation_preview(row)
         if preview:
-            return preview
+            return self._with_review_suggestions(row, preview)
 
         _outcome, _triggers, system_evaluation = self._auto_evaluate(row)
-        return system_evaluation
+        return self._with_review_suggestions(row, system_evaluation)
+
+    def _with_review_suggestions(
+        self,
+        row: Dict[str, Any],
+        evaluation: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        result = dict(evaluation or {})
+        result["review_suggestions"] = build_review_suggestions(
+            row.get("candidate"),
+            evaluation,
+        )
+        return result
 
     def _get_record_row(self, record_id: str, user_id: str) -> Optional[Dict[str, Any]]:
         with self.db.get_connection() as conn:

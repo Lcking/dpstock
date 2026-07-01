@@ -36,12 +36,21 @@ export type JournalFailureReason =
     | 'logic_broken'
     | 'other'
 
+export interface JournalReviewSuggestions {
+    title: string
+    bullets: string[]
+    suggested_failure_reason: JournalFailureReason | null
+    lesson_prompt: string
+    notes_prompt: string
+}
+
 export interface JournalSystemEvaluation {
     outcome?: 'supported' | 'falsified' | 'uncertain'
     actual_path?: string | null
     summary?: string
     selected_condition?: Record<string, any>
     candidate_results?: Record<string, any>
+    review_suggestions?: JournalReviewSuggestions
 }
 
 export interface JournalListResponse {
@@ -59,6 +68,7 @@ export interface JournalStockTimeline {
     due_count: number
     active_count: number
     support_rate: number | null
+    condition_quality_leaderboard: JournalConditionQualityItem[]
     records: JournalRecord[]
 }
 

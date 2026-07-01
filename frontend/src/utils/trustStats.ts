@@ -40,6 +40,11 @@ export function buildPersonalReviewSummary(
   return parts.join(' · ')
 }
 
+export function formatSupportRate(support_rate: number | null | undefined): string {
+  if (support_rate === null || support_rate === undefined) return '—'
+  return `${support_rate.toFixed(1)}%`
+}
+
 export function buildTrustSummary(stats: PublicAccuracyStats | null | undefined): string {
   if (!stats || stats.reviewed_count <= 0 || stats.support_rate == null) {
     return ''
