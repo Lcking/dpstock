@@ -22,6 +22,14 @@
 import { ref, onMounted } from 'vue'
 import NavBar from '@/components/NavBar.vue'
 import Footer from '@/components/Footer.vue'
+import { NLayout } from 'naive-ui'
+import {
+  NConfigProvider,
+  NMessageProvider,
+  NLoadingBarProvider,
+  NDialogProvider,
+  NNotificationProvider,
+} from 'naive-ui'
 import { getOrCreateUserId } from '@/utils/cookies'
 import { getOrCreateAnonymousId } from '@/utils/anonymousId'
 import { syncAnchorSession } from '@/utils/anchorSession'
