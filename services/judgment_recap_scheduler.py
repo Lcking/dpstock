@@ -70,8 +70,6 @@ class JudgmentRecapScheduler:
 
             service = JudgmentRecapService()
             result = service.log_weekly_snapshot(window_days=7)
-            published = service.publish_weekly_recap_article(window_days=7)
-            result["published_article_id"] = published.get("article_id")
             logger.info(f"[JudgmentRecapScheduler] Completed {result}")
             job_health_tracker.record_success(job_id)
         except Exception as exc:

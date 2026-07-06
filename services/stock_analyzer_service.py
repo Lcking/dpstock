@@ -737,6 +737,10 @@ class StockAnalyzerService:
 
     async def get_kline_data(self, stock_code: str, market_type: str = 'A', days: int = 100) -> Dict[str, Any]:
         """获取K线图数据"""
+        from services.instrument_name_resolver import infer_market_type, _normalize_code
+
+        stock_code = _normalize_code(stock_code)
+        market_type = infer_market_type(stock_code, market_type)
         try:
             # 这里的日期处理可以更精确，简单起见获取足够多的数据
             df = await self.data_provider.get_stock_data(stock_code, market_type)

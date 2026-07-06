@@ -139,13 +139,6 @@ class JudgmentRecapService:
             },
             ensure_ascii=False,
         )
-        latest_article = self.get_latest_weekly_recap_article()
-        archive_cta = ""
-        if latest_article:
-            archive_cta = (
-                f'<a class="cta cta-secondary" href="{self.base_url}/analysis/{latest_article["id"]}">'
-                f'阅读归档文章</a>'
-            )
 
         return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -201,8 +194,7 @@ class JudgmentRecapService:
       <p class="disclaimer">{self._escape(payload['disclaimer'])}</p>
       <div class="cta-row">
         <a class="cta" href="/journal">打开判断日记</a>
-        <a class="cta cta-secondary" href="/analysis">分析专栏</a>
-        {archive_cta}
+        <a class="cta cta-secondary" href="/me">用户中心</a>
       </div>
     </header>
     <section>

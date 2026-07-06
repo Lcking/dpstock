@@ -13,6 +13,19 @@ from database.db_factory import DatabaseFactory
 
 logger = get_logger()
 
+_PUBLIC_ARTICLE_EXCLUDE_SQL = (
+    "stock_code != 'WEEKLY_RECAP' AND COALESCE(market_type, '') != 'META'"
+)
+
+
+def _is_private_archive_article(article: Optional[Dict[str, Any]]) -> bool:
+    if not article:
+        return False
+    stock_code = str(article.get("stock_code") or "").strip().upper()
+    market_type = str(article.get("market_type") or "").strip().upper()
+    return stock_code == "WEEKLY_RECAP" or market_type == "META"
+
+
 class ArchiveService:
     def __init__(self, db_path: str = "data/stocks.db"):
         self.db_path = db_path
@@ -138,17 +151,19 @@ class ArchiveService:
                 cursor = conn.cursor()
                 
                 if keyword:
-                    sql = """
+                    sql = f"""
                         SELECT * FROM articles 
-                        WHERE title LIKE ? OR stock_code LIKE ? OR stock_name LIKE ?
+                        WHERE ({_PUBLIC_ARTICLE_EXCLUDE_SQL})
+                          AND (title LIKE ? OR stock_code LIKE ? OR stock_name LIKE ?)
                         ORDER BY publish_date DESC, created_at DESC 
                         LIMIT ? OFFSET ?
                     """
                     pattern = f"%{keyword}%"
                     params = (pattern, pattern, pattern, limit, offset)
                 else:
-                    sql = """
+                    sql = f"""
                         SELECT * FROM articles 
+                        WHERE {_PUBLIC_ARTICLE_EXCLUDE_SQL}
                         ORDER BY publish_date DESC, created_at DESC 
                         LIMIT ? OFFSET ?
                     """
@@ -171,7 +186,10 @@ class ArchiveService:
                     return None
                 from services.instrument_name_resolver import enrich_article_record
 
-                return enrich_article_record(dict(row))
+                article = enrich_article_record(dict(row))
+                if _is_private_archive_article(article):
+                    return None
+                return article
         except Exception as e:
             logger.error(f"获取文章详情出错: {str(e)}")
             return None

@@ -95,6 +95,7 @@ async function initChart() {
     }
 
     chartInstance.value = await createStockChart(chartRef.value, option)
+    chartInstance.value?.resize()
   } catch (error) {
     chartError.value = '图表加载失败，请稍后重试'
     console.error('ArticleKlineChart 初始化图表失败:', error)

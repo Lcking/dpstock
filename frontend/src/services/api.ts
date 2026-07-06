@@ -232,16 +232,6 @@ export const apiService = {
     }
   },
 
-  getLatestWeeklyRecapArticle: async (): Promise<{ id: number; title: string } | null> => {
-    try {
-      const response = await axiosInstance.get('/articles/weekly-recap/latest');
-      return response.data.article || null;
-    } catch (error) {
-      console.error('获取最新周报归档时出错:', error);
-      return null;
-    }
-  },
-
   getRiskStocks: async (params: { trade_date?: string; tag?: string } = {}): Promise<RiskStockListResponse> => {
     try {
       const response = await axiosInstance.get('/risk-stocks', { params });

@@ -499,7 +499,6 @@ class StockPageService:
       <a class="cta" href="{self._escape(realtime_url)}">实时 AI 诊断这只股票</a>
       <div class="cta-row">
         <a class="cta-secondary" href="{self._escape(journal_url)}">查看我对这只股票的判断历史</a>
-        <a class="cta-secondary" href="/review/weekly">平台判断验证周报</a>
       </div>
     </header>
     <section>

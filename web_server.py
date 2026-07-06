@@ -784,13 +784,6 @@ async def get_articles(limit: int = 20, offset: int = 0, q: str = None):
         logger.error(f"获取文章列表出错: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/articles/weekly-recap/latest")
-async def get_latest_weekly_recap_article():
-    from services.judgment_recap_service import JudgmentRecapService
-
-    article = JudgmentRecapService().get_latest_weekly_recap_article()
-    return {"article": article}
-
 # 获取单篇文章详情
 @app.get("/api/articles/{article_id}")
 async def get_article_detail(article_id: int):

@@ -2,10 +2,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 import asyncio
 from typing import Dict, List, Optional, Tuple, Any
-from utils.logger import get_logger
+from services.instrument_name_resolver import infer_market_type, _normalize_code
 from services.tushare.client import tushare_client
+from utils.logger import get_logger
 
-# 获取日志器
 logger = get_logger()
 
 class StockDataProvider:
@@ -422,6 +422,9 @@ class StockDataProvider:
         """
         内部数据获取实现
         """
+        stock_code = _normalize_code(stock_code)
+        market_type = infer_market_type(stock_code, market_type)
+
         # Monkey patch requests库以禁用SSL验证并添加必要的请求头
         # 这是为了解决东方财富API的SSL连接问题和反爬虫措施
         import requests
@@ -743,6 +746,8 @@ class StockDataProvider:
                 df = df[required_cols]
                 
             elif market_type in ['ETF', 'LOF']:
+                if df is None or df.empty:
+                    raise ValueError(f"未获取到{market_type}基金 {stock_code} 的数据")
                 # 基金数据可能有不同的列
                 df.columns = ['Date', 'Open', 'Close', 'High', 'Low', 'Volume', 'Amount', 'Amplitude', 'Change_pct', 'Change', 'Turnover']
                 
