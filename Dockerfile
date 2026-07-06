@@ -1,5 +1,5 @@
 # 阶段一: 构建Vue前端
-FROM node:18-alpine as frontend-builder
+FROM node:20-alpine as frontend-builder
 
 # 设置工作目录
 WORKDIR /app/frontend

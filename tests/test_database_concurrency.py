@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from database.db_factory import DatabaseFactory
+from database.sqlite_utils import run_with_busy_retry
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS_DIR = REPO_ROOT / "migrations"
@@ -67,18 +68,22 @@ def test_concurrent_llm_usage_upserts_do_not_lock(tmp_path):
 
     def write_usage(index: int) -> None:
         user_type = "anonymous" if index % 2 == 0 else "authenticated"
-        with DatabaseFactory.get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO llm_usage_daily (usage_date, user_type, call_count, stock_count)
-                VALUES (date('now'), ?, 1, 1)
-                ON CONFLICT(usage_date, user_type) DO UPDATE SET
-                    call_count = call_count + 1,
-                    stock_count = stock_count + 1
-                """,
-                (user_type,),
-            )
-            conn.commit()
+
+        def _write() -> None:
+            with DatabaseFactory.get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO llm_usage_daily (usage_date, user_type, call_count, stock_count)
+                    VALUES (date('now'), ?, 1, 1)
+                    ON CONFLICT(usage_date, user_type) DO UPDATE SET
+                        call_count = call_count + 1,
+                        stock_count = stock_count + 1
+                    """,
+                    (user_type,),
+                )
+                conn.commit()
+
+        run_with_busy_retry(_write)
 
     with ThreadPoolExecutor(max_workers=10) as pool:
         list(pool.map(write_usage, range(30)))

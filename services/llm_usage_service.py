@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List
 
 from database.db_factory import DatabaseFactory
+from database.sqlite_utils import run_with_busy_retry
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -28,21 +29,24 @@ class LlmUsageService:
         user_type = USER_TYPE_AUTHENTICATED if is_authenticated else USER_TYPE_ANONYMOUS
         usage_date = date.today().isoformat()
         try:
-            with DatabaseFactory.get_connection() as conn:
-                cursor = conn.cursor()
-                if not self._table_exists(cursor):
-                    return
-                cursor.execute(
-                    """
-                    INSERT INTO llm_usage_daily (usage_date, user_type, call_count, stock_count)
-                    VALUES (?, ?, 1, ?)
-                    ON CONFLICT(usage_date, user_type) DO UPDATE SET
-                        call_count = call_count + 1,
-                        stock_count = stock_count + excluded.stock_count
-                    """,
-                    (usage_date, user_type, stock_count),
-                )
-                conn.commit()
+            def _write() -> None:
+                with DatabaseFactory.get_connection() as conn:
+                    cursor = conn.cursor()
+                    if not self._table_exists(cursor):
+                        return
+                    cursor.execute(
+                        """
+                        INSERT INTO llm_usage_daily (usage_date, user_type, call_count, stock_count)
+                        VALUES (?, ?, 1, ?)
+                        ON CONFLICT(usage_date, user_type) DO UPDATE SET
+                            call_count = call_count + 1,
+                            stock_count = stock_count + excluded.stock_count
+                        """,
+                        (usage_date, user_type, stock_count),
+                    )
+                    conn.commit()
+
+            run_with_busy_retry(_write)
         except Exception as exc:
             logger.warning(f"[LlmUsage] record_analyze skipped: {exc}")
 

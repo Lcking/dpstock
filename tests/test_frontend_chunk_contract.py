@@ -43,6 +43,15 @@ def test_vite_manual_chunks_has_ui_and_echarts_split():
     assert "vendor-icons" in text
     assert "vendor-axios" in text
     assert "vendor-naive-heavy" not in text
+    assert "unplugin-vue-components" in text
+    assert "NaiveUiResolver" in text
+
+
+def test_dockerfile_uses_node_20_for_frontend_build():
+    repo_root = Path(__file__).resolve().parents[1]
+    dockerfile = (repo_root / "Dockerfile").read_text(encoding="utf-8")
+    assert "node:20-alpine" in dockerfile
+    assert "node:18-alpine" not in dockerfile
 
 
 def test_frontend_build_metrics_scripts_and_runbook_exist():
