@@ -428,21 +428,18 @@
 | 2026-06-18 | N7: Ops 邮件/LLM 看板补全 | local_done | pending | pending |
 | 2026-06-18 | 判断闭环 2.5: 诊股→判断→复盘转化漏斗 | local_done | pending | pending |
 | 2026-06-18 | N6: 周报自动归档文章 | local_done | pending | pending |
-| 2026-06-18 | N8: 全量 pytest CI | local_done | pending | pending |
+| 2026-06-18 | N8: 全量 pytest CI | done | main | verified 2026-07-06 |
+| 2026-07-06 | 周报私有化 + ETF 图表修复 | done | ecbd434,536def7 | verified |
+| 2026-07-06 | 用户周报 `/me/weekly-recap` | done | 525c10e | verified |
+| 2026-07-06 | N5: Node 20 + naive-ui 按需引入 | done | 1b6c0e2 | verified |
+| 2026-07-06 | 部署验收脚本更新 | done | main | verified 2026-07-06 |
 
 ---
 
 ## 6. 推荐下一步
 
-从 P0 开始，严格按顺序推进：
+SEO 基础闭环（Task 1–4）与 N1–N8 主体已落地。后续优先：
 
-1. Task 1：修复 sitemap 500。
-2. Task 2：个股 SEO HTML MVP。
-3. Task 3：sitemap 加入个股 URL。
-4. Task 4：站内内链入口。
-
-这四个任务形成一个完整的 SEO 基础闭环：
-
-`可访问 → 可抓正文 → 可发现 → 有内链`
-
-完成后，再进入 P1 的信任和留存体验。
+1. 每次部署后运行 `scripts/verify_deploy_checklist.sh`（已覆盖健康检查、风险股、FAQ、私有化周报、ETF K 线）。
+2. 按需推进路由级 chunk 拆分，进一步压缩首屏 `vendor-naive-ui`。
+3. 用户体系 Phase 2（导航收编、专栏私有化等）按产品节奏单独立项。

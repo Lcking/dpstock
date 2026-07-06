@@ -32,7 +32,7 @@ curl -sI https://aguai.net/api/risk-stocks/export/csv
 | P1 | N2 | 风险提醒邮件/推送 | 增长/留存 | 1–2 天 | N1 ✅ 已实现 |
 | P1 | N3 | ETF/LOF 防回归测试 | 质量 | 0.5 天 | Q0-1 已完成 ✅ |
 | P1 | N4 | 测试套件 + CI 门禁 | 工程 | 1 天 | N1、N3 ✅ |
-| P2 | N5 | 前端首屏性能（移动端） | 性能 | 1–2 天 | Q0-2 已完成 ✅ |
+| P2 | N5 | 前端首屏性能（移动端） | 性能 | 1–2 天 | Q0-2 已完成 ✅ 已验收 2026-07-06 |
 | P2 | N6 | 自动「诊断复盘」内容引擎 | SEO/GEO | 2–3 天 | T4/sitemap 已落地 ✅ |
 | P3 | N7 | 可观测性补全 | 运维 | 1 天 | N1 |
 | P3 | N8 | 数据层与配置一致性收尾 | 技术债 | 0.5–1 天 | Q0-2 部分完成 |
@@ -220,9 +220,40 @@ flowchart LR
 | `2026-06-16-product-seo-trust-roadmap.md` | Task 1–11 | SEO/信任路线图；Task 10–11 与 N2/N6 重叠 |
 | 本文档 | Q0 + N1–N8 可执行卡 | **当前执行入口** |
 
+**线上验收命令（部署后）**：
+
+```bash
+BASE_URL=https://aguai.net ./scripts/verify_deploy_checklist.sh
+```
+
+或手动抽查：
+
+```bash
+curl -s https://aguai.net/analysis/1680 | grep -E '常见问题|FAQPage'
+curl -sI https://aguai.net/risk-stocks
+curl -sI https://aguai.net/api/risk-stocks/export/csv
+curl -sI https://aguai.net/review/weekly   # 期望 302 -> /me/weekly-recap
+curl -s "https://aguai.net/api/kline/159941?market_type=ETF&days=5"
+```
+
 ---
 
-## 5. 部署提醒
+## 6. 2026-07-06 验收批次（已完成）
+
+| 项 | 结果 |
+|---|---|
+| `/api/health` | 200 |
+| `/risk-stocks` + CSV 导出 | 200 |
+| 分析文章 FAQ（`/analysis/1680`） | 含 FAQPage |
+| ETF K 线（`159941`） | 有 dates，无 error |
+| 私有化周报 API | `scope=user` |
+| `/review/weekly` | 302 → `/me/weekly-recap` |
+| sitemap-core | 不含 `review/weekly` |
+| Node 20 前端构建 + build-budget | 通过 |
+
+---
+
+## 7. 部署提醒
 
 生产部署流程不变：
 
