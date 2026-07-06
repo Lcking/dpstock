@@ -185,6 +185,115 @@ class StockDataProvider:
             return f"{stock_code}.SH"
         return f"{stock_code}.SZ"
 
+    def _infer_eastmoney_market_id(self, stock_code: str) -> int:
+        """推断东方财富 secid 市场前缀：1=上交所，0=深交所。"""
+        code = _normalize_code(stock_code)
+        if code.startswith(("51", "56", "58", "50")):
+            return 1
+        return 0
+
+    def _to_yfinance_fund_code(self, stock_code: str) -> str:
+        code = _normalize_code(stock_code)
+        suffix = "SS" if code.startswith("5") else "SZ"
+        return f"{code}.{suffix}"
+
+    def _fetch_fund_hist_eastmoney(
+        self,
+        stock_code: str,
+        start_date: str,
+        end_date: str,
+        adjust: str = "qfq",
+    ) -> pd.DataFrame:
+        """直接请求东方财富 K 线，避免 akshare 全量 ETF 映射在服务器上失败。"""
+        import requests
+
+        code = _normalize_code(stock_code)
+        adjust_map = {"qfq": "1", "hfq": "2", "": "0"}
+        url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+        params_base = {
+            "fields1": "f1,f2,f3,f4,f5,f6",
+            "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+            "ut": "7eea3edcaed734bea9cbfc24409ed989",
+            "klt": "101",
+            "fqt": adjust_map.get(adjust, "1"),
+            "beg": str(start_date).replace("-", ""),
+            "end": str(end_date).replace("-", ""),
+        }
+
+        primary = self._infer_eastmoney_market_id(code)
+        for market_id in (primary, 1 - primary):
+            params = {**params_base, "secid": f"{market_id}.{code}"}
+            try:
+                resp = requests.get(url, params=params, timeout=15, verify=False)
+                payload = resp.json()
+            except Exception as exc:
+                logger.warning(f"[Fund] eastmoney kline failed {code} secid={market_id}: {exc}")
+                continue
+
+            klines = (payload.get("data") or {}).get("klines") or []
+            if not klines:
+                continue
+
+            rows = [item.split(",") for item in klines]
+            df = pd.DataFrame(rows)
+            if df.shape[1] < 11:
+                logger.warning(f"[Fund] unexpected eastmoney columns for {code}: {df.shape[1]}")
+                continue
+
+            df = df.iloc[:, :11]
+            df.columns = [
+                "日期", "开盘", "收盘", "最高", "最低", "成交量", "成交额",
+                "振幅", "涨跌幅", "涨跌额", "换手率",
+            ]
+            for col in df.columns[1:]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            logger.info(f"[Fund] eastmoney direct OK {code} secid={market_id} rows={len(df)}")
+            return df
+
+        return pd.DataFrame()
+
+    def _fetch_fund_hist_yfinance(
+        self,
+        stock_code: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> pd.DataFrame:
+        import yfinance as yf
+
+        code = _normalize_code(stock_code)
+        yf_symbol = self._to_yfinance_fund_code(code)
+        ticker = yf.Ticker(yf_symbol)
+        yf_df = ticker.history(period="2y")
+        if yf_df is None or yf_df.empty:
+            return pd.DataFrame()
+
+        yf_df = yf_df.reset_index()
+        yf_df["Date"] = yf_df["Date"].dt.strftime("%Y%m%d")
+        if start_date:
+            yf_df = yf_df[yf_df["Date"] >= str(start_date).replace("-", "")]
+        if end_date:
+            yf_df = yf_df[yf_df["Date"] <= str(end_date).replace("-", "")]
+
+        if yf_df.empty:
+            return pd.DataFrame()
+
+        pre_close = yf_df["Close"].shift(1)
+        df = pd.DataFrame({
+            "日期": yf_df["Date"],
+            "开盘": yf_df["Open"],
+            "收盘": yf_df["Close"],
+            "最高": yf_df["High"],
+            "最低": yf_df["Low"],
+            "成交量": yf_df["Volume"],
+            "成交额": yf_df["Volume"] * yf_df["Close"],
+            "振幅": ((yf_df["High"] - yf_df["Low"]) / pre_close.replace(0, pd.NA)) * 100,
+            "涨跌幅": ((yf_df["Close"] - pre_close) / pre_close.replace(0, pd.NA)) * 100,
+            "涨跌额": yf_df["Close"] - pre_close,
+            "换手率": 0.0,
+        })
+        logger.info(f"[Fund] yfinance OK {code} ({yf_symbol}) rows={len(df)}")
+        return df
+
     def _enrich_a_share_turnover(
         self,
         df: pd.DataFrame,
@@ -697,20 +806,31 @@ class StockDataProvider:
                     logger.error(f"yfinance 获取美股数据失败 {stock_code}: {str(e)}")
                     raise ValueError(f"获取美股数据失败 {stock_code}: {str(e)}")
                     
-            elif market_type in ['ETF']:
+            elif market_type in ['ETF', 'LOF']:
                 logger.debug(f"获取{market_type}基金数据: {stock_code}")
-                df = ak.fund_etf_hist_em(
-                    symbol=stock_code,
-                    start_date=start_date.replace('-', ''),
-                    end_date=end_date.replace('-', '')
+                df = self._fetch_fund_hist_eastmoney(
+                    stock_code,
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="qfq",
                 )
-            elif market_type in ['LOF']:
-                logger.debug(f"获取{market_type}基金数据: {stock_code}")
-                df = ak.fund_lof_hist_em(
-                    symbol=stock_code,
-                    start_date=start_date.replace('-', ''),
-                    end_date=end_date.replace('-', '')
-                )
+                if df is None or df.empty:
+                    logger.warning(f"[{market_type}] direct eastmoney empty for {stock_code}, trying akshare")
+                    fetch_fn = ak.fund_etf_hist_em if market_type == 'ETF' else ak.fund_lof_hist_em
+                    try:
+                        df = fetch_fn(
+                            symbol=stock_code,
+                            period="daily",
+                            start_date=start_date.replace('-', ''),
+                            end_date=end_date.replace('-', ''),
+                            adjust="qfq",
+                        )
+                    except Exception as ak_error:
+                        logger.warning(f"[{market_type}] akshare failed {stock_code}: {ak_error}")
+                        df = pd.DataFrame()
+                if df is None or df.empty:
+                    logger.info(f"[{market_type}] trying yfinance for {stock_code}")
+                    df = self._fetch_fund_hist_yfinance(stock_code, start_date, end_date)
                 
             else:
                 error_msg = f"不支持的市场类型: {market_type}"
