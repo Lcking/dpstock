@@ -63,6 +63,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/me/weekly-recap',
+    name: 'WeeklyRecap',
+    component: () => import('@/components/UserCenter/WeeklyRecapPage.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
     path: '/help/judgment-verification',
     name: 'JudgmentHelp',
     component: () => import('@/components/JudgmentHelp.vue'),

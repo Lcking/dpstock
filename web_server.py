@@ -833,15 +833,13 @@ async def stock_index_page(page: int = 1):
 
 @app.api_route("/review/weekly", methods=["GET", "HEAD"])
 async def judgment_weekly_recap_page(request: Request):
-    from services.judgment_recap_service import JudgmentRecapService
+    """Legacy public SSR URL — redirect to private user weekly recap SPA."""
+    from fastapi.responses import RedirectResponse
 
-    html_content = JudgmentRecapService(base_url="https://aguai.net").render_weekly_recap_page(
-        window_days=7
-    )
-    headers = {"Cache-Control": "public, max-age=1800"}
+    headers = {"Cache-Control": "no-cache, no-store, must-revalidate"}
     if request.method == "HEAD":
-        return Response(status_code=200, headers=headers)
-    return Response(content=html_content, media_type="text/html", headers=headers)
+        return Response(status_code=302, headers={**headers, "Location": "/me/weekly-recap"})
+    return RedirectResponse(url="/me/weekly-recap", status_code=302, headers=headers)
 
 
 @app.get("/baidu_verify_codeva-m2d0KFsWXV.html")

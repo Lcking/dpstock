@@ -77,6 +77,9 @@
         compact
         :max-items="4"
       />
+      <n-button size="small" tertiary type="primary" @click="$emit('go-weekly-recap')">
+        查看判断验证周报
+      </n-button>
       <n-divider style="margin: 4px 0" />
       <n-text depth="3">平台历史验证（全站参考）</n-text>
       <n-text v-if="platformSummary" depth="3">{{ platformSummary }}</n-text>
@@ -101,6 +104,7 @@ defineEmits<{
   (e: 'invite'): void
   (e: 'go-watchlist', payload?: { focus?: string }): void
   (e: 'go-journal'): void
+  (e: 'go-weekly-recap'): void
 }>()
 
 const personalSummary = computed(() =>

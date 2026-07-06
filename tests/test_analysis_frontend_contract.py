@@ -41,4 +41,4 @@ def test_analysis_v1_display_surfaces_judgment_funnel_cta_and_post_save_actions(
     assert "查看我的复盘表现" in component_text
     assert "me_overview_refresh" in user_center
     assert "me_overview_refresh" in review_dialog
-    assert "/me" in (REPO_ROOT / "frontend/src/components/NavBar.vue").read_text(encoding="utf-8")
+    assert "/me/weekly-recap" in (REPO_ROOT / "frontend/src/components/NavBar.vue").read_text(encoding="utf-8")

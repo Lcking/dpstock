@@ -68,6 +68,60 @@ def test_weekly_recap_payload_aggregates_reviewed_cases(tmp_path):
     assert "仅供参考" in payload["disclaimer"]
 
 
+def test_user_weekly_recap_payload_is_scoped_to_user(tmp_path):
+    db_path = tmp_path / "judgment_recap_user.db"
+    DatabaseFactory.initialize(str(db_path))
+    _create_judgments_table(db_path)
+
+    created_at = (datetime.utcnow() - timedelta(days=2)).isoformat() + "Z"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO judgments (
+                id, user_id, stock_code, candidate, selected_premises,
+                selected_risk_checks, constraints, snapshot, validation_date,
+                status, review, created_at, updated_at
+            ) VALUES (?, ?, '600519', 'A', '[]', '[]', '{}', '{}', ?, 'reviewed', ?, ?, ?)
+            """,
+            (
+                "jr-u1",
+                "u1",
+                created_at,
+                json.dumps({"outcome": "supported"}, ensure_ascii=False),
+                created_at,
+                created_at,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO judgments (
+                id, user_id, stock_code, candidate, selected_premises,
+                selected_risk_checks, constraints, snapshot, validation_date,
+                status, review, created_at, updated_at
+            ) VALUES (?, ?, '000001', 'B', '[]', '[]', '{}', '{}', ?, 'reviewed', ?, ?, ?)
+            """,
+            (
+                "jr-u2",
+                "u2",
+                created_at,
+                json.dumps({"outcome": "falsified"}, ensure_ascii=False),
+                created_at,
+                created_at,
+            ),
+        )
+        conn.commit()
+
+    service = JudgmentRecapService(base_url="https://aguai.net", db_path=str(db_path))
+    payload_u1 = service.get_user_weekly_recap_payload("u1", window_days=7)
+    payload_u2 = service.get_user_weekly_recap_payload("u2", window_days=7)
+
+    assert payload_u1["scope"] == "user"
+    assert payload_u1["stats"]["reviewed_count"] == 1
+    assert payload_u1["highlight_cases"][0]["stock_code"] == "600519"
+    assert payload_u2["stats"]["reviewed_count"] == 1
+    assert payload_u2["highlight_cases"][0]["stock_code"] == "000001"
+
+
 def test_weekly_recap_page_is_ssr_html_with_compliance_copy(tmp_path):
     db_path = tmp_path / "judgment_recap_html.db"
     DatabaseFactory.initialize(str(db_path))
@@ -84,6 +138,18 @@ def test_weekly_recap_page_is_ssr_html_with_compliance_copy(tmp_path):
     assert '"@type": "Article"' in html
     assert 'href="/me"' in html
     assert "阅读归档文章" not in html
+
+
+def test_review_weekly_redirects_to_private_spa():
+    from fastapi.testclient import TestClient
+
+    from web_server import app
+
+    with TestClient(app, follow_redirects=False) as client:
+        response = client.get("/review/weekly")
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/me/weekly-recap"
 
 
 def test_core_sitemap_excludes_weekly_recap_page(tmp_path, monkeypatch):

@@ -136,7 +136,7 @@ const myMenuOptions = computed(() => {
     ...notificationItems,
     { label: '我的观察', key: '/watchlist' },
     { label: '判断日记', key: '/journal' },
-    { label: '判断验证周报', key: '/me' },
+    { label: '判断验证周报', key: '/me/weekly-recap' },
     { label: '用户中心', key: '/me' },
     { label: '额度与邀请', key: 'quota-invite' },
   ];

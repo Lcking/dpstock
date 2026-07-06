@@ -83,6 +83,28 @@ async def get_user_center_overview(user: UserContext = Depends(get_current_user)
         raise HTTPException(status_code=500, detail="获取用户中心概览失败")
 
 
+@router.get("/weekly-recap")
+async def get_user_weekly_recap(
+    window_days: int = 7,
+    user: UserContext = Depends(get_current_user),
+):
+    from services.judgment_recap_service import JudgmentRecapService
+
+    try:
+        payload = JudgmentRecapService().get_user_weekly_recap_payload(
+            user.user_id,
+            window_days=window_days,
+        )
+        due_count = journal_service.get_due_count(user.user_id)
+        return {
+            **payload,
+            "due_count": due_count,
+        }
+    except Exception as e:
+        logger.error(f"[UserCenter] Failed to load weekly recap: {e}")
+        raise HTTPException(status_code=500, detail="获取判断验证周报失败")
+
+
 @router.get("/notify-pref")
 async def get_notify_pref(user: UserContext = Depends(get_current_user)):
     return {"notify_pref": notify_pref_service.get_notify_pref(user.user_id)}

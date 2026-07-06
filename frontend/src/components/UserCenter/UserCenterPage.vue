@@ -69,6 +69,7 @@
         @invite="showInviteDialog = true"
         @go-watchlist="handleGoWatchlist"
         @go-journal="router.push('/journal')"
+        @go-weekly-recap="router.push('/me/weekly-recap')"
       />
 
       <n-grid cols="1 xl:3" :x-gap="16" :y-gap="16" responsive="screen" class="content-grid">

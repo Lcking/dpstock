@@ -473,6 +473,13 @@ export const apiService = {
     return response.data;
   },
 
+  getWeeklyRecap: async (windowDays: number = 7) => {
+    const response = await axiosInstance.get('/user-center/weekly-recap', {
+      params: { window_days: windowDays },
+    });
+    return response.data;
+  },
+
   updateNotifyPref: async (prefs: {
     risk_alert_email?: boolean;
     journal_due_email?: boolean;

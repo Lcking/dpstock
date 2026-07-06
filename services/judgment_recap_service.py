@@ -47,21 +47,157 @@ class JudgmentRecapService:
             or "历史验证统计仅供参考，不构成投资建议，也不代表未来表现。",
         }
 
-    def _fetch_highlight_cases(self, *, window_days: int, limit: int) -> List[Dict[str, Any]]:
+    def get_user_weekly_recap_payload(
+        self,
+        user_id: str,
+        window_days: int = 7,
+    ) -> Dict[str, Any]:
+        """Aggregate weekly recap for a single user (private, identity-bound)."""
+        window_days = min(max(int(window_days or 7), 7), 30)
+        stats = self._aggregate_user_stats(user_id, window_days=window_days)
+        cases = self._fetch_highlight_cases(
+            window_days=window_days,
+            limit=10,
+            user_id=user_id,
+        )
+        now = datetime.utcnow()
+        period_end = now.date()
+        period_start = period_end - timedelta(days=window_days - 1)
+        return {
+            "scope": "user",
+            "user_id": user_id,
+            "window_days": window_days,
+            "period_start": period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+            "period_label": (
+                f"{period_start.strftime('%Y年%m月%d日')} – "
+                f"{period_end.strftime('%Y年%m月%d日')}"
+            ),
+            "stats": stats,
+            "highlight_cases": cases,
+            "generated_at": now.strftime("%Y-%m-%d %H:%M UTC"),
+            "disclaimer": (
+                "以下为你个人判断日记在近一周内的复盘统计，仅供参考，"
+                "不构成投资建议，也不代表未来表现。"
+            ),
+        }
+
+    def _aggregate_user_stats(self, user_id: str, *, window_days: int) -> Dict[str, Any]:
+        from services.journal.condition_quality import build_condition_quality_leaderboard
+        from services.journal.failure_reasons import failure_reason_label, normalize_failure_reason
+
+        outcome_counts = {"supported": 0, "falsified": 0, "uncertain": 0}
+        reviewed_condition_items: List[Dict[str, Any]] = []
+        failure_reason_counts: Dict[str, int] = {}
+        reviewed_count = 0
+        pending_count = 0
+
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT stock_code, candidate, review, constraints, created_at, updated_at
+                SELECT candidate, status, review, constraints, created_at
                 FROM judgments
-                WHERE status = 'reviewed'
-                  AND review IS NOT NULL
+                WHERE user_id = ?
                   AND datetime(created_at) >= datetime('now', ?)
-                ORDER BY updated_at DESC
-                LIMIT 120
+                ORDER BY created_at DESC
+                LIMIT 500
                 """,
-                (f"-{window_days} day",),
+                (user_id, f"-{window_days} day"),
             )
+            rows = [dict(row) for row in cursor.fetchall()]
+
+        for row in rows:
+            if row.get("status") != "reviewed":
+                pending_count += 1
+                continue
+
+            review = self._parse_json(row.get("review")) or {}
+            outcome = review.get("outcome")
+            if outcome not in outcome_counts:
+                outcome = "uncertain"
+            outcome_counts[outcome] += 1
+            reviewed_count += 1
+
+            constraints = self._parse_json(row.get("constraints")) or {}
+            candidate = str(row.get("candidate") or "").upper()
+            reviewed_condition_items.append(
+                {
+                    "outcome": outcome,
+                    "condition_description": extract_selected_condition_description(
+                        constraints,
+                        candidate,
+                    ),
+                }
+            )
+
+            failure_reason = normalize_failure_reason(review.get("failure_reason"))
+            if failure_reason:
+                failure_reason_counts[failure_reason] = failure_reason_counts.get(failure_reason, 0) + 1
+
+        support_rate = None
+        falsified_rate = None
+        if reviewed_count > 0:
+            support_rate = round(outcome_counts["supported"] / reviewed_count * 100, 2)
+            falsified_rate = round(outcome_counts["falsified"] / reviewed_count * 100, 2)
+
+        most_common_failure = None
+        if failure_reason_counts:
+            most_common_failure = max(failure_reason_counts, key=failure_reason_counts.get)
+
+        return {
+            "window_days": window_days,
+            "reviewed_count": reviewed_count,
+            "pending_count": pending_count,
+            "outcome_counts": outcome_counts,
+            "support_rate": support_rate,
+            "falsified_rate": falsified_rate,
+            "failure_reason_counts": failure_reason_counts,
+            "most_common_failure_reason_label": failure_reason_label(most_common_failure),
+            "condition_quality_leaderboard": build_condition_quality_leaderboard(
+                reviewed_condition_items
+            ),
+            "disclaimer": (
+                "个人复盘统计仅供参考，不构成投资建议，也不代表未来表现。"
+            ),
+        }
+
+    def _fetch_highlight_cases(
+        self,
+        *,
+        window_days: int,
+        limit: int,
+        user_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            if user_id:
+                cursor.execute(
+                    """
+                    SELECT stock_code, candidate, review, constraints, created_at, updated_at
+                    FROM judgments
+                    WHERE user_id = ?
+                      AND status = 'reviewed'
+                      AND review IS NOT NULL
+                      AND datetime(created_at) >= datetime('now', ?)
+                    ORDER BY updated_at DESC
+                    LIMIT 120
+                    """,
+                    (user_id, f"-{window_days} day"),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT stock_code, candidate, review, constraints, created_at, updated_at
+                    FROM judgments
+                    WHERE status = 'reviewed'
+                      AND review IS NOT NULL
+                      AND datetime(created_at) >= datetime('now', ?)
+                    ORDER BY updated_at DESC
+                    LIMIT 120
+                    """,
+                    (f"-{window_days} day",),
+                )
             rows = [dict(row) for row in cursor.fetchall()]
 
         cases: List[Dict[str, Any]] = []
