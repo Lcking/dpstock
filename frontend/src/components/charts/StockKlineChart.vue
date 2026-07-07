@@ -1,6 +1,7 @@
 <template>
   <div class="chart-wrapper">
     <div ref="chartRef" class="kline-chart" :style="{ height }"></div>
+    <div v-if="overlayLegend" class="pattern-legend">形态标注：{{ overlayLegend }}</div>
     <div v-if="chartLoading" class="chart-loading">
       <n-spin size="small" />
       <span>加载行情数据…</span>
@@ -15,6 +16,7 @@ import { NSpin } from 'naive-ui'
 import { createStockChart, type StockChartOption } from '@/utils/echartsLoader'
 import type { EChartsType } from 'echarts/core'
 import { apiService } from '@/services/api'
+import { buildOverlayMarks } from '@/utils/patternOverlay'
 
 const props = withDefaults(
   defineProps<{
@@ -31,6 +33,7 @@ const chartRef = ref<HTMLElement | null>(null)
 const chartInstance = ref<EChartsType | null>(null)
 const chartLoading = ref(false)
 const chartError = ref('')
+const overlayLegend = ref('')
 
 async function initChart() {
   if (!chartRef.value || !props.stockCode) return
@@ -45,6 +48,9 @@ async function initChart() {
       chartInstance.value.dispose()
       chartInstance.value = null
     }
+
+    const { markLine, markPoint, legendText } = buildOverlayMarks(data.pattern_overlay)
+    overlayLegend.value = legendText
 
     const option: StockChartOption = {
       animation: false,
@@ -70,6 +76,8 @@ async function initChart() {
           type: 'candlestick',
           data: data.values,
           itemStyle: { color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' },
+          markLine,
+          markPoint,
         },
         { name: 'MA5', type: 'line', data: data.ma5, smooth: true, showSymbol: false, lineStyle: { width: 1, color: '#f59e0b' } },
         { name: 'MA20', type: 'line', data: data.ma20, smooth: true, showSymbol: false, lineStyle: { width: 1, color: '#6366f1' } },
@@ -155,5 +163,15 @@ onBeforeUnmount(() => {
   color: #b91c1c;
   background: rgba(254, 226, 226, 0.85);
   border: 1px solid rgba(252, 165, 165, 0.6);
+}
+
+.pattern-legend {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #9a3412;
+  background: rgba(255, 247, 237, 0.9);
+  border: 1px solid rgba(251, 146, 60, 0.35);
 }
 </style>

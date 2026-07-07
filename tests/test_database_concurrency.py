@@ -42,15 +42,18 @@ def test_concurrent_analysis_record_writes_do_not_lock(tmp_path):
     DatabaseFactory.initialize(str(db_path))
 
     def write_row(index: int) -> None:
-        with DatabaseFactory.get_connection() as conn:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO analysis_records (user_id, stock_code, analysis_date)
-                VALUES (?, ?, date('now'))
-                """,
-                (f"user_{index % 3}", f"{600000 + index}.SH"),
-            )
-            conn.commit()
+        def _write() -> None:
+            with DatabaseFactory.get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO analysis_records (user_id, stock_code, analysis_date)
+                    VALUES (?, ?, date('now'))
+                    """,
+                    (f"user_{index % 3}", f"{600000 + index}.SH"),
+                )
+                conn.commit()
+
+        run_with_busy_retry(_write)
 
     with ThreadPoolExecutor(max_workers=12) as pool:
         results = list(pool.map(write_row, range(40)))

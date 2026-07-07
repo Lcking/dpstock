@@ -752,7 +752,10 @@ class StockAnalyzerService:
             
             # 只取最近 N 天
             df = df.tail(days)
-            
+
+            # 形态 overlay：与展示窗口一致，供前端 K 线 markLine/markPoint 渲染
+            overlay = self._build_pattern_overlay(df)
+
             # 格式化数据给前端 (ECharts 常用格式)
             dates = df.index.strftime('%Y-%m-%d').tolist()
             # K线数据: [开盘, 收盘, 最低, 最高]
@@ -782,8 +785,91 @@ class StockAnalyzerService:
                     "macd": macd,
                     "signal": macd_signal,
                     "hist": macd_hist
-                }
+                },
+                "pattern_overlay": overlay,
             }
         except Exception as e:
             logger.error(f"获取K线数据出错: {str(e)}")
             return {"error": str(e)}
+
+    def _build_pattern_overlay(self, df) -> Dict[str, Any]:
+        """
+        基于展示窗口内的 K 线跑形态检测，输出可直接渲染的 overlay 数据。
+
+        结构:
+        - patterns: [{pattern_type, label, confidence, completion_rate, points: [{label, price, date}], lines: [{label, price}]}]
+        - crossovers: [{date, cross_type, fast_ma, slow_ma, price}]
+        - swing_points: [{date, price, type}]
+        """
+        empty: Dict[str, Any] = {"patterns": [], "crossovers": [], "swing_points": []}
+        try:
+            from services.pattern_detector import pattern_detector
+
+            report = pattern_detector.detect(df)
+
+            valid_dates = set(df.index.strftime('%Y-%m-%d').tolist())
+
+            patterns = []
+            for p in report.patterns:
+                if p.pattern_type == 'none' or p.confidence < 50:
+                    continue
+                points = []
+                lines = []
+                for kp in p.key_points:
+                    price = kp.get('price')
+                    if price is None:
+                        continue
+                    entry = {
+                        "label": str(kp.get('label') or ''),
+                        "price": round(float(price), 3),
+                        "date": str(kp.get('date') or ''),
+                    }
+                    # 无日期的关键点（颈线/边界/上下轨）作为水平线渲染
+                    if entry["date"] and entry["date"] in valid_dates:
+                        points.append(entry)
+                    else:
+                        lines.append({"label": entry["label"], "price": entry["price"]})
+                label = self._extract_pattern_label(p.description) or p.pattern_type
+                patterns.append({
+                    "pattern_type": p.pattern_type,
+                    "label": label,
+                    "confidence": round(float(p.confidence)),
+                    "completion_rate": int(p.completion_rate),
+                    "points": points,
+                    "lines": lines,
+                })
+
+            crossovers = [
+                {
+                    "date": c.date,
+                    "cross_type": c.cross_type,
+                    "fast_ma": c.fast_ma,
+                    "slow_ma": c.slow_ma,
+                    "price": round(float(c.price_at_cross), 3),
+                }
+                for c in report.crossovers
+                if c.date in valid_dates
+            ][-6:]
+
+            swing_points = [
+                {"date": sp.date, "price": round(float(sp.price), 3), "type": sp.type}
+                for sp in (report.swing_highs[-3:] + report.swing_lows[-3:])
+                if sp.date in valid_dates
+            ]
+
+            return {
+                "patterns": patterns[:2],
+                "crossovers": crossovers,
+                "swing_points": swing_points,
+            }
+        except Exception as e:
+            logger.warning(f"形态 overlay 构建失败（不影响K线返回）: {e}")
+            return empty
+
+    @staticmethod
+    def _extract_pattern_label(description: str) -> str:
+        """从描述文本中提取形态名称，如 '**双顶形态**：...' -> '双顶形态'"""
+        import re
+
+        match = re.match(r"\*\*(.+?)\*\*", str(description or ''))
+        return match.group(1) if match else ""

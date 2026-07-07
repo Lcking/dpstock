@@ -12,7 +12,7 @@ let initPromise: Promise<{
 async function loadEchartsRuntime() {
   const [
     { BarChart, CandlestickChart, LineChart },
-    { GridComponent, TooltipComponent },
+    { GridComponent, TooltipComponent, MarkLineComponent, MarkPointComponent },
     { CanvasRenderer },
     { init, use },
   ] = await Promise.all([
@@ -28,6 +28,8 @@ async function loadEchartsRuntime() {
     BarChart,
     GridComponent,
     TooltipComponent,
+    MarkLineComponent,
+    MarkPointComponent,
     CanvasRenderer,
   ])
 
