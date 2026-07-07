@@ -5,12 +5,13 @@ import { apiService } from '@/services/api'
 export const useNotificationStore = defineStore('notification', () => {
     const pendingReviewCount = ref(0)
     const riskAlertCount = ref(0)
+    const signalAlertCount = ref(0)
     const isLoading = ref(false)
 
     let pollInterval: number | null = null
 
     const totalNotificationCount = computed(
-        () => pendingReviewCount.value + riskAlertCount.value
+        () => pendingReviewCount.value + riskAlertCount.value + signalAlertCount.value
     )
 
     async function checkReviews() {
@@ -21,6 +22,7 @@ export const useNotificationStore = defineStore('notification', () => {
             const inbox = await apiService.getNotificationInbox()
             pendingReviewCount.value = inbox.due_count || 0
             riskAlertCount.value = inbox.risk_alert_count || 0
+            signalAlertCount.value = inbox.signal_alert_count || 0
         } catch (error) {
             console.error('Failed to check notifications:', error)
         } finally {
@@ -47,6 +49,7 @@ export const useNotificationStore = defineStore('notification', () => {
     return {
         pendingReviewCount,
         riskAlertCount,
+        signalAlertCount,
         totalNotificationCount,
         checkReviews,
         startPolling,

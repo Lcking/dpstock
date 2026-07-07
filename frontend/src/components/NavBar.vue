@@ -128,6 +128,12 @@ const myMenuOptions = computed(() => {
       key: '/watchlist?focus=risk',
     });
   }
+  if (notificationStore.signalAlertCount > 0) {
+    notificationItems.push({
+      label: `结构信号 (${notificationStore.signalAlertCount})`,
+      key: '/watchlist?focus=signals',
+    });
+  }
   if (notificationItems.length > 0) {
     notificationItems.push({ label: 'divider', key: 'notify-divider', type: 'divider' });
   }

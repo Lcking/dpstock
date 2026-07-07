@@ -51,6 +51,34 @@
     </n-alert>
     </div>
 
+    <div v-if="signalAlerts.length > 0" id="signal-alert-panel">
+    <n-alert
+      type="info"
+      :bordered="false"
+      class="risk-alert-panel"
+    >
+      <template #header>
+        自选结构信号（{{ signalAlerts.length }}）
+      </template>
+      <div class="risk-alert-list">
+        <div v-for="alert in signalAlerts" :key="alert.id" class="risk-alert-item">
+          <div class="risk-alert-main">
+            <a :href="`/stock/${alert.ts_code.slice(0, 6)}`" class="risk-alert-name">{{ alert.stock_name }}</a>
+            <span class="risk-alert-code">{{ alert.ts_code }}</span>
+            <n-tag size="small" :bordered="false" type="info">{{ alert.title }}</n-tag>
+            <span class="risk-alert-code">{{ alert.trade_date }}</span>
+          </div>
+          <div class="risk-alert-reason">{{ alert.detail }}</div>
+        </div>
+      </div>
+      <div class="risk-alert-actions">
+        <n-space>
+          <n-button size="small" type="primary" secondary @click="markSignalAlertsRead">标记已读</n-button>
+        </n-space>
+      </div>
+    </n-alert>
+    </div>
+
     <n-alert
       v-if="watchlistState.isTemporary && watchlistState.trialMessage"
       type="warning"
@@ -315,7 +343,7 @@ import WatchlistFilters from './WatchlistFilters.vue'
 import EmptyState from '../common/EmptyState.vue'
 import AnchorBindDialog from '../AnchorBindDialog.vue'
 import { apiService } from '@/services/api'
-import type { WatchlistSummary, Watchlist, WatchlistItemSummary, WatchlistRiskAlert } from '@/types/watchlist'
+import type { WatchlistSummary, Watchlist, WatchlistItemSummary, WatchlistRiskAlert, WatchlistSignalAlert } from '@/types/watchlist'
 import { applyPageSeo } from '@/utils/seo'
 import { syncAnchorSession } from '@/utils/anchorSession'
 import { onBindSuccess } from '@/utils/bindEvents'
@@ -345,6 +373,7 @@ const watchlistState = ref({
   trialMessage: null as string | null
 })
 const riskAlerts = ref<WatchlistRiskAlert[]>([])
+const signalAlerts = ref<WatchlistSignalAlert[]>([])
 
 function pickPrimaryWatchlist(watchlists: Watchlist[]): Watchlist | null {
   if (watchlists.length === 0) return null
@@ -871,6 +900,32 @@ async function markRiskAlertsRead() {
   }
 }
 
+async function loadSignalAlerts() {
+  try {
+    const response = await apiService.getWatchlistSignalAlerts({ unread_only: true, limit: 10 })
+    signalAlerts.value = response.items
+  } catch (error) {
+    console.error('Load signal alerts error:', error)
+  }
+}
+
+async function markSignalAlertsRead() {
+  try {
+    await apiService.markWatchlistSignalAlertsRead()
+    signalAlerts.value = []
+    await notificationStore.checkReviews()
+    message.success('结构信号已标记为已读')
+  } catch (error) {
+    console.error('Mark signal alerts read failed:', error)
+    message.error('标记已读失败')
+  }
+}
+
+async function scrollToSignalPanel() {
+  await nextTick()
+  document.getElementById('signal-alert-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 onMounted(async () => {
   applyPageSeo({
     title: '我的观察 | Agu AI',
@@ -884,8 +939,11 @@ onMounted(async () => {
   })
   await initWatchlist()
   await loadRiskAlerts()
+  await loadSignalAlerts()
   if (route.query.focus === 'risk') {
     await scrollToRiskPanel()
+  } else if (route.query.focus === 'signals') {
+    await scrollToSignalPanel()
   }
 })
 

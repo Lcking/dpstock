@@ -7,7 +7,7 @@ import type {
   JournalStockTimeline,
   JournalSystemEvaluation,
 } from '@/types/journal';
-import type { Watchlist, WatchlistSummary, WatchlistRiskAlertsResponse } from '@/types/watchlist';
+import type { Watchlist, WatchlistSummary, WatchlistRiskAlertsResponse, WatchlistSignalAlertsResponse } from '@/types/watchlist';
 import type { RiskStockListResponse } from '@/types/riskStock';
 
 const API_PREFIX = '/api';
@@ -535,6 +535,20 @@ export const apiService = {
 
   markWatchlistRiskAlertsRead: async (): Promise<void> => {
     await axiosInstance.post('/watchlists/risk-alerts/mark-read');
+  },
+
+  getWatchlistSignalAlerts: async (params: { limit?: number; unread_only?: boolean } = {}): Promise<WatchlistSignalAlertsResponse> => {
+    try {
+      const response = await axiosInstance.get('/watchlists/signal-alerts', { params });
+      return response.data;
+    } catch (error) {
+      console.error('获取自选结构信号时出错:', error);
+      return { unread_count: 0, items: [] };
+    }
+  },
+
+  markWatchlistSignalAlertsRead: async (): Promise<void> => {
+    await axiosInstance.post('/watchlists/signal-alerts/mark-read');
   },
 
   // ========== Quota API ==========

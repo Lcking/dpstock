@@ -124,11 +124,15 @@ async def startup_event():
     start_judgment_recap_scheduler()
     start_journal_due_scheduler()
 
+    from services.watchlist_signal_scheduler import start_watchlist_signal_scheduler
+    start_watchlist_signal_scheduler()
+
     for scheduled_job in (
         "risk_stock_scheduler",
         "verification_scheduler",
         "judgment_recap_scheduler",
         "journal_due_scheduler",
+        "watchlist_signal_scheduler",
     ):
         job_health_tracker.ensure_registered(scheduled_job)
 

@@ -12,6 +12,7 @@ from services.notify_pref_service import NotifyPrefService
 from services.risk_alert_email_service import verify_risk_alert_unsubscribe_token
 from services.journal_due_email_service import verify_journal_due_unsubscribe_token
 from services.watchlist_risk_alert_service import WatchlistRiskAlertService
+from services.watchlist_signal_service import WatchlistSignalService
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 
 notify_pref_service = NotifyPrefService()
 watchlist_risk_alert_service = WatchlistRiskAlertService()
+watchlist_signal_service = WatchlistSignalService()
 
 
 @router.get("/inbox")
@@ -62,11 +64,33 @@ async def get_notification_inbox(user: UserContext = Depends(get_current_user)):
             for item in alerts.get("items") or []
         ]
 
+    signal_alert_count = watchlist_signal_service.get_unread_count(user_id)
+    signal_preview = []
+    if signal_alert_count > 0:
+        signal_alerts = watchlist_signal_service.list_alerts(
+            user_id,
+            limit=5,
+            unread_only=True,
+        )
+        signal_preview = [
+            {
+                "id": item.get("id"),
+                "ts_code": item.get("ts_code"),
+                "stock_name": item.get("stock_name"),
+                "trade_date": item.get("trade_date"),
+                "signal_type": item.get("signal_type"),
+                "title": item.get("title"),
+            }
+            for item in signal_alerts.get("items") or []
+        ]
+
     return {
         "due_count": due_count,
         "risk_alert_count": risk_alert_count,
+        "signal_alert_count": signal_alert_count,
         "due_preview": due_preview,
         "risk_preview": risk_preview,
+        "signal_preview": signal_preview,
     }
 
 

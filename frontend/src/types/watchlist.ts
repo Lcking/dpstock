@@ -132,3 +132,21 @@ export interface WatchlistRiskAlertsResponse {
     unread_count: number
     items: WatchlistRiskAlert[]
 }
+
+export interface WatchlistSignalAlert {
+    id: string
+    user_id: string
+    ts_code: string
+    stock_name: string
+    trade_date: string
+    signal_type: string
+    title: string
+    detail: string
+    created_at: string
+    read_at?: string | null
+}
+
+export interface WatchlistSignalAlertsResponse {
+    unread_count: number
+    items: WatchlistSignalAlert[]
+}
