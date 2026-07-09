@@ -1,7 +1,7 @@
 <template>
   <div class="chart-wrapper">
     <div ref="chartRef" class="kline-chart"></div>
-    <div v-if="overlayLegend" class="pattern-legend">形态标注：{{ overlayLegend }}</div>
+    <div v-if="overlayLegend" class="pattern-legend">形态标注：{{ overlayLegend }} · 滚轮/拖动下方滑条可缩放拥挤区域</div>
     <div v-if="chartLoading" class="chart-loading">
       <n-spin size="small" />
       <span>加载行情数据…</span>
@@ -61,9 +61,30 @@ async function initChart() {
         axisPointer: { type: 'cross' },
       },
       grid: [
-        { left: '8%', right: '3%', height: '55%', top: '5%' },
-        { left: '8%', right: '3%', top: '65%', height: '15%' },
-        { left: '8%', right: '3%', top: '85%', height: '10%' },
+        { left: '8%', right: '3%', height: '50%', top: '4%' },
+        { left: '8%', right: '3%', top: '60%', height: '13%' },
+        { left: '8%', right: '3%', top: '77%', height: '10%' },
+      ],
+      dataZoom: [
+        {
+          type: 'inside',
+          xAxisIndex: [0, 1, 2],
+          start: 50,
+          end: 100,
+          minValueSpan: 10,
+        },
+        {
+          type: 'slider',
+          xAxisIndex: [0, 1, 2],
+          start: 50,
+          end: 100,
+          bottom: 6,
+          height: 18,
+          borderColor: 'rgba(99, 102, 241, 0.25)',
+          fillerColor: 'rgba(99, 102, 241, 0.12)',
+          handleStyle: { color: '#6366f1' },
+          textStyle: { fontSize: 10, color: '#94a3b8' },
+        },
       ],
       xAxis: [
         { type: 'category', data: data.dates, boundaryGap: false, axisLine: { lineStyle: { color: '#94a3b8' } } },
@@ -143,8 +164,8 @@ onBeforeUnmount(() => {
 
 .kline-chart {
   width: 100%;
-  height: 400px;
-  min-height: 400px;
+  height: 460px;
+  min-height: 460px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;

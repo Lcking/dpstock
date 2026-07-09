@@ -193,7 +193,7 @@
           :is="StockKlineChartAsync"
           :stock-code="stock.code"
           :market-type="stock.marketType"
-          :height="isMobile ? '250px' : '350px'"
+          :height="isMobile ? '300px' : '420px'"
         />
         <div v-if="chartModuleError" class="chart-module-error">
           <n-icon><AlertCircleIcon /></n-icon>

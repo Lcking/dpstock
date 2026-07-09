@@ -69,6 +69,14 @@
             <span class="risk-alert-code">{{ alert.trade_date }}</span>
           </div>
           <div class="risk-alert-reason">{{ alert.detail }}</div>
+          <div class="signal-alert-links">
+            <a :href="`/?code=${alert.ts_code.slice(0, 6)}&market=A&focus=search`" class="signal-alert-link">
+              实时 AI 诊断，验证这个信号 →
+            </a>
+            <router-link :to="`/journal?ts_code=${alert.ts_code}`" class="signal-alert-link secondary">
+              我的判断历史
+            </router-link>
+          </div>
         </div>
       </div>
       <div class="risk-alert-actions">
@@ -1020,6 +1028,28 @@ onBeforeUnmount(() => {
   gap: 6px;
   flex-wrap: wrap;
   margin-bottom: 6px;
+}
+
+.signal-alert-links {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.signal-alert-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: #5560d6;
+  text-decoration: none;
+}
+
+.signal-alert-link.secondary {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.signal-alert-link:hover {
+  text-decoration: underline;
 }
 
 .risk-alert-reason {

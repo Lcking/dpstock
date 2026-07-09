@@ -192,6 +192,10 @@ def test_frontend_watchlist_page_renders_signal_panel():
     assert "自选结构信号" in watchlist_text
     assert "markSignalAlertsRead" in watchlist_text
     assert "focus === 'signals'" in watchlist_text.replace('"', "'")
+    # 信号 → 判断闭环入口
+    assert "实时 AI 诊断" in watchlist_text
+    assert "focus=search" in watchlist_text
+    assert "/journal?ts_code=" in watchlist_text
 
     nav_text = (REPO_ROOT / "frontend/src/components/NavBar.vue").read_text(encoding="utf-8")
     assert "signalAlertCount" in nav_text

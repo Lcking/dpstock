@@ -54,11 +54,35 @@ async function initChart() {
 
     const option: StockChartOption = {
       animation: false,
-      silent: true,
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'cross' },
+      },
       grid: [
-        { left: '8%', right: '3%', height: '50%', top: '5%' },
-        { left: '8%', right: '3%', top: '60%', height: '15%' },
-        { left: '8%', right: '3%', top: '78%', height: '18%' },
+        { left: '8%', right: '3%', height: '46%', top: '4%' },
+        { left: '8%', right: '3%', top: '55%', height: '13%' },
+        { left: '8%', right: '3%', top: '72%', height: '13%' },
+      ],
+      dataZoom: [
+        {
+          type: 'inside',
+          xAxisIndex: [0, 1, 2],
+          start: 50,
+          end: 100,
+          minValueSpan: 10,
+        },
+        {
+          type: 'slider',
+          xAxisIndex: [0, 1, 2],
+          start: 50,
+          end: 100,
+          bottom: 4,
+          height: 16,
+          borderColor: 'rgba(99, 102, 241, 0.25)',
+          fillerColor: 'rgba(99, 102, 241, 0.12)',
+          handleStyle: { color: '#6366f1' },
+          textStyle: { fontSize: 10, color: '#94a3b8' },
+        },
       ],
       xAxis: [
         { type: 'category', data: data.dates, boundaryGap: false, axisLine: { lineStyle: { color: '#ccc' } } },

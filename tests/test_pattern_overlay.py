@@ -115,3 +115,17 @@ def test_frontend_charts_render_pattern_overlay():
     loader = (REPO_ROOT / "frontend/src/utils/echartsLoader.ts").read_text(encoding="utf-8")
     assert "MarkLineComponent" in loader
     assert "MarkPointComponent" in loader
+    assert "DataZoomInsideComponent" in loader
+    assert "DataZoomSliderComponent" in loader
+
+
+def test_frontend_charts_support_zooming_for_crowded_marks():
+    for rel in (
+        "frontend/src/components/charts/ArticleKlineChart.vue",
+        "frontend/src/components/charts/StockKlineChart.vue",
+    ):
+        text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        assert "dataZoom" in text, rel
+        assert "'inside'" in text, rel
+        assert "'slider'" in text, rel
+        assert "silent: true" not in text, rel
