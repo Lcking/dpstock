@@ -736,7 +736,11 @@ class StockAnalyzerService:
             yield json.dumps({"error": error_msg})
 
     async def get_kline_data(self, stock_code: str, market_type: str = 'A', days: int = 100) -> Dict[str, Any]:
-        """获取K线图数据"""
+        """获取K线图数据。
+
+        同时检测「近期窗口」与「全历史」形态：默认 dataZoom 看近期，
+        全历史关键点也落在可缩放范围内，避免文案与图标注各说各话。
+        """
         from services.instrument_name_resolver import infer_market_type, _normalize_code
 
         stock_code = _normalize_code(stock_code)
@@ -746,33 +750,36 @@ class StockAnalyzerService:
             df = await self.data_provider.get_stock_data(stock_code, market_type)
             if df.empty or hasattr(df, 'error'):
                 return {"error": "无法获取K线数据"}
-            
+
             # 计算指标
             df = self.indicator.calculate_indicators(df)
-            
-            # 只取最近 N 天
-            df = df.tail(days)
 
-            # 形态 overlay：与展示窗口一致，供前端 K 线 markLine/markPoint 渲染
-            overlay = self._build_pattern_overlay(df)
+            recent_days = max(1, int(days))
+            overlay_recent = self._build_pattern_overlay(df.tail(recent_days), scope='recent')
+            overlay_full = self._build_pattern_overlay(df, scope='history')
+            overlay_merged = self._merge_pattern_overlays(overlay_recent, overlay_full)
+
+            display_days = self._resolve_kline_display_days(df, overlay_merged, min_days=recent_days)
+            df = df.tail(display_days)
+            overlay = self._clip_pattern_overlay(overlay_merged, df)
 
             # 格式化数据给前端 (ECharts 常用格式)
             dates = df.index.strftime('%Y-%m-%d').tolist()
             # K线数据: [开盘, 收盘, 最低, 最高]
             values = df[['Open', 'Close', 'Low', 'High']].values.tolist()
             volumes = df['Volume'].tolist()
-            
+
             # 均线数据
             ma5 = df['MA5'].tolist() if 'MA5' in df else []
             ma20 = df['MA20'].tolist() if 'MA20' in df else []
             ma60 = df['MA60'].tolist() if 'MA60' in df else []
-            
+
             # 副指标
             rsi = df['RSI'].tolist() if 'RSI' in df else []
             macd = df['MACD'].tolist() if 'MACD' in df else []
             macd_signal = df['Signal'].tolist() if 'Signal' in df else []
             macd_hist = df['Hist'].tolist() if 'Hist' in df else []
-            
+
             return {
                 "dates": dates,
                 "values": values,
@@ -792,12 +799,12 @@ class StockAnalyzerService:
             logger.error(f"获取K线数据出错: {str(e)}")
             return {"error": str(e)}
 
-    def _build_pattern_overlay(self, df) -> Dict[str, Any]:
+    def _build_pattern_overlay(self, df, scope: str = 'recent') -> Dict[str, Any]:
         """
-        基于展示窗口内的 K 线跑形态检测，输出可直接渲染的 overlay 数据。
+        在给定 K 线上跑形态检测，输出可直接渲染的 overlay 数据。
 
         结构:
-        - patterns: [{pattern_type, label, confidence, completion_rate, points: [{label, price, date}], lines: [{label, price}]}]
+        - patterns: [{scope, pattern_type, label, confidence, completion_rate, points, lines}]
         - crossovers: [{date, cross_type, fast_ma, slow_ma, price}]
         - swing_points: [{date, price, type}]
         """
@@ -827,10 +834,12 @@ class StockAnalyzerService:
                     # 无日期的关键点（颈线/边界/上下轨）作为水平线渲染
                     if entry["date"] and entry["date"] in valid_dates:
                         points.append(entry)
-                    else:
+                    elif not entry["date"]:
                         lines.append({"label": entry["label"], "price": entry["price"]})
+                    # 有日期但不在 df 内的点丢弃（不应发生在全历史检测路径）
                 label = self._extract_pattern_label(p.description) or p.pattern_type
                 patterns.append({
+                    "scope": scope,
                     "pattern_type": p.pattern_type,
                     "label": label,
                     "confidence": round(float(p.confidence)),
@@ -865,6 +874,130 @@ class StockAnalyzerService:
         except Exception as e:
             logger.warning(f"形态 overlay 构建失败（不影响K线返回）: {e}")
             return empty
+
+    def _merge_pattern_overlays(
+        self,
+        recent: Dict[str, Any],
+        history: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """合并近期与全历史形态；同源重复只保留近期，交叉信号优先近期。"""
+        merged_patterns = []
+        recent_fingerprints = set()
+
+        for pattern in recent.get("patterns") or []:
+            item = {**pattern, "scope": "recent"}
+            merged_patterns.append(item)
+            recent_fingerprints.add(self._pattern_fingerprint(item))
+
+        for pattern in history.get("patterns") or []:
+            item = {**pattern, "scope": "history"}
+            if self._pattern_fingerprint(item) in recent_fingerprints:
+                continue
+            # 与近期同类型且关键点价格接近，视为同一形态
+            if any(
+                self._patterns_roughly_same(item, r)
+                for r in merged_patterns
+                if r.get("scope") == "recent"
+            ):
+                continue
+            merged_patterns.append(item)
+
+        has_history = any(p.get("scope") == "history" for p in merged_patterns)
+        has_recent = any(p.get("scope") == "recent" for p in merged_patterns)
+        note = ""
+        if has_history and has_recent:
+            note = "默认展示近期形态；另有全历史形态，可用滚轮/滑条缩小查看"
+        elif has_history:
+            note = "标注为全历史形态，可用滚轮/滑条缩放查看关键区间"
+        elif has_recent:
+            note = "标注为近期形态，可用滚轮/滑条缩放查看"
+
+        return {
+            "patterns": merged_patterns[:4],
+            "crossovers": list(recent.get("crossovers") or []) or list(history.get("crossovers") or []),
+            "swing_points": list(recent.get("swing_points") or []) or list(history.get("swing_points") or []),
+            "note": note,
+        }
+
+    @staticmethod
+    def _pattern_fingerprint(pattern: Dict[str, Any]) -> str:
+        points = pattern.get("points") or []
+        parts = [str(pattern.get("pattern_type") or ""), str(pattern.get("label") or "")]
+        for point in points:
+            parts.append(f"{point.get('label')}:{point.get('date')}:{point.get('price')}")
+        return "|".join(parts)
+
+    @staticmethod
+    def _patterns_roughly_same(a: Dict[str, Any], b: Dict[str, Any], tol: float = 0.03) -> bool:
+        if a.get("pattern_type") != b.get("pattern_type"):
+            return False
+        a_map = {p.get("label"): p.get("price") for p in (a.get("points") or []) if p.get("label")}
+        b_map = {p.get("label"): p.get("price") for p in (b.get("points") or []) if p.get("label")}
+        shared = set(a_map) & set(b_map)
+        if len(shared) < 2:
+            return False
+        for label in shared:
+            pa, pb = float(a_map[label]), float(b_map[label])
+            base = max(abs(pa), abs(pb), 1e-6)
+            if abs(pa - pb) / base > tol:
+                return False
+        return True
+
+    def _resolve_kline_display_days(
+        self,
+        df,
+        overlay: Dict[str, Any],
+        min_days: int = 100,
+        max_days: int = 300,
+        pad_bars: int = 15,
+    ) -> int:
+        """按形态关键点最早日期拉长展示窗口，保证标注点落在图内。"""
+        n = len(df)
+        if n <= 0:
+            return min_days
+        min_days = max(1, int(min_days))
+        max_days = max(min_days, int(max_days))
+
+        pattern_dates = []
+        for pattern in overlay.get("patterns") or []:
+            for point in pattern.get("points") or []:
+                d = str(point.get("date") or "").strip()
+                if d:
+                    pattern_dates.append(d)
+        if not pattern_dates:
+            return min(n, min_days)
+
+        earliest = min(pattern_dates)
+        date_list = df.index.strftime('%Y-%m-%d').tolist()
+        start_idx = 0
+        for i, d in enumerate(date_list):
+            if d >= earliest:
+                start_idx = i
+                break
+        start_idx = max(0, start_idx - pad_bars)
+        needed = n - start_idx
+        return min(n, max(min_days, min(max_days, needed)))
+
+    def _clip_pattern_overlay(self, overlay: Dict[str, Any], df) -> Dict[str, Any]:
+        """把 overlay 裁到当前展示窗口；窗口外的有日期关键点丢弃，不降级成水平线。"""
+        valid_dates = set(df.index.strftime('%Y-%m-%d').tolist())
+        patterns = []
+        for pattern in overlay.get("patterns") or []:
+            points = [p for p in (pattern.get("points") or []) if p.get("date") in valid_dates]
+            lines = list(pattern.get("lines") or [])
+            # 关键点全被裁掉则该形态不再展示，避免只剩颈线误导
+            if not points and not lines:
+                continue
+            if not points and lines:
+                continue
+            patterns.append({**pattern, "points": points, "lines": lines})
+
+        return {
+            "patterns": patterns,
+            "crossovers": [c for c in (overlay.get("crossovers") or []) if c.get("date") in valid_dates],
+            "swing_points": [s for s in (overlay.get("swing_points") or []) if s.get("date") in valid_dates],
+            "note": str(overlay.get("note") or ""),
+        }
 
     @staticmethod
     def _extract_pattern_label(description: str) -> str:

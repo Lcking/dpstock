@@ -1,7 +1,7 @@
 <template>
   <div class="chart-wrapper">
     <div ref="chartRef" class="kline-chart"></div>
-    <div v-if="overlayLegend" class="pattern-legend">形态标注：{{ overlayLegend }} · 滚轮/拖动下方滑条可缩放拥挤区域</div>
+    <div v-if="overlayLegend" class="pattern-legend">形态标注：{{ overlayLegend }}</div>
     <div v-if="chartLoading" class="chart-loading">
       <n-spin size="small" />
       <span>加载行情数据…</span>
