@@ -97,6 +97,46 @@ async def test_kline_data_includes_pattern_overlay(monkeypatch):
     assert set(data["pattern_overlay"].keys()) >= {"patterns", "crossovers", "swing_points", "note"}
 
 
+@pytest.mark.asyncio
+async def test_kline_data_sanitizes_nan_for_json(monkeypatch):
+    """拉长展示窗口后前段 rolling NaN 不得进入响应，否则线上会 500。"""
+    import json
+    import math
+
+    service = StockAnalyzerService()
+    rows = 120
+    dates = pd.date_range('2025-01-01', periods=rows, freq='B')
+    close = np.linspace(10, 20, rows)
+    df = pd.DataFrame({
+        'Open': close - 0.1,
+        'Close': close,
+        'High': close + 0.2,
+        'Low': close - 0.2,
+        'Volume': np.full(rows, 1_000_000.0),
+        'MA5': [math.nan] * 4 + list(close[4:]),
+        'MA20': [math.nan] * 19 + list(close[19:]),
+        'MA60': [math.nan] * 59 + list(close[59:]),
+        'RSI': [math.nan] * 14 + list(np.linspace(40, 60, rows - 14)),
+        'MACD': [math.nan] * 25 + list(np.linspace(-1, 1, rows - 25)),
+        'Signal': [math.nan] * 33 + list(np.linspace(-1, 1, rows - 33)),
+        'Hist': [math.nan] * 33 + list(np.linspace(-0.5, 0.5, rows - 33)),
+    }, index=dates)
+
+    async def fake_get_stock_data(*args, **kwargs):
+        return df
+
+    monkeypatch.setattr(service.data_provider, "get_stock_data", fake_get_stock_data)
+    monkeypatch.setattr(service.indicator, "calculate_indicators", lambda x: x)
+
+    data = await service.get_kline_data("301151", "A", days=100)
+    assert "error" not in data
+    # 标准 JSON 禁止 NaN；allow_nan=False 能复现线上序列化失败
+    payload = json.dumps(data, allow_nan=False)
+    assert "NaN" not in payload
+    assert data["ma60"][0] is None
+    assert isinstance(data["ma60"][-1], float)
+
+
 def _make_long_history_with_early_hs_top(rows: int = 260) -> pd.DataFrame:
     """前段构造头肩顶（约第 40-80 根），后段再走出另一套低位结构。"""
     rng = np.random.default_rng(11)

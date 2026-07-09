@@ -780,7 +780,9 @@ class StockAnalyzerService:
             macd_signal = df['Signal'].tolist() if 'Signal' in df else []
             macd_hist = df['Hist'].tolist() if 'Hist' in df else []
 
-            return {
+            # 展示窗口拉长后，序列前段可能仍含 rolling NaN；必须清洗，
+            # 否则 FastAPI/json 序列化 NaN 会直接 500，前端表现为「图表加载失败」。
+            return _json_safe({
                 "dates": dates,
                 "values": values,
                 "volumes": volumes,
@@ -794,7 +796,7 @@ class StockAnalyzerService:
                     "hist": macd_hist
                 },
                 "pattern_overlay": overlay,
-            }
+            })
         except Exception as e:
             logger.error(f"获取K线数据出错: {str(e)}")
             return {"error": str(e)}
