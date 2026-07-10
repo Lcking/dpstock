@@ -294,6 +294,178 @@ class StockDataProvider:
         logger.info(f"[Fund] yfinance OK {code} ({yf_symbol}) rows={len(df)}")
         return df
 
+    @staticmethod
+    def _to_sina_a_share_symbol(stock_code: str) -> str:
+        """6 位 A 股代码 → 新浪 hq 符号，如 002129 → sz002129。"""
+        code = _normalize_code(stock_code)
+        if code.startswith(('5', '6', '9')):
+            return f"sh{code}"
+        return f"sz{code}"
+
+    def fetch_a_share_sina_realtime(self, stock_code: str) -> Optional[Dict[str, Any]]:
+        """
+        拉取 A 股新浪实时行情。
+
+        返回字段: open, prev_close, price, high, low, volume, amount,
+                  trade_date (YYYY-MM-DD), trade_time (HH:MM:SS)
+        """
+        import httpx
+
+        symbol = self._to_sina_a_share_symbol(stock_code)
+        url = f"https://hq.sinajs.cn/list={symbol}"
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://finance.sina.com.cn/",
+        }
+        try:
+            with httpx.Client(timeout=8.0) as client:
+                resp = client.get(url, headers=headers)
+                resp.raise_for_status()
+                text = resp.text
+        except Exception as exc:
+            logger.warning(f"[A] sina realtime failed {stock_code}: {exc}")
+            return None
+
+        # var hq_str_sz002129="名称,开盘,昨收,现价,最高,最低,买一,卖一,成交量(股),成交额,... ,日期,时间,..."
+        parts = text.split('"')
+        if len(parts) < 2:
+            return None
+        fields = parts[1].split(",")
+        if len(fields) < 32:
+            logger.warning(f"[A] sina realtime malformed {stock_code}: fields={len(fields)}")
+            return None
+        try:
+            open_px = float(fields[1])
+            prev_close = float(fields[2])
+            price = float(fields[3])
+            high = float(fields[4])
+            low = float(fields[5])
+            volume = float(fields[8])
+            amount = float(fields[9])
+            trade_date = str(fields[30]).strip()
+            trade_time = str(fields[31]).strip()
+        except (TypeError, ValueError) as exc:
+            logger.warning(f"[A] sina realtime parse failed {stock_code}: {exc}")
+            return None
+
+        if price <= 0 or not trade_date:
+            return None
+
+        return {
+            "open": open_px,
+            "prev_close": prev_close,
+            "price": price,
+            "high": high,
+            "low": low,
+            "volume": volume,
+            "amount": amount,
+            "trade_date": trade_date,
+            "trade_time": trade_time,
+            "name": str(fields[0]).strip(),
+        }
+
+    def patch_a_share_latest_bar_with_realtime(
+        self,
+        df: pd.DataFrame,
+        stock_code: str,
+        quote: Optional[Dict[str, Any]] = None,
+        price_tol: float = 0.005,
+    ) -> pd.DataFrame:
+        """
+        用实时行情校正/补齐日线最后一根。
+
+        - 日线缺当日：追加一根
+        - 日线已有当日但收盘价与实时不一致：覆盖 OHLC/量额
+        """
+        if df is None or df.empty:
+            return df
+        if quote is None:
+            quote = self.fetch_a_share_sina_realtime(stock_code)
+        if not quote:
+            return df
+
+        try:
+            trade_ts = pd.Timestamp(quote["trade_date"]).normalize()
+        except Exception:
+            return df
+
+        price = float(quote["price"])
+        open_px = float(quote.get("open") or price)
+        high = float(quote.get("high") or price)
+        low = float(quote.get("low") or price)
+        prev_close = float(quote.get("prev_close") or 0)
+        volume = float(quote.get("volume") or 0)
+        amount = float(quote.get("amount") or 0)
+        change = price - prev_close if prev_close else 0.0
+        change_pct = (change / prev_close * 100) if prev_close else 0.0
+
+        out = df.copy()
+        last_ts = pd.Timestamp(out.index[-1]).normalize()
+
+        if trade_ts < last_ts:
+            return out
+
+        patched = False
+        if trade_ts > last_ts:
+            row = {col: out.iloc[-1][col] if col in out.columns else None for col in out.columns}
+            row.update({
+                "Open": open_px,
+                "Close": price,
+                "High": max(high, open_px, price),
+                "Low": min(low, open_px, price) if low > 0 else min(open_px, price),
+                "Volume": volume,
+            })
+            if "Amount" in out.columns:
+                row["Amount"] = amount
+            if "Change" in out.columns:
+                row["Change"] = round(change, 4)
+            if "Change_pct" in out.columns:
+                row["Change_pct"] = round(change_pct, 4)
+            if "Amplitude" in out.columns and prev_close:
+                row["Amplitude"] = round((row["High"] - row["Low"]) / prev_close * 100, 4)
+            out.loc[trade_ts] = row
+            patched = True
+            logger.info(
+                f"[A] realtime append {stock_code}: {trade_ts.date()} close={price:.2f} "
+                f"(hist last={last_ts.date()})"
+            )
+        else:
+            old_close = float(out.iloc[-1]["Close"])
+            old_volume = float(out.iloc[-1]["Volume"]) if "Volume" in out.columns else 0.0
+            if abs(old_close - price) > price_tol or (
+                volume > 0 and abs(old_volume - volume) > 1
+            ):
+                idx = out.index[-1]
+                out.at[idx, "Close"] = price
+                if "Open" in out.columns and open_px > 0:
+                    out.at[idx, "Open"] = open_px
+                if "High" in out.columns:
+                    out.at[idx, "High"] = max(float(out.at[idx, "High"]), high, price)
+                if "Low" in out.columns:
+                    existing_low = float(out.at[idx, "Low"])
+                    out.at[idx, "Low"] = min(
+                        existing_low, low if low > 0 else existing_low, price
+                    )
+                if "Volume" in out.columns and volume > 0:
+                    out.at[idx, "Volume"] = volume
+                if "Amount" in out.columns and amount > 0:
+                    out.at[idx, "Amount"] = amount
+                if "Change" in out.columns:
+                    out.at[idx, "Change"] = round(change, 4)
+                if "Change_pct" in out.columns:
+                    out.at[idx, "Change_pct"] = round(change_pct, 4)
+                patched = True
+                logger.info(
+                    f"[A] realtime patch {stock_code}: {trade_ts.date()} "
+                    f"close {old_close:.2f} -> {price:.2f}"
+                )
+
+        if patched:
+            out.attrs["realtime_patched"] = True
+            out.attrs["realtime_source"] = "sina"
+            out.attrs["realtime_as_of"] = f"{quote['trade_date']} {quote.get('trade_time') or ''}".strip()
+        return out
+
     def _enrich_a_share_turnover(
         self,
         df: pd.DataFrame,
@@ -881,7 +1053,12 @@ class StockDataProvider:
                 
             # 确保按日期升序排序
             df.sort_index(inplace=True)
-                
+
+            # A 股：日线 API 收盘后常滞后/不完整，用新浪实时价校正最后一根
+            # （复现：002129 分析用了 10.72，实时收盘已是 10.66）
+            if market_type == 'A' and not df.empty:
+                df = self.patch_a_share_latest_bar_with_realtime(df, stock_code)
+
             logger.info(f"成功获取{market_type}数据 {stock_code}, 数据点数: {len(df)}")
             return df
             

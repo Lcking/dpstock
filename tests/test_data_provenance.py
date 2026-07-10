@@ -22,6 +22,18 @@ def test_build_data_provenance_uses_latest_bar_timestamp():
     assert "数据截至" in provenance["data_provenance_label"]
 
 
+def test_build_data_provenance_marks_realtime_patch():
+    df = pd.DataFrame(
+        {"Close": [10.72, 10.66]},
+        index=pd.to_datetime(["2026-07-09", "2026-07-10"]),
+    )
+    df.attrs["realtime_patched"] = True
+    df.attrs["realtime_as_of"] = "2026-07-10 15:18:45"
+    provenance = build_data_provenance("A", df)
+    assert provenance["data_source"] == "日线 + 新浪实时补丁"
+    assert provenance["data_as_of"] == "2026-07-10 15:18"
+
+
 def test_stock_scorer_recommendation_uses_structure_labels():
     scorer = StockScorer()
     assert scorer.get_recommendation(85) == "结构强"
