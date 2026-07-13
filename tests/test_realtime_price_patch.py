@@ -86,6 +86,9 @@ def test_patch_appends_when_daily_missing_today():
 
 
 def test_parse_sina_realtime_text(monkeypatch):
+    from services import realtime_quote
+
+    realtime_quote.clear_quote_cache()
     provider = StockDataProvider()
     payload = (
         'var hq_str_sz002129="TCL中环,11.030,11.030,10.660,11.390,10.650,'
@@ -111,6 +114,7 @@ def test_parse_sina_realtime_text(monkeypatch):
     import httpx
     monkeypatch.setattr(httpx, "Client", _Client)
     quote = provider.fetch_a_share_sina_realtime("002129")
+    realtime_quote.clear_quote_cache()
     assert quote is not None
     assert quote["price"] == 10.66
     assert quote["trade_date"] == "2026-07-10"

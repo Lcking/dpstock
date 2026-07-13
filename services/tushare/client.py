@@ -122,7 +122,11 @@ class TushareClient:
     
     def get_daily(self, ts_code: str, start_date: str = None, end_date: str = None, days: int = 60):
         """
-        获取日线行情
+        获取日线行情。
+
+        统一取数咽喉：当请求区间覆盖今天时，用新浪实时报价补/校当日 bar。
+        tushare 日线收盘后常滞后数小时，观察列表/趋势/相对强弱等所有走
+        这条路径的消费方会因此显示旧价（bug 现场：/watchlist 收盘后价格滞后）。
         
         Args:
             ts_code: 股票代码 (e.g., '600519.SH')
@@ -130,22 +134,42 @@ class TushareClient:
             end_date: 结束日期 YYYYMMDD
             days: 如果未指定日期范围，获取最近N天
         """
+        requested_end = end_date
         if not end_date:
             end_date = datetime.now().strftime('%Y%m%d')
         
-        return self.query('daily', ts_code=ts_code, start_date=start_date, end_date=end_date)
+        df = self.query('daily', ts_code=ts_code, start_date=start_date, end_date=end_date)
+        return self._maybe_patch_realtime(df, ts_code, requested_end)
     
     def get_index_daily(self, ts_code: str, start_date: str = None, end_date: str = None):
         """
-        获取指数日线行情
+        获取指数日线行情（同样做实时补丁，保证与个股同一时间口径，
+        否则相对强弱里“个股今日 vs 指数昨日”会失真）。
         
         Args:
             ts_code: 指数代码 (e.g., '000300.SH' for 沪深300)
         """
+        requested_end = end_date
         if not end_date:
             end_date = datetime.now().strftime('%Y%m%d')
         
-        return self.query('index_daily', ts_code=ts_code, start_date=start_date, end_date=end_date)
+        df = self.query('index_daily', ts_code=ts_code, start_date=start_date, end_date=end_date)
+        return self._maybe_patch_realtime(df, ts_code, requested_end)
+
+    @staticmethod
+    def _maybe_patch_realtime(df, ts_code: str, requested_end: Optional[str]):
+        """请求区间覆盖今天时才补当日 bar；历史回看（判卷等）保持原样。"""
+        if df is None or getattr(df, 'empty', True):
+            return df
+        try:
+            from services.realtime_quote import patch_tushare_daily, should_patch_range
+
+            if not should_patch_range(requested_end):
+                return df
+            return patch_tushare_daily(df, ts_code)
+        except Exception as exc:
+            logger.warning(f"[Tushare] realtime patch skipped for {ts_code}: {exc}")
+            return df
     
     def get_moneyflow(self, ts_code: str, start_date: str = None, end_date: str = None):
         """

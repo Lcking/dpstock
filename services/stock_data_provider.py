@@ -304,65 +304,14 @@ class StockDataProvider:
 
     def fetch_a_share_sina_realtime(self, stock_code: str) -> Optional[Dict[str, Any]]:
         """
-        拉取 A 股新浪实时行情。
+        拉取 A 股新浪实时行情（委托统一模块，带 TTL 缓存）。
 
         返回字段: open, prev_close, price, high, low, volume, amount,
                   trade_date (YYYY-MM-DD), trade_time (HH:MM:SS)
         """
-        import httpx
+        from services.realtime_quote import get_quote
 
-        symbol = self._to_sina_a_share_symbol(stock_code)
-        url = f"https://hq.sinajs.cn/list={symbol}"
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://finance.sina.com.cn/",
-        }
-        try:
-            with httpx.Client(timeout=8.0) as client:
-                resp = client.get(url, headers=headers)
-                resp.raise_for_status()
-                text = resp.text
-        except Exception as exc:
-            logger.warning(f"[A] sina realtime failed {stock_code}: {exc}")
-            return None
-
-        # var hq_str_sz002129="名称,开盘,昨收,现价,最高,最低,买一,卖一,成交量(股),成交额,... ,日期,时间,..."
-        parts = text.split('"')
-        if len(parts) < 2:
-            return None
-        fields = parts[1].split(",")
-        if len(fields) < 32:
-            logger.warning(f"[A] sina realtime malformed {stock_code}: fields={len(fields)}")
-            return None
-        try:
-            open_px = float(fields[1])
-            prev_close = float(fields[2])
-            price = float(fields[3])
-            high = float(fields[4])
-            low = float(fields[5])
-            volume = float(fields[8])
-            amount = float(fields[9])
-            trade_date = str(fields[30]).strip()
-            trade_time = str(fields[31]).strip()
-        except (TypeError, ValueError) as exc:
-            logger.warning(f"[A] sina realtime parse failed {stock_code}: {exc}")
-            return None
-
-        if price <= 0 or not trade_date:
-            return None
-
-        return {
-            "open": open_px,
-            "prev_close": prev_close,
-            "price": price,
-            "high": high,
-            "low": low,
-            "volume": volume,
-            "amount": amount,
-            "trade_date": trade_date,
-            "trade_time": trade_time,
-            "name": str(fields[0]).strip(),
-        }
+        return get_quote(stock_code)
 
     def patch_a_share_latest_bar_with_realtime(
         self,
@@ -1055,9 +1004,13 @@ class StockDataProvider:
             df.sort_index(inplace=True)
 
             # A 股：日线 API 收盘后常滞后/不完整，用新浪实时价校正最后一根
-            # （复现：002129 分析用了 10.72，实时收盘已是 10.66）
+            # （复现：002129 分析用了 10.72，实时收盘已是 10.66）。
+            # 历史区间请求（判卷等）不覆盖今天时禁止补，避免污染回看数据。
             if market_type == 'A' and not df.empty:
-                df = self.patch_a_share_latest_bar_with_realtime(df, stock_code)
+                from services.realtime_quote import should_patch_range
+
+                if should_patch_range(end_date):
+                    df = self.patch_a_share_latest_bar_with_realtime(df, stock_code)
 
             logger.info(f"成功获取{market_type}数据 {stock_code}, 数据点数: {len(df)}")
             return df
