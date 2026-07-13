@@ -75,6 +75,9 @@ class JudgmentService:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_judgments_created_at ON judgments(created_at DESC)")
                 
                 # Create judgment_checks table
+                # 注意：绝不能加 FOREIGN KEY (judgment_id) REFERENCES judgments(judgment_id)。
+                # 006 之后 judgments 表没有 judgment_id 列，foreign_keys=ON 时这个坏外键
+                # 会让所有 DELETE FROM judgments 报 "foreign key mismatch"（见迁移 018）。
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS judgment_checks (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,8 +88,7 @@ class JudgmentService:
                         current_structure_status TEXT,
                         status_description TEXT,
                         reasons TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (judgment_id) REFERENCES judgments(judgment_id)
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
                 
