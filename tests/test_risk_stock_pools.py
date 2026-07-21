@@ -270,6 +270,50 @@ def test_spot_eastmoney_pages_stop_at_thresholds(monkeypatch):
     assert calls["asc"] == 1
 
 
+def test_spot_falls_back_to_sina_when_eastmoney_fails(monkeypatch):
+    """服务器上东财 push2 常被拒连，必须回退新浪而不是让涨幅池静默为空。"""
+    sina_desc = [
+        [
+            {"code": "300643", "name": "万通智控", "changepercent": 20.03},
+            {"code": "600200", "name": "涨9示例", "changepercent": 9.4},
+            {"code": "830001", "name": "北交所示例", "changepercent": 9.0},  # 应被过滤
+            {"code": "600100", "name": "涨5示例", "changepercent": 5.6},
+            {"code": "000500", "name": "普通股票", "changepercent": 4.9},
+        ],
+    ]
+    sina_asc = [
+        [
+            {"code": "301400", "name": "创业板暴跌", "changepercent": -15.3},
+            {"code": "600900", "name": "普通下跌", "changepercent": -9.9},
+        ],
+    ]
+
+    def boom(self):
+        raise ConnectionError("push2 refused")
+
+    def fake_sina_page(self, session, page, ascending):
+        pages = sina_asc if ascending else sina_desc
+        return pages[page - 1] if page <= len(pages) else []
+
+    monkeypatch.setattr(RiskStockCollector, "_fetch_spot_eastmoney", boom)
+    monkeypatch.setattr(RiskStockCollector, "_fetch_sina_page", fake_sina_page)
+
+    collector = RiskStockCollector.__new__(RiskStockCollector)
+    df = collector._fetch_spot()
+
+    codes = set(df["代码"])
+    assert codes == {"300643", "600200", "600100", "301400"}
+    assert "830001" not in codes  # 北交所过滤
+
+    # 走标准入口验证池子归属
+    monkeypatch.setattr(RiskStockCollector, "_fetch_spot", lambda self: df)
+    pool_rows = collector._collect_spot_pool_rows()
+    pools = {row["ts_code"]: row["pools"] for row in pool_rows}
+    assert pools["600200.SH"] == ["9%涨幅池"]
+    assert pools["600100.SH"] == ["5%涨幅池"]
+    assert "创业板大波动" in pools["301400.SZ"]
+
+
 def test_is_chinext():
     assert is_chinext("300001") is True
     assert is_chinext("301151") is True

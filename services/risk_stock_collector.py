@@ -434,13 +434,24 @@ class RiskStockCollector:
     SPOT_MAX_PAGES = 40
 
     def _fetch_spot(self):
-        """全市场涨跌幅快照。优先直连东财排序分页（只拉需要的头尾段），失败回退 akshare。"""
+        """全市场涨跌幅快照。
+
+        东财 → 新浪 → akshare 三级回退：服务器（海外 IP）对东财 push2 系列
+        经常被拒连，而新浪行情从服务器一直可用（实时价补丁同源）。
+        """
         try:
             df = self._fetch_spot_eastmoney()
             if df is not None and not df.empty:
                 return df
         except Exception as exc:
             logger.warning(f"[RiskStockCollector] eastmoney spot fetch failed: {exc}")
+
+        try:
+            df = self._fetch_spot_sina()
+            if df is not None and not df.empty:
+                return df
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] sina spot fetch failed: {exc}")
 
         import akshare as ak
 
@@ -475,6 +486,81 @@ class RiskStockCollector:
                 rows.append(item)
 
         return pd.DataFrame(rows, columns=["代码", "名称", "涨跌幅"])
+
+    SINA_PAGE_SIZE = 80
+    SINA_MAX_PAGES = 40
+
+    def _fetch_spot_sina(self):
+        """新浪行情中心列表：按涨跌幅排序分页，阈值早停，与东财路径同构。"""
+        import pandas as pd
+        import requests
+
+        session = requests.Session()
+        session.trust_env = False
+
+        rows: List[Dict[str, Any]] = []
+        seen: set = set()
+
+        for item in self._page_spot_sina(session, ascending=False):
+            if item["涨跌幅"] < self.GAIN_POOL_5:
+                break
+            if item["代码"] not in seen:
+                seen.add(item["代码"])
+                rows.append(item)
+
+        for item in self._page_spot_sina(session, ascending=True):
+            if item["涨跌幅"] > -self.CHINEXT_SWING:
+                break
+            if item["代码"] not in seen:
+                seen.add(item["代码"])
+                rows.append(item)
+
+        return pd.DataFrame(rows, columns=["代码", "名称", "涨跌幅"])
+
+    def _page_spot_sina(self, session, ascending: bool):
+        for page in range(1, self.SINA_MAX_PAGES + 1):
+            data = self._fetch_sina_page(session, page=page, ascending=ascending)
+            if not data:
+                return
+            for entry in data:
+                code = str(entry.get("code") or "").strip()
+                name = str(entry.get("name") or "").strip()
+                pct = entry.get("changepercent")
+                try:
+                    pct = float(pct)
+                except (TypeError, ValueError):
+                    continue
+                if not code or not name:
+                    continue
+                # 新浪 hs_a 含北交所（8/4/92 开头），涨幅池只关注沪深 A 股
+                if not self._is_sh_sz_a_share(code):
+                    continue
+                yield {"代码": code, "名称": name, "涨跌幅": pct}
+            if len(data) < self.SINA_PAGE_SIZE:
+                return
+
+    def _fetch_sina_page(self, session, page: int, ascending: bool) -> List[Dict[str, Any]]:
+        url = (
+            "https://vip.stock.finance.sina.com.cn/quotes_service/api/"
+            "json_v2.php/Market_Center.getHQNodeData"
+        )
+        params = {
+            "page": page,
+            "num": self.SINA_PAGE_SIZE,
+            "sort": "changepercent",
+            "asc": 1 if ascending else 0,
+            "node": "hs_a",
+            "symbol": "",
+            "_s_r_a": "page",
+        }
+        headers = {
+            "Referer": "https://finance.sina.com.cn",
+            "User-Agent": "Mozilla/5.0",
+        }
+        resp = session.get(url, params=params, headers=headers, timeout=12)
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else []
 
     def _page_spot(self, session, ascending: bool):
         """按涨跌幅排序逐页产出 {代码, 名称, 涨跌幅}。"""
