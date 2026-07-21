@@ -5,10 +5,12 @@ Collect daily risk stock candidates from public market data sources.
 - 连续涨停/跌停 ≥2 天（东财涨停池/跌停池）
 - 当日涨幅 ≥5% 进 5%涨幅池，≥9% 进 9%涨幅池（全市场快照，回落自动移除）
 - 创业板当日涨跌幅 ≥±15% 进创业板大波动池
-- ST征兆：最近年报业绩预告首亏/续亏，或净资产为负（pb<0），且当前未戴帽
+- ST征兆：最近年报净利润为负且营收低于阈值，或每股净资产为负，且当前未戴帽
+  （科创板上市未盈利企业在实现盈利前，不适用「亏损且营收低于1亿」口径）
 """
 from __future__ import annotations
 
+import math
 import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -276,7 +278,7 @@ class RiskStockCollector:
         omen_by_code: Dict[str, List[str]] = {}
         names_by_code: Dict[str, str] = {}
 
-        # 1) 最近已披露年报：净利润为负且营收低于阈值（交易所退市风险警示口径）
+        # 1) 最近已披露年报：亏损+低营收，或每股净资产为负（交易所退市风险警示口径）
         period, label = self._latest_disclosed_annual_period()
         try:
             df = self._fetch_yjbb(period)
@@ -286,44 +288,63 @@ class RiskStockCollector:
         if df is not None and not df.empty:
             profit_col = "净利润-净利润"
             revenue_col = "营业总收入-营业总收入"
-            if profit_col in df.columns and revenue_col in df.columns:
-                seen: set = set()
-                import math
+            bps_col = "每股净资产"
+            seen: set = set()
 
-                for _, item in df.iterrows():
-                    code = str(item.get("股票代码") or "").strip().zfill(6)
-                    if not code or code in seen:
-                        continue
-                    seen.add(code)
-                    # 业绩报表混有新三板/北交所/老三板，ST 规则只适用沪深 A 股
-                    if not self._is_sh_sz_a_share(code):
-                        continue
+            for _, item in df.iterrows():
+                code = str(item.get("股票代码") or "").strip().zfill(6)
+                if not code or code in seen:
+                    continue
+                seen.add(code)
+                # 业绩报表混有新三板/北交所/老三板，ST 规则只适用沪深 A 股
+                if not self._is_sh_sz_a_share(code):
+                    continue
+
+                name = str(item.get("股票简称") or "").strip()
+                ts_code = to_ts_code(code)
+                if name:
+                    names_by_code.setdefault(ts_code, name)
+
+                # 净资产为负：用年报「每股净资产」，勿用 PB（负净资产时 PB 常为 NaN，旧逻辑会误伤）
+                if bps_col in df.columns:
                     try:
-                        profit = float(item.get(profit_col))
-                        revenue = float(item.get(revenue_col))
+                        bps = float(item.get(bps_col))
                     except (TypeError, ValueError):
-                        continue
-                    # NaN 会让所有比较判 False，必须显式排除，否则缺数据的票全部误入池
-                    if not (math.isfinite(profit) and math.isfinite(revenue)):
-                        continue
-                    if profit >= 0:
-                        continue
-                    threshold = (
-                        self.ST_REVENUE_GROWTH
-                        if code.startswith(("300", "301", "688", "689"))
-                        else self.ST_REVENUE_MAIN
-                    )
-                    if revenue >= threshold:
-                        continue
-                    ts_code = to_ts_code(code)
-                    omen_by_code.setdefault(ts_code, []).append(
-                        f"{label}净利润为负且营收低于 {threshold / 1e8:.0f} 亿（退市风险警示口径）"
-                    )
-                    name = str(item.get("股票简称") or "").strip()
-                    if name:
-                        names_by_code.setdefault(ts_code, name)
+                        bps = float("nan")
+                    if math.isfinite(bps) and bps < 0:
+                        omen_by_code.setdefault(ts_code, []).append(
+                            f"{label}净资产为负（每股净资产 {bps:.4f}）"
+                        )
 
-        # 2) 净资产为负（pb < 0），退市风险警示的直接口径之一
+                if profit_col not in df.columns or revenue_col not in df.columns:
+                    continue
+                try:
+                    profit = float(item.get(profit_col))
+                    revenue = float(item.get(revenue_col))
+                except (TypeError, ValueError):
+                    continue
+                # NaN 会让所有比较判 False，必须显式排除，否则缺数据的票全部误入池
+                if not (math.isfinite(profit) and math.isfinite(revenue)):
+                    continue
+                if profit >= 0:
+                    continue
+                threshold = (
+                    self.ST_REVENUE_GROWTH
+                    if code.startswith(("300", "301", "688", "689"))
+                    else self.ST_REVENUE_MAIN
+                )
+                if revenue >= threshold:
+                    continue
+                # 科创板：上市时未盈利的，实现盈利前不适用本项
+                if code.startswith(("688", "689")) and self._is_star_pre_profit_exempt(
+                    ts_code, name
+                ):
+                    continue
+                omen_by_code.setdefault(ts_code, []).append(
+                    f"{label}净利润为负且营收低于 {threshold / 1e8:.0f} 亿（退市风险警示口径）"
+                )
+
+        # 2) 补充：daily_basic 有限且明确的 PB<0（稀少；NaN 一律忽略）
         try:
             basic_df = self._fetch_daily_basic_with_fallback(trade_date)
             if basic_df is not None and not basic_df.empty and "pb" in basic_df.columns:
@@ -332,17 +353,21 @@ class RiskStockCollector:
                         pb = float(item.get("pb"))
                     except (TypeError, ValueError):
                         continue
-                    if pb >= 0:
+                    if not (math.isfinite(pb) and pb < 0):
                         continue
                     ts_code = str(item.get("ts_code") or "").strip().upper()
                     if not ts_code:
                         continue
-                    omen_by_code.setdefault(ts_code, []).append("净资产为负（PB<0）")
+                    reasons = omen_by_code.setdefault(ts_code, [])
+                    if not any("净资产为负" in r for r in reasons):
+                        reasons.append("净资产为负（PB<0）")
         except Exception as exc:
             logger.warning(f"[RiskStockCollector] daily_basic fetch failed: {exc}")
 
         rows: List[Dict[str, Any]] = []
         for ts_code, reasons in omen_by_code.items():
+            if not reasons:
+                continue
             symbol = ts_code.split(".")[0]
             name = names_by_code.get(ts_code) or name_map.get(symbol, "")
             if not name:
@@ -360,6 +385,46 @@ class RiskStockCollector:
                 }
             )
         return rows
+
+    def _is_star_pre_profit_exempt(self, ts_code: str, name: str = "") -> bool:
+        """科创板上市未盈利企业：实现盈利前，不适用『净利润为负且营收低于1亿』。
+
+        判定：简称带 -U（未盈利上市标记），或历史年报从未出现归母净利润 > 0。
+        """
+        # 未盈利上市标记，如 N泰诺-U
+        if "-U" in (name or "").upper():
+            return True
+
+        try:
+            from services.tushare.client import tushare_client
+
+            tushare_client.ensure_initialized(log_missing_token=False)
+            if not tushare_client.is_available:
+                # 无财务史时：科创板命中亏损+低营收默认按豁免处理，避免把未盈利生物医药误标成 ST 征兆
+                return True
+            income = tushare_client.query(
+                "income",
+                ts_code=ts_code,
+                fields="ts_code,end_date,n_income_attr_p",
+            )
+            if income is None or income.empty:
+                return True
+            annual = income[income["end_date"].astype(str).str.endswith("1231")]
+            if annual.empty:
+                return True
+            for value in annual["n_income_attr_p"].tolist():
+                try:
+                    profit = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(profit) and profit > 0:
+                    return False
+            return True
+        except Exception as exc:
+            logger.warning(
+                f"[RiskStockCollector] star profit history check failed for {ts_code}: {exc}"
+            )
+            return True
 
     @staticmethod
     def _latest_disclosed_annual_period(now: Optional[datetime] = None) -> Tuple[str, str]:
