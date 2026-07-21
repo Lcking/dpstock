@@ -32,13 +32,22 @@ class RiskStockService:
         now = datetime.utcnow().isoformat() + "Z"
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
+            # 替换式刷新：5%/9% 涨幅池等动态池要求「回落自动移除」，
+            # 所以每次刷新以最新快照整体替换当日清单。
+            # 空结果通常意味着数据源故障，此时保留旧数据不做清空。
+            if items:
+                cursor.execute(
+                    "DELETE FROM risk_stock_items WHERE trade_date = ?",
+                    (trade_date,),
+                )
             for item in items:
                 cursor.execute(
                     """
                     INSERT INTO risk_stock_items (
                         trade_date, ts_code, name, market, tags_json, risk_level,
-                        reason, limit_up_days, is_st, source, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        reason, limit_up_days, limit_down_days, pct_chg,
+                        is_st, source, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(trade_date, ts_code)
                     DO UPDATE SET
                         name = excluded.name,
@@ -47,6 +56,8 @@ class RiskStockService:
                         risk_level = excluded.risk_level,
                         reason = excluded.reason,
                         limit_up_days = excluded.limit_up_days,
+                        limit_down_days = excluded.limit_down_days,
+                        pct_chg = excluded.pct_chg,
                         is_st = excluded.is_st,
                         source = excluded.source,
                         updated_at = excluded.updated_at
@@ -60,6 +71,8 @@ class RiskStockService:
                         item["risk_level"],
                         item["reason"],
                         item["limit_up_days"],
+                        item["limit_down_days"],
+                        item["pct_chg"],
                         1 if item["is_st"] else 0,
                         item["source"],
                         now,
@@ -140,6 +153,10 @@ class RiskStockService:
             return None
 
         limit_up_days = int(row.get("limit_up_days") or 0)
+        limit_down_days = int(row.get("limit_down_days") or 0)
+        pct_chg = row.get("pct_chg")
+        pools = [str(pool) for pool in (row.get("pools") or []) if pool]
+        pool_reasons = [str(reason) for reason in (row.get("pool_reasons") or []) if reason]
         is_st = self._is_st_name(name)
         tags = []
         reasons = []
@@ -148,12 +165,25 @@ class RiskStockService:
             tags.append("ST股")
             reasons.append("股票名称包含 ST 风险标识")
 
+        # 需求 1：连续 2 个交易日涨停/跌停 → 高风险
+        if limit_up_days >= 2:
+            tags.append("连续涨停")
+            reasons.append(f"连续涨停 {limit_up_days} 天")
         if limit_up_days >= 3:
             tags.append("三连板")
             tags.append("高度板")
-            reasons.append(f"连续涨停 {limit_up_days} 天")
             if limit_up_days >= 4:
                 tags.append("四连板+")
+
+        if limit_down_days >= 2:
+            tags.append("连续跌停")
+            reasons.append(f"连续跌停 {limit_down_days} 天")
+
+        # 需求 2/3/4：涨幅池 / 创业板大波动 / ST征兆（由 collector 计算，附带原因）
+        for pool in pools:
+            if pool not in tags:
+                tags.append(pool)
+        reasons.extend(pool_reasons)
 
         if not tags:
             return None
@@ -161,7 +191,12 @@ class RiskStockService:
         if is_st and limit_up_days >= 3:
             tags.append("ST+连板")
 
-        risk_level = "high" if is_st or limit_up_days >= 3 else "medium"
+        risk_level = self._resolve_risk_level(
+            is_st=is_st,
+            limit_up_days=limit_up_days,
+            limit_down_days=limit_down_days,
+            tags=tags,
+        )
         return {
             "trade_date": trade_date,
             "ts_code": ts_code,
@@ -171,9 +206,27 @@ class RiskStockService:
             "risk_level": risk_level,
             "reason": "；".join(reasons),
             "limit_up_days": limit_up_days,
+            "limit_down_days": limit_down_days,
+            "pct_chg": round(float(pct_chg), 2) if pct_chg is not None else None,
             "is_st": is_st,
             "source": source,
         }
+
+    @staticmethod
+    def _resolve_risk_level(
+        is_st: bool,
+        limit_up_days: int,
+        limit_down_days: int,
+        tags: List[str],
+    ) -> str:
+        # 高风险：ST 股 / 连续 2 日以上涨停或跌停
+        if is_st or limit_up_days >= 2 or limit_down_days >= 2:
+            return "high"
+        # 中风险：9% 涨幅档 / 创业板大波动 / ST 征兆
+        if any(tag in tags for tag in ("9%涨幅池", "创业板大波动", "ST征兆")):
+            return "medium"
+        # 低风险：仅 5% 涨幅档等观察性标签
+        return "low"
 
     def _is_st_name(self, name: str) -> bool:
         normalized = name.upper().replace("＊", "*")

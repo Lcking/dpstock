@@ -38,9 +38,25 @@ class RiskStockScheduler:
                 name="Refresh Risk Stock List",
                 replace_existing=True,
             )
+            # 盘中滚动刷新：5%/9% 涨幅池、创业板大波动需要「达标进入、回落移除」，
+            # 交易时段每 15 分钟重算一次（收盘后由 16:10 任务定稿）。
+            cls._scheduler.add_job(
+                cls._run_refresh_job,
+                trigger=CronTrigger(
+                    day_of_week="mon-fri",
+                    hour="9-15",
+                    minute="*/15",
+                    timezone="Asia/Shanghai",
+                ),
+                id="risk_stock_intraday_job",
+                name="Intraday Risk Stock Pools Refresh",
+                replace_existing=True,
+            )
             cls._scheduler.start()
             cls._running = True
-            logger.info("[RiskStockScheduler] Started - daily refresh at 16:10 Asia/Shanghai")
+            logger.info(
+                "[RiskStockScheduler] Started - daily 16:10 + intraday */15min 9-15h Asia/Shanghai"
+            )
         except ImportError:
             logger.warning("[RiskStockScheduler] APScheduler not installed, using timer fallback")
             cls._start_simple_timer()

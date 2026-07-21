@@ -47,6 +47,21 @@ class WatchlistRiskAlertService:
                 "emails_failed": 0,
             }
 
+        # 仅对中/高风险生成自选提醒；5%涨幅池这类低风险观察标签不打扰用户
+        risk_items = [
+            item for item in risk_items
+            if str(item.get("risk_level") or "") in ("high", "medium")
+        ]
+        if not risk_items:
+            return {
+                "trade_date": effective_date,
+                "created": 0,
+                "matched_users": 0,
+                "emails_sent": 0,
+                "emails_skipped": 0,
+                "emails_failed": 0,
+            }
+
         risk_by_code = {item["ts_code"]: item for item in risk_items}
         codes = list(risk_by_code.keys())
         placeholders = ",".join("?" for _ in codes)

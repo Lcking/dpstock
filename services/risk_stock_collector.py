@@ -1,8 +1,15 @@
 """
 Collect daily risk stock candidates from public market data sources.
+
+风险池口径：
+- 连续涨停/跌停 ≥2 天（东财涨停池/跌停池）
+- 当日涨幅 ≥5% 进 5%涨幅池，≥9% 进 9%涨幅池（全市场快照，回落自动移除）
+- 创业板当日涨跌幅 ≥±15% 进创业板大波动池
+- ST征兆：最近年报业绩预告首亏/续亏，或净资产为负（pb<0），且当前未戴帽
 """
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -10,6 +17,10 @@ from services.search_snapshot_service import SearchSnapshotService
 from utils.logger import get_logger
 
 logger = get_logger()
+
+# ST征兆当日缓存：财务口径盘中不变，避免盘中每 15 分钟重复打 tushare
+_st_omen_cache: Dict[str, List[Dict[str, Any]]] = {}
+_st_omen_lock = threading.Lock()
 
 
 def to_ts_code(code: str) -> str:
@@ -19,8 +30,20 @@ def to_ts_code(code: str) -> str:
     return f"{normalized}.SZ"
 
 
+def is_chinext(code: str) -> bool:
+    """创业板：300/301 开头。"""
+    normalized = str(code).strip().zfill(6)
+    return normalized.startswith(("300", "301"))
+
+
 class RiskStockCollector:
-    """Build risk-stock source rows from A-share snapshot and limit-up pool."""
+    """Build risk-stock source rows from A-share snapshot, limit pools and spot quotes."""
+
+    # 连板/连续跌停进入风险池的门槛（需求：连续 2 日即高风险）
+    MIN_CONSECUTIVE_LIMIT_DAYS = 2
+    GAIN_POOL_5 = 5.0
+    GAIN_POOL_9 = 9.0
+    CHINEXT_SWING = 15.0
 
     def __init__(self, snapshot_service: Optional[SearchSnapshotService] = None):
         self.snapshot_service = snapshot_service or SearchSnapshotService()
@@ -29,26 +52,55 @@ class RiskStockCollector:
         effective_date = trade_date or self._resolve_trade_date()
         rows_by_code: Dict[str, Dict[str, Any]] = {}
 
-        for row in self._collect_st_rows():
-            rows_by_code[row["ts_code"]] = row
-
-        for row in self._collect_limit_up_rows(effective_date):
+        def merge(row: Dict[str, Any]) -> None:
             existing = rows_by_code.get(row["ts_code"])
-            if existing:
-                existing["limit_up_days"] = max(
-                    int(existing.get("limit_up_days") or 0),
-                    int(row.get("limit_up_days") or 0),
-                )
-                if row.get("market") and not existing.get("market"):
-                    existing["market"] = row["market"]
-            else:
+            if existing is None:
+                row.setdefault("limit_up_days", 0)
+                row.setdefault("limit_down_days", 0)
+                row.setdefault("pools", [])
+                row.setdefault("pool_reasons", [])
                 rows_by_code[row["ts_code"]] = row
+                return
+            existing["limit_up_days"] = max(
+                int(existing.get("limit_up_days") or 0),
+                int(row.get("limit_up_days") or 0),
+            )
+            existing["limit_down_days"] = max(
+                int(existing.get("limit_down_days") or 0),
+                int(row.get("limit_down_days") or 0),
+            )
+            if row.get("pct_chg") is not None:
+                existing["pct_chg"] = row["pct_chg"]
+            if row.get("market") and not existing.get("market"):
+                existing["market"] = row["market"]
+            for pool in row.get("pools") or []:
+                if pool not in (existing.get("pools") or []):
+                    existing.setdefault("pools", []).append(pool)
+            for reason in row.get("pool_reasons") or []:
+                if reason not in (existing.get("pool_reasons") or []):
+                    existing.setdefault("pool_reasons", []).append(reason)
+
+        for row in self._collect_st_rows():
+            merge(row)
+        for row in self._collect_limit_up_rows(effective_date):
+            merge(row)
+        for row in self._collect_limit_down_rows(effective_date):
+            merge(row)
+        for row in self._collect_spot_pool_rows():
+            merge(row)
+        for row in self._collect_st_omen_rows(effective_date):
+            merge(row)
 
         rows = list(rows_by_code.values())
         logger.info(
             f"[RiskStockCollector] trade_date={effective_date} rows={len(rows)} "
-            f"(st={sum(1 for row in rows if self._is_st_name(row.get('name', '')))}, "
-            f"board3+={sum(1 for row in rows if int(row.get('limit_up_days') or 0) >= 3)})"
+            f"(st={sum(1 for r in rows if self._is_st_name(r.get('name', '')))}, "
+            f"board2+={sum(1 for r in rows if int(r.get('limit_up_days') or 0) >= 2)}, "
+            f"down2+={sum(1 for r in rows if int(r.get('limit_down_days') or 0) >= 2)}, "
+            f"gain5={sum(1 for r in rows if '5%涨幅池' in (r.get('pools') or []))}, "
+            f"gain9={sum(1 for r in rows if '9%涨幅池' in (r.get('pools') or []))}, "
+            f"cx15={sum(1 for r in rows if '创业板大波动' in (r.get('pools') or []))}, "
+            f"st_omen={sum(1 for r in rows if 'ST征兆' in (r.get('pools') or []))})"
         )
         return effective_date, rows
 
@@ -63,6 +115,10 @@ class RiskStockCollector:
             if df is not None and not df.empty:
                 return candidate
         return datetime.now().strftime("%Y%m%d")
+
+    # ------------------------------------------------------------------
+    # ST 名称池（已戴帽）
+    # ------------------------------------------------------------------
 
     def _collect_st_rows(self) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
@@ -81,6 +137,10 @@ class RiskStockCollector:
             )
         return rows
 
+    # ------------------------------------------------------------------
+    # 连续涨停 / 连续跌停
+    # ------------------------------------------------------------------
+
     def _collect_limit_up_rows(self, trade_date: str) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         try:
@@ -94,7 +154,7 @@ class RiskStockCollector:
 
         for _, item in df.iterrows():
             limit_up_days = int(item.get("连板数") or 0)
-            if limit_up_days < 3:
+            if limit_up_days < self.MIN_CONSECUTIVE_LIMIT_DAYS:
                 continue
             code = str(item.get("代码") or "").strip()
             name = str(item.get("名称") or "").strip()
@@ -110,16 +170,273 @@ class RiskStockCollector:
             )
         return rows
 
+    def _collect_limit_down_rows(self, trade_date: str) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        try:
+            df = self._fetch_dt_pool(trade_date)
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] failed to load dt pool for {trade_date}: {exc}")
+            return rows
+
+        if df is None or df.empty:
+            return rows
+
+        for _, item in df.iterrows():
+            limit_down_days = int(item.get("连续跌停") or 0)
+            if limit_down_days < self.MIN_CONSECUTIVE_LIMIT_DAYS:
+                continue
+            code = str(item.get("代码") or "").strip()
+            name = str(item.get("名称") or "").strip()
+            if not code or not name:
+                continue
+            rows.append(
+                {
+                    "ts_code": to_ts_code(code),
+                    "name": name,
+                    "market": str(item.get("所属行业") or self._infer_market(code)),
+                    "limit_down_days": limit_down_days,
+                }
+            )
+        return rows
+
+    # ------------------------------------------------------------------
+    # 当日涨幅池（5% / 9%）+ 创业板大波动（回落自动移除：每次刷新重算）
+    # ------------------------------------------------------------------
+
+    def _collect_spot_pool_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        try:
+            df = self._fetch_spot()
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] failed to load spot quotes: {exc}")
+            return rows
+
+        if df is None or df.empty:
+            return rows
+
+        for _, item in df.iterrows():
+            code = str(item.get("代码") or "").strip()
+            name = str(item.get("名称") or "").strip()
+            if not code or not name:
+                continue
+            try:
+                pct = float(item.get("涨跌幅"))
+            except (TypeError, ValueError):
+                continue
+
+            pools: List[str] = []
+            reasons: List[str] = []
+            if is_chinext(code) and abs(pct) >= self.CHINEXT_SWING:
+                pools.append("创业板大波动")
+                reasons.append(f"创业板当日涨跌幅 {pct:+.2f}%，波动达 ±{self.CHINEXT_SWING:.0f}%")
+            if pct >= self.GAIN_POOL_9:
+                pools.append("9%涨幅池")
+                reasons.append(f"当日涨幅 {pct:.2f}%，达到 9% 档")
+            elif pct >= self.GAIN_POOL_5:
+                pools.append("5%涨幅池")
+                reasons.append(f"当日涨幅 {pct:.2f}%，达到 5% 档")
+
+            if not pools:
+                continue
+            rows.append(
+                {
+                    "ts_code": to_ts_code(code),
+                    "name": name,
+                    "market": self._infer_market(code),
+                    "pct_chg": round(pct, 2),
+                    "pools": pools,
+                    "pool_reasons": reasons,
+                }
+            )
+        return rows
+
+    # ------------------------------------------------------------------
+    # ST 征兆（年报预亏 / 净资产为负，未戴帽）
+    # ------------------------------------------------------------------
+
+    def _collect_st_omen_rows(self, trade_date: str) -> List[Dict[str, Any]]:
+        cache_key = str(trade_date)[:8]
+        with _st_omen_lock:
+            cached = _st_omen_cache.get(cache_key)
+        if cached is not None:
+            return [dict(row) for row in cached]
+
+        rows = self._build_st_omen_rows(trade_date)
+        with _st_omen_lock:
+            _st_omen_cache.clear()
+            _st_omen_cache[cache_key] = [dict(row) for row in rows]
+        return rows
+
+    # 退市风险警示（*ST）财务口径的营收阈值：主板 3 亿，创业板/科创板 1 亿
+    ST_REVENUE_MAIN = 3e8
+    ST_REVENUE_GROWTH = 1e8
+
+    def _build_st_omen_rows(self, trade_date: str) -> List[Dict[str, Any]]:
+        name_map = self._build_name_map()
+        omen_by_code: Dict[str, List[str]] = {}
+        names_by_code: Dict[str, str] = {}
+
+        # 1) 最近已披露年报：净利润为负且营收低于阈值（交易所退市风险警示口径）
+        period, label = self._latest_disclosed_annual_period()
+        try:
+            df = self._fetch_yjbb(period)
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] yjbb fetch failed for {period}: {exc}")
+            df = None
+        if df is not None and not df.empty:
+            profit_col = "净利润-净利润"
+            revenue_col = "营业总收入-营业总收入"
+            if profit_col in df.columns and revenue_col in df.columns:
+                seen: set = set()
+                import math
+
+                for _, item in df.iterrows():
+                    code = str(item.get("股票代码") or "").strip().zfill(6)
+                    if not code or code in seen:
+                        continue
+                    seen.add(code)
+                    # 业绩报表混有新三板/北交所/老三板，ST 规则只适用沪深 A 股
+                    if not self._is_sh_sz_a_share(code):
+                        continue
+                    try:
+                        profit = float(item.get(profit_col))
+                        revenue = float(item.get(revenue_col))
+                    except (TypeError, ValueError):
+                        continue
+                    # NaN 会让所有比较判 False，必须显式排除，否则缺数据的票全部误入池
+                    if not (math.isfinite(profit) and math.isfinite(revenue)):
+                        continue
+                    if profit >= 0:
+                        continue
+                    threshold = (
+                        self.ST_REVENUE_GROWTH
+                        if code.startswith(("300", "301", "688", "689"))
+                        else self.ST_REVENUE_MAIN
+                    )
+                    if revenue >= threshold:
+                        continue
+                    ts_code = to_ts_code(code)
+                    omen_by_code.setdefault(ts_code, []).append(
+                        f"{label}净利润为负且营收低于 {threshold / 1e8:.0f} 亿（退市风险警示口径）"
+                    )
+                    name = str(item.get("股票简称") or "").strip()
+                    if name:
+                        names_by_code.setdefault(ts_code, name)
+
+        # 2) 净资产为负（pb < 0），退市风险警示的直接口径之一
+        try:
+            basic_df = self._fetch_daily_basic_with_fallback(trade_date)
+            if basic_df is not None and not basic_df.empty and "pb" in basic_df.columns:
+                for _, item in basic_df.iterrows():
+                    try:
+                        pb = float(item.get("pb"))
+                    except (TypeError, ValueError):
+                        continue
+                    if pb >= 0:
+                        continue
+                    ts_code = str(item.get("ts_code") or "").strip().upper()
+                    if not ts_code:
+                        continue
+                    omen_by_code.setdefault(ts_code, []).append("净资产为负（PB<0）")
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] daily_basic fetch failed: {exc}")
+
+        rows: List[Dict[str, Any]] = []
+        for ts_code, reasons in omen_by_code.items():
+            symbol = ts_code.split(".")[0]
+            name = names_by_code.get(ts_code) or name_map.get(symbol, "")
+            if not name:
+                continue
+            # 已戴帽的归 ST股池，不重复进征兆池
+            if self._is_st_name(name):
+                continue
+            rows.append(
+                {
+                    "ts_code": ts_code,
+                    "name": name,
+                    "market": self._infer_market(symbol),
+                    "pools": ["ST征兆"],
+                    "pool_reasons": reasons,
+                }
+            )
+        return rows
+
+    @staticmethod
+    def _latest_disclosed_annual_period(now: Optional[datetime] = None) -> Tuple[str, str]:
+        """最近已完整披露的年报期：年报 4 月底截止，5 月起用上一年，否则再往前一年。"""
+        now = now or datetime.now()
+        year = now.year - 1 if now.month >= 5 else now.year - 2
+        return f"{year}1231", f"{year}年报"
+
+    @staticmethod
+    def _is_sh_sz_a_share(code: str) -> bool:
+        """沪深 A 股（主板/创业板/科创板），排除新三板、北交所、老三板等。"""
+        normalized = str(code).strip().zfill(6)
+        return normalized.startswith(("600", "601", "603", "605", "000", "001", "002", "003", "300", "301", "688", "689"))
+
+    def _fetch_daily_basic_with_fallback(self, trade_date: str):
+        """当日盘中还没有 daily_basic 时回退最近一个有数据的交易日。"""
+        from services.tushare.client import tushare_client
+
+        tushare_client.ensure_initialized(log_missing_token=False)
+        if not tushare_client.is_available:
+            return None
+
+        base = datetime.strptime(str(trade_date)[:8], "%Y%m%d")
+        for offset in range(0, 8):
+            candidate = (base - timedelta(days=offset)).strftime("%Y%m%d")
+            df = tushare_client.query(
+                "daily_basic",
+                trade_date=candidate,
+                fields="ts_code,pb",
+            )
+            if df is not None and not df.empty:
+                return df
+        return None
+
+    def _build_name_map(self) -> Dict[str, str]:
+        name_map: Dict[str, str] = {}
+        try:
+            for item in self.snapshot_service._load_snapshot("A"):
+                symbol = str(item.get("symbol") or "").strip()
+                name = str(item.get("name") or "").strip()
+                if symbol and name:
+                    name_map[symbol] = name
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] name map build failed: {exc}")
+        return name_map
+
+    # ------------------------------------------------------------------
+    # 数据源封装（便于测试 monkeypatch）
+    # ------------------------------------------------------------------
+
     def _fetch_zt_pool(self, trade_date: str):
         import akshare as ak
 
         return ak.stock_zt_pool_em(date=trade_date)
 
+    def _fetch_dt_pool(self, trade_date: str):
+        import akshare as ak
+
+        # 东财「跌停股池」，列含 代码/名称/连续跌停/所属行业
+        return ak.stock_zt_pool_dtgc_em(date=trade_date)
+
+    def _fetch_spot(self):
+        import akshare as ak
+
+        return ak.stock_zh_a_spot_em()
+
+    def _fetch_yjbb(self, period: str):
+        import akshare as ak
+
+        # 东财「业绩报表」（实际披露值），列含 股票代码/股票简称/净利润-净利润/营业总收入-营业总收入
+        return ak.stock_yjbb_em(date=period)
+
     def _infer_market(self, code: str) -> str:
         normalized = str(code).strip().zfill(6)
         if normalized.startswith("688"):
             return "科创板"
-        if normalized.startswith("300"):
+        if normalized.startswith(("300", "301")):
             return "创业板"
         if normalized.startswith(("8", "4")):
             return "北交所"

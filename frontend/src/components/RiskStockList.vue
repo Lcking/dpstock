@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1>风险股清单</h1>
-        <p>每日收盘后更新，聚焦 ST 股与三连板及以上高波动标的。</p>
+        <p>交易时段每 15 分钟滚动更新：ST 股、连续涨停/跌停、5%/9% 涨幅池、创业板大波动与 ST 征兆。涨幅池达标进入、回落自动移除。</p>
       </div>
       <div class="header-actions">
         <n-tag type="warning" size="small" :bordered="false">
@@ -98,9 +98,14 @@ const message = useMessage()
 const tagOptions = [
   { label: '全部', value: '' },
   { label: 'ST股', value: 'ST股' },
+  { label: 'ST征兆', value: 'ST征兆' },
+  { label: '连续涨停', value: '连续涨停' },
+  { label: '连续跌停', value: '连续跌停' },
   { label: '三连板', value: '三连板' },
   { label: '高度板', value: '高度板' },
-  { label: '四连板+', value: '四连板+' },
+  { label: '5%涨幅池', value: '5%涨幅池' },
+  { label: '9%涨幅池', value: '9%涨幅池' },
+  { label: '创业板大波动', value: '创业板大波动' },
 ]
 
 const items = computed(() => data.value?.items || [])
@@ -135,10 +140,25 @@ const columns: DataTableColumns<RiskStockItem> = [
     ))
   },
   {
-    title: '连板天数',
+    title: '连板/连跌',
     key: 'limit_up_days',
+    width: 100,
+    render: (row) => {
+      if (row.limit_up_days) return `涨停 ${row.limit_up_days} 天`
+      if (row.limit_down_days) return `跌停 ${row.limit_down_days} 天`
+      return '-'
+    }
+  },
+  {
+    title: '当日涨跌',
+    key: 'pct_chg',
     width: 90,
-    render: (row) => row.limit_up_days ? `${row.limit_up_days} 天` : '-'
+    render: (row) => {
+      if (row.pct_chg === null || row.pct_chg === undefined) return '-'
+      const value = Number(row.pct_chg)
+      const cls = value > 0 ? 'pct-up' : value < 0 ? 'pct-down' : ''
+      return h('span', { class: cls }, `${value > 0 ? '+' : ''}${value.toFixed(2)}%`)
+    }
   },
   {
     title: '风险等级',
@@ -160,8 +180,9 @@ const columns: DataTableColumns<RiskStockItem> = [
 ]
 
 function tagType(tag: string): 'error' | 'warning' | 'info' {
-  if (tag.includes('ST')) return 'error'
-  if (tag.includes('连板') || tag.includes('高度')) return 'warning'
+  if (tag === 'ST征兆') return 'warning'
+  if (tag.includes('ST') || tag.includes('跌停')) return 'error'
+  if (tag.includes('连板') || tag.includes('高度') || tag.includes('涨停') || tag.includes('大波动')) return 'warning'
   return 'info'
 }
 
@@ -215,9 +236,9 @@ async function exportRiskStocks(format: 'csv' | 'xlsx') {
 onMounted(() => {
   applyPageSeo({
     title: '风险股清单 | Agu AI',
-    description: '查看每日收盘后更新的 ST 股、三连板及以上风险股清单。',
+    description: '盘中滚动更新的风险股清单：ST股、ST征兆、连续涨停/跌停、5%/9%涨幅池、创业板大波动。',
     canonicalPath: '/risk-stocks',
-    keywords: '风险股清单,ST股,三连板,高度板,A股风险提示',
+    keywords: '风险股清单,ST股,ST征兆,连续涨停,连续跌停,涨幅池,创业板大波动,A股风险提示',
   })
   loadRiskStocks()
 })
@@ -325,5 +346,15 @@ onMounted(() => {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.pct-up {
+  color: #d03050;
+  font-weight: 600;
+}
+
+.pct-down {
+  color: #18a058;
+  font-weight: 600;
 }
 </style>

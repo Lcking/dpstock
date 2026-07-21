@@ -23,6 +23,8 @@ EXPORT_COLUMNS: List[Tuple[str, str]] = [
     ("market", "市场/行业"),
     ("tags", "风险标签"),
     ("limit_up_days", "连板天数"),
+    ("limit_down_days", "连续跌停天数"),
+    ("pct_chg", "当日涨跌幅%"),
     ("risk_level", "风险等级"),
     ("reason", "原因"),
 ]
@@ -45,6 +47,7 @@ def build_export_rows(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if tags is None:
             tags = _parse_tags(item.get("tags_json"))
         risk_level = str(item.get("risk_level") or "")
+        pct_chg = item.get("pct_chg")
         rows.append(
             {
                 "trade_date": item.get("trade_date") or "",
@@ -53,6 +56,8 @@ def build_export_rows(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "market": item.get("market") or "",
                 "tags": "、".join(tags),
                 "limit_up_days": int(item.get("limit_up_days") or 0),
+                "limit_down_days": int(item.get("limit_down_days") or 0),
+                "pct_chg": round(float(pct_chg), 2) if pct_chg is not None else "",
                 "risk_level": RISK_LEVEL_LABELS.get(risk_level, risk_level),
                 "reason": item.get("reason") or "",
             }

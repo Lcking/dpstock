@@ -9,6 +9,8 @@ export interface RiskStockItem {
   risk_level: 'high' | 'medium' | 'low'
   reason: string
   limit_up_days: number
+  limit_down_days?: number
+  pct_chg?: number | null
   is_st: number
   source?: string
   created_at?: string
