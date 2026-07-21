@@ -86,7 +86,7 @@ class RiskStockCollector:
             merge(row)
         for row in self._collect_limit_down_rows(effective_date):
             merge(row)
-        for row in self._collect_spot_pool_rows():
+        for row in self._collect_spot_pool_rows(effective_date):
             merge(row)
         for row in self._collect_st_omen_rows(effective_date):
             merge(row)
@@ -203,10 +203,10 @@ class RiskStockCollector:
     # 当日涨幅池（5% / 9%）+ 创业板大波动（回落自动移除：每次刷新重算）
     # ------------------------------------------------------------------
 
-    def _collect_spot_pool_rows(self) -> List[Dict[str, Any]]:
+    def _collect_spot_pool_rows(self, trade_date: Optional[str] = None) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         try:
-            df = self._fetch_spot()
+            df = self._fetch_spot(trade_date)
         except Exception as exc:
             logger.warning(f"[RiskStockCollector] failed to load spot quotes: {exc}")
             return rows
@@ -433,11 +433,14 @@ class RiskStockCollector:
     SPOT_PAGE_SIZE = 100
     SPOT_MAX_PAGES = 40
 
-    def _fetch_spot(self):
+    def _fetch_spot(self, trade_date: Optional[str] = None):
         """全市场涨跌幅快照。
 
-        东财 → 新浪 → akshare 三级回退：服务器（海外 IP）对东财 push2 系列
-        经常被拒连，而新浪行情从服务器一直可用（实时价补丁同源）。
+        东财 → 新浪 → tushare daily → akshare 四级回退：
+        - 服务器（海外 IP）对东财 push2 系列经常被拒连
+        - 新浪行情从服务器一直可用（实时价补丁同源），盘中主力兜底
+        - tushare daily 是积分接口、最稳，但只有收盘结算后才有当日数据，
+          用于 16:10 定稿任务的兜底（盘中返回空会自然跳过）
         """
         try:
             df = self._fetch_spot_eastmoney()
@@ -453,9 +456,52 @@ class RiskStockCollector:
         except Exception as exc:
             logger.warning(f"[RiskStockCollector] sina spot fetch failed: {exc}")
 
+        try:
+            df = self._fetch_spot_tushare(trade_date)
+            if df is not None and not df.empty:
+                return df
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] tushare spot fetch failed: {exc}")
+
         import akshare as ak
 
         return ak.stock_zh_a_spot_em()
+
+    def _fetch_spot_tushare(self, trade_date: Optional[str] = None):
+        """tushare pro.daily 全市场单日行情（收盘结算后可用）。"""
+        import pandas as pd
+
+        from services.tushare.client import tushare_client
+
+        tushare_client.ensure_initialized(log_missing_token=False)
+        if not tushare_client.is_available:
+            return None
+
+        effective = str(trade_date or datetime.now().strftime("%Y%m%d"))[:8]
+        df = tushare_client.query(
+            "daily",
+            trade_date=effective,
+            fields="ts_code,pct_chg",
+        )
+        if df is None or df.empty:
+            return None
+
+        name_map = self._build_name_map()
+        rows: List[Dict[str, Any]] = []
+        for _, item in df.iterrows():
+            ts_code = str(item.get("ts_code") or "").strip().upper()
+            symbol = ts_code.split(".")[0]
+            if not symbol or not self._is_sh_sz_a_share(symbol):
+                continue
+            try:
+                pct = float(item.get("pct_chg"))
+            except (TypeError, ValueError):
+                continue
+            # 快照名称缺失时用代码兜底，不让 tushare 兜底链依赖快照健康度
+            name = name_map.get(symbol, "") or symbol
+            rows.append({"代码": symbol, "名称": name, "涨跌幅": round(pct, 2)})
+
+        return pd.DataFrame(rows, columns=["代码", "名称", "涨跌幅"])
 
     def _fetch_spot_eastmoney(self):
         import pandas as pd

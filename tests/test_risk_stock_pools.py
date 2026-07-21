@@ -180,7 +180,7 @@ def _spot_df():
 
 def test_collector_builds_spot_pools(monkeypatch):
     collector = RiskStockCollector.__new__(RiskStockCollector)
-    monkeypatch.setattr(RiskStockCollector, "_fetch_spot", lambda self: _spot_df())
+    monkeypatch.setattr(RiskStockCollector, "_fetch_spot", lambda self, d=None: _spot_df())
 
     rows = collector._collect_spot_pool_rows()
     by_code = {row["ts_code"]: row for row in rows}
@@ -306,12 +306,63 @@ def test_spot_falls_back_to_sina_when_eastmoney_fails(monkeypatch):
     assert "830001" not in codes  # 北交所过滤
 
     # 走标准入口验证池子归属
-    monkeypatch.setattr(RiskStockCollector, "_fetch_spot", lambda self: df)
+    monkeypatch.setattr(RiskStockCollector, "_fetch_spot", lambda self, d=None: df)
     pool_rows = collector._collect_spot_pool_rows()
     pools = {row["ts_code"]: row["pools"] for row in pool_rows}
     assert pools["600200.SH"] == ["9%涨幅池"]
     assert pools["600100.SH"] == ["5%涨幅池"]
     assert "创业板大波动" in pools["301400.SZ"]
+
+
+def test_spot_falls_back_to_tushare_daily_when_web_sources_fail(monkeypatch):
+    """东财+新浪都失败时，收盘后用 tushare daily 兜底（积分接口，最稳）。"""
+    daily_df = pd.DataFrame(
+        [
+            {"ts_code": "600200.SH", "pct_chg": 9.44},
+            {"ts_code": "600100.SH", "pct_chg": 5.61},
+            {"ts_code": "301400.SZ", "pct_chg": -15.33},
+            {"ts_code": "000500.SZ", "pct_chg": 2.1},
+            {"ts_code": "830001.BJ", "pct_chg": 9.9},  # 北交所过滤
+        ]
+    )
+
+    class FakeTushare:
+        is_available = True
+
+        def ensure_initialized(self, log_missing_token=True):
+            return None
+
+        def query(self, api, **kwargs):
+            assert api == "daily"
+            assert kwargs.get("trade_date") == "20260721"
+            return daily_df
+
+    def boom(self, *args, **kwargs):
+        raise ConnectionError("web source down")
+
+    monkeypatch.setattr(RiskStockCollector, "_fetch_spot_eastmoney", boom)
+    monkeypatch.setattr(RiskStockCollector, "_fetch_spot_sina", boom)
+    monkeypatch.setattr("services.tushare.client.tushare_client", FakeTushare())
+    monkeypatch.setattr(RiskStockCollector, "_build_name_map", lambda self: {"600200": "涨9示例"})
+
+    collector = RiskStockCollector.__new__(RiskStockCollector)
+    df = collector._fetch_spot("20260721")
+
+    codes = set(df["代码"])
+    assert "830001" not in codes
+    by_code = df.set_index("代码")
+    assert float(by_code.loc["600200", "涨跌幅"]) == 9.44
+    assert by_code.loc["600200", "名称"] == "涨9示例"
+    # 快照缺名时用代码兜底，不丢数据
+    assert by_code.loc["600100", "名称"] == "600100"
+
+    monkeypatch.setattr(RiskStockCollector, "_fetch_spot", lambda self, d=None: df)
+    pool_rows = collector._collect_spot_pool_rows("20260721")
+    pools = {row["ts_code"]: row["pools"] for row in pool_rows}
+    assert pools["600200.SH"] == ["9%涨幅池"]
+    assert pools["600100.SH"] == ["5%涨幅池"]
+    assert "创业板大波动" in pools["301400.SZ"]
+    assert "000500.SZ" not in pools
 
 
 def test_is_chinext():
