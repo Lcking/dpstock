@@ -79,16 +79,17 @@ class ArticleSeoService:
         body_html = self.render_article_body(article, description)
         faq_entries = self._build_faq_entries(article, description, self._parse_article_content(article.get("content") or ""))
         json_ld = self.build_json_ld(article, description)
+        # 转义 <，避免正文里的 MA5<MA20 等在 </script> 解析边界上干扰 HTML
         json_ld_script = (
             f'\n<script type="application/ld+json">\n'
-            f"{json.dumps(json_ld, ensure_ascii=False, indent=2)}\n"
+            f"{self._dumps_json_ld(json_ld)}\n"
             f"</script>\n"
         )
         if faq_entries:
             faq_json_ld = self._build_faq_json_ld(faq_entries)
             json_ld_script += (
                 f'\n<script type="application/ld+json">\n'
-                f"{json.dumps(faq_json_ld, ensure_ascii=False, indent=2)}\n"
+                f"{self._dumps_json_ld(faq_json_ld)}\n"
                 f"</script>\n"
             )
 
@@ -289,3 +290,8 @@ class ArticleSeoService:
             return parsed if isinstance(parsed, dict) else None
         except json.JSONDecodeError:
             return None
+
+    @staticmethod
+    def _dumps_json_ld(payload: Dict[str, Any]) -> str:
+        raw = json.dumps(payload, ensure_ascii=False, indent=2)
+        return raw.replace("<", "\\u003c")

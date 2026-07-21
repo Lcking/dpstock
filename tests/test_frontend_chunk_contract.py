@@ -23,15 +23,28 @@ def test_chart_modules_use_lazy_echarts_loader():
         assert "echarts/charts" not in text
 
 
-def test_article_detail_uses_async_chart_module():
+def test_article_detail_sync_imports_chart_keeps_echarts_lazy():
+    """文章页图表 SFC 同步引入，避免 Vite 异步 CSS preload 失败触发整页刷新弹窗。"""
     repo_root = Path(__file__).resolve().parents[1]
     text = (repo_root / "frontend/src/components/ArticleDetail.vue").read_text(encoding="utf-8")
 
-    assert "defineAsyncComponent" in text
-    assert "ArticleKlineChartAsync" in text
-    assert "@/components/charts/ArticleKlineChart.vue" in text
+    assert "import ArticleKlineChart from '@/components/charts/ArticleKlineChart.vue'" in text
+    assert "defineAsyncComponent" not in text
+    assert "ArticleKlineChartAsync" not in text
     assert "echarts/core" not in text
     assert "initECharts" not in text
+    assert "echarts/charts" not in text
+
+
+def test_runtime_recovery_ignores_css_preload_errors():
+    repo_root = Path(__file__).resolve().parents[1]
+    text = (repo_root / "frontend/src/utils/runtimeRecovery.ts").read_text(encoding="utf-8")
+
+    assert "isCssPreloadError" in text
+    assert "Unable to preload CSS" in text
+    assert "vite:preloadError" in text
+    assert "CSS preload failed (ignored)" in text
+    assert "isChunkLoadError" in text
 
 
 def test_vite_manual_chunks_has_ui_and_echarts_split():

@@ -16,14 +16,19 @@ function getErrorMessage(error: unknown): string {
   return String(error ?? '')
 }
 
+/** CSS preload 失败不该整页弹窗：Vite 会把它和 JS chunk 绑在一起抛出，但正文通常仍可用。 */
+export function isCssPreloadError(error: unknown): boolean {
+  return /Unable to preload CSS/i.test(getErrorMessage(error))
+}
+
 export function isChunkLoadError(error: unknown): boolean {
   const msg = getErrorMessage(error)
+  if (isCssPreloadError(error)) return false
   return [
     /Failed to fetch dynamically imported module/i,
     /Importing a module script failed/i,
     /Loading chunk [\w-]+ failed/i,
     /ChunkLoadError/i,
-    /Unable to preload CSS/i,
   ].some((pattern) => pattern.test(msg))
 }
 
@@ -58,6 +63,12 @@ function showRecoveryDialog() {
 }
 
 export function handleRuntimeError(error: unknown, context = 'runtime') {
+  // CSS preload 失败：记录即可，避免误伤文章页等已渲染内容
+  if (isCssPreloadError(error)) {
+    console.warn('[RuntimeRecovery] CSS preload failed (ignored):', getErrorMessage(error))
+    return
+  }
+
   if (isChunkLoadError(error)) {
     const recovered = reloadOncePerPath('页面资源已更新，正在为你自动刷新…')
     if (!recovered) {
@@ -83,6 +94,24 @@ export function installRuntimeRecovery(app: App, router: Router) {
     handleRuntimeError(error, 'router')
   })
 
+  // Vite 动态 import / CSS preload 失败时优先走这里；preventDefault 可阻止二次抛出
+  window.addEventListener('vite:preloadError', ((event: Event) => {
+    const preloadEvent = event as Event & { payload?: unknown; preventDefault: () => void }
+    const payload = preloadEvent.payload
+    console.error('[RuntimeRecovery][VitePreloadError]', payload)
+
+    if (isCssPreloadError(payload)) {
+      preloadEvent.preventDefault()
+      handleRuntimeError(payload, 'vite-css')
+      return
+    }
+
+    if (isChunkLoadError(payload)) {
+      preloadEvent.preventDefault()
+      handleRuntimeError(payload, 'vite-chunk')
+    }
+  }) as EventListener)
+
   window.addEventListener('error', (event) => {
     if (event.error) {
       console.error('[RuntimeRecovery][WindowError]', event.error)
@@ -92,6 +121,9 @@ export function installRuntimeRecovery(app: App, router: Router) {
 
   window.addEventListener('unhandledrejection', (event) => {
     console.error('[RuntimeRecovery][UnhandledRejection]', event.reason)
+    if (isCssPreloadError(event.reason) || isChunkLoadError(event.reason)) {
+      event.preventDefault()
+    }
     handleRuntimeError(event.reason, 'promise')
   })
 }

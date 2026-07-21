@@ -306,13 +306,13 @@ const ChartModuleError = defineComponent({
 
 const StockKlineChartAsync = defineAsyncComponent({
   loader: async () => {
-    try {
-      chartModuleError.value = '';
-      return await import('@/components/charts/StockKlineChart.vue');
-    } catch (error) {
-      chartModuleError.value = '图表模块加载失败，已自动降级展示文本分析';
-      throw error;
-    }
+    chartModuleError.value = '';
+    return import('@/components/charts/StockKlineChart.vue');
+  },
+  // 失败时只降级图表，勿 rethrow 到全局 runtimeRecovery（否则会误弹「页面需要刷新」）
+  onError(_error, _retry, fail) {
+    chartModuleError.value = '图表模块加载失败，已自动降级展示文本分析';
+    fail();
   },
   loadingComponent: ChartModuleLoading,
   errorComponent: ChartModuleError,

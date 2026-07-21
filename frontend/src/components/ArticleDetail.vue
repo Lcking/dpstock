@@ -48,18 +48,14 @@
       
       <n-divider />
 
-      <!-- 行情走势回顾 -->
+      <!-- 行情走势回顾：图表 SFC 同步引入，避免 Vite 异步 chunk 的 CSS preload 失败触发整页刷新 -->
       <section class="chart-section">
         <h3 class="section-title">行情走势回顾</h3>
-        <component
+        <ArticleKlineChart
           v-if="article"
-          :is="ArticleKlineChartAsync"
           :stock-code="article.stock_code"
           :market-type="article.market_type"
         />
-        <div v-if="chartModuleError" class="chart-module-error">
-          {{ chartModuleError }}
-        </div>
       </section>
 
       <section class="analysis-content-section">
@@ -89,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, defineAsyncComponent, defineComponent, h } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { NButton, NIcon, NTag, NEmpty, NDivider } from 'naive-ui';
 import { ArrowBackOutline as ArrowBack } from '@vicons/ionicons5';
@@ -99,42 +95,12 @@ import { applyPageSeo, getArticlePreview, setCanonicalUrl } from '@/utils/seo';
 import ShareButtons from './ShareButtons.vue';
 import AnalysisV1Display from './AnalysisV1Display.vue';
 import AiScorePanel from './AiScorePanel.vue';
+import ArticleKlineChart from '@/components/charts/ArticleKlineChart.vue';
 import type { AiScore } from '@/types';
 
 const route = useRoute();
 const article = ref<any>(null);
 const loading = ref(true);
-const chartModuleError = ref('');
-
-const ChartModuleLoading = defineComponent({
-  name: 'ArticleChartModuleLoading',
-  setup() {
-    return () => h('div', { class: 'chart-module-loading' }, '图表模块加载中…');
-  }
-});
-
-const ChartModuleError = defineComponent({
-  name: 'ArticleChartModuleError',
-  setup() {
-    return () => h('div', { class: 'chart-module-error-placeholder' }, '图表模块加载失败，请稍后重试');
-  }
-});
-
-const ArticleKlineChartAsync = defineAsyncComponent({
-  loader: async () => {
-    try {
-      chartModuleError.value = '';
-      return await import('@/components/charts/ArticleKlineChart.vue');
-    } catch (error) {
-      chartModuleError.value = '图表模块加载失败，正文内容不受影响';
-      throw error;
-    }
-  },
-  loadingComponent: ChartModuleLoading,
-  errorComponent: ChartModuleError,
-  delay: 120,
-  timeout: 15000,
-});
 
 const aiScoreForArticle = computed<AiScore | null>(() => {
   // 1) Prefer stored ai_score_json (new articles)
@@ -480,44 +446,6 @@ onMounted(() => {
   margin: 32px 0;
   min-height: 450px;
   position: relative;
-}
-
-.chart-module-loading {
-  width: 100%;
-  min-height: 400px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  border: 1px dashed rgba(100, 116, 139, 0.4);
-  color: #64748b;
-  font-size: 0.92rem;
-  background: rgba(248, 250, 252, 0.72);
-}
-
-.chart-module-error-placeholder {
-  width: 100%;
-  min-height: 400px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  color: #b91c1c;
-  font-size: 0.92rem;
-  background: rgba(254, 242, 242, 0.78);
-}
-
-.chart-module-error {
-  margin-top: 10px;
-  display: inline-flex;
-  align-items: center;
-  color: #b91c1c;
-  font-size: 0.82rem;
-  background: rgba(254, 242, 242, 0.78);
-  border: 1px solid rgba(252, 165, 165, 0.5);
-  border-radius: 999px;
-  padding: 4px 10px;
 }
 
 .article-content {
