@@ -421,10 +421,115 @@ class RiskStockCollector:
         # 东财「跌停股池」，列含 代码/名称/连续跌停/所属行业
         return ak.stock_zt_pool_dtgc_em(date=trade_date)
 
+    # 东财行情主机：push2 容易拒连（本地/服务器均复现过 Server disconnected），
+    # 按顺序故障转移；push2delay 为延时源，作为兜底足够 15 分钟级别的池子刷新。
+    SPOT_HOSTS = (
+        "push2.eastmoney.com",
+        "82.push2.eastmoney.com",
+        "push2delay.eastmoney.com",
+    )
+    # 沪深 A 股（深主板/创业板/沪主板/科创板），不含北交所
+    SPOT_FS = "m:0 t:6,m:0 t:80,m:1 t:2,m:1 t:23"
+    SPOT_PAGE_SIZE = 100
+    SPOT_MAX_PAGES = 40
+
     def _fetch_spot(self):
+        """全市场涨跌幅快照。优先直连东财排序分页（只拉需要的头尾段），失败回退 akshare。"""
+        try:
+            df = self._fetch_spot_eastmoney()
+            if df is not None and not df.empty:
+                return df
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] eastmoney spot fetch failed: {exc}")
+
         import akshare as ak
 
         return ak.stock_zh_a_spot_em()
+
+    def _fetch_spot_eastmoney(self):
+        import pandas as pd
+        import requests
+
+        session = requests.Session()
+        session.trust_env = False
+
+        rows: List[Dict[str, Any]] = []
+        seen: set = set()
+
+        # 涨幅从高到低翻页，跌破 5% 档即停（覆盖 5%/9% 池 + 创业板暴涨）
+        for item in self._page_spot(session, ascending=False):
+            pct = item["涨跌幅"]
+            if pct < self.GAIN_POOL_5:
+                break
+            if item["代码"] not in seen:
+                seen.add(item["代码"])
+                rows.append(item)
+
+        # 跌幅从低到高翻页，回到 -15% 以内即停（只为创业板大波动的下跌侧）
+        for item in self._page_spot(session, ascending=True):
+            pct = item["涨跌幅"]
+            if pct > -self.CHINEXT_SWING:
+                break
+            if item["代码"] not in seen:
+                seen.add(item["代码"])
+                rows.append(item)
+
+        return pd.DataFrame(rows, columns=["代码", "名称", "涨跌幅"])
+
+    def _page_spot(self, session, ascending: bool):
+        """按涨跌幅排序逐页产出 {代码, 名称, 涨跌幅}。"""
+        for page in range(1, self.SPOT_MAX_PAGES + 1):
+            diff = self._fetch_spot_page(session, page=page, ascending=ascending)
+            if not diff:
+                return
+            for entry in diff:
+                code = str(entry.get("f12") or "").strip()
+                name = str(entry.get("f14") or "").strip()
+                pct = entry.get("f3")
+                if not code or not name or not isinstance(pct, (int, float)):
+                    continue
+                yield {"代码": code, "名称": name, "涨跌幅": float(pct)}
+            if len(diff) < self.SPOT_PAGE_SIZE:
+                return
+
+    def _fetch_spot_page(self, session, page: int, ascending: bool) -> List[Dict[str, Any]]:
+        params = {
+            "pn": page,
+            "pz": self.SPOT_PAGE_SIZE,
+            "po": 0 if ascending else 1,
+            "np": 1,
+            "fltt": 2,
+            "invt": 2,
+            "fid": "f3",
+            "fs": self.SPOT_FS,
+            "fields": "f2,f3,f12,f14",
+        }
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://quote.eastmoney.com/",
+        }
+        last_error: Optional[Exception] = None
+        for host in self.SPOT_HOSTS:
+            try:
+                resp = session.get(
+                    f"https://{host}/api/qt/clist/get",
+                    params=params,
+                    headers=headers,
+                    timeout=12,
+                    verify=False,
+                )
+                resp.raise_for_status()
+                data = (resp.json() or {}).get("data") or {}
+                return data.get("diff") or []
+            except Exception as exc:
+                last_error = exc
+                continue
+        if last_error is not None:
+            raise last_error
+        return []
 
     def _fetch_yjbb(self, period: str):
         import akshare as ak

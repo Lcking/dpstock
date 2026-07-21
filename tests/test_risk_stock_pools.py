@@ -229,6 +229,47 @@ def test_collector_limit_up_threshold_is_two(monkeypatch):
     assert rows[0]["limit_up_days"] == 2
 
 
+def test_spot_eastmoney_pages_stop_at_thresholds(monkeypatch):
+    """排序分页：涨幅侧跌破 5% 即停，跌幅侧回到 -15% 以内即停。"""
+    desc_pages = [
+        [
+            {"f12": "300643", "f14": "万通智控", "f3": 20.03},
+            {"f12": "600200", "f14": "涨9示例", "f3": 9.4},
+        ],
+        [
+            {"f12": "600100", "f14": "涨5示例", "f3": 5.6},
+            {"f12": "000500", "f14": "普通股票", "f3": 4.9},  # 跌破 5% → 停止
+        ],
+        [
+            {"f12": "999999", "f14": "不应到达", "f3": 4.0},
+        ],
+    ]
+    asc_pages = [
+        [
+            {"f12": "301400", "f14": "创业板暴跌", "f3": -15.3},
+            {"f12": "600900", "f14": "普通下跌", "f3": -9.9},  # 回到 -15% 以内 → 停止
+        ],
+    ]
+    calls = {"desc": 0, "asc": 0}
+
+    def fake_page(self, session, page, ascending):
+        if ascending:
+            calls["asc"] += 1
+            return asc_pages[page - 1] if page <= len(asc_pages) else []
+        calls["desc"] += 1
+        return desc_pages[page - 1] if page <= len(desc_pages) else []
+
+    monkeypatch.setattr(RiskStockCollector, "_fetch_spot_page", fake_page)
+    monkeypatch.setattr(RiskStockCollector, "SPOT_PAGE_SIZE", 2)
+    collector = RiskStockCollector.__new__(RiskStockCollector)
+    df = collector._fetch_spot_eastmoney()
+
+    codes = set(df["代码"])
+    assert codes == {"300643", "600200", "600100", "301400"}
+    assert calls["desc"] == 2  # 第 2 页触发早停，不翻第 3 页
+    assert calls["asc"] == 1
+
+
 def test_is_chinext():
     assert is_chinext("300001") is True
     assert is_chinext("301151") is True
