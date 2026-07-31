@@ -123,9 +123,16 @@ class SearchSnapshotService:
 
     def refresh_a_share_snapshot(self) -> int:
         try:
+            # 强制绕过进程内共享缓存，避免新股上市后仍写回旧列表
+            if hasattr(self.provider_factory, "clear_a_share_list_cache"):
+                self.provider_factory.clear_a_share_list_cache()
             provider = self.provider_factory()
-            rows = provider.get_a_share_list()
-            normalized_rows = [self._normalize_row(row, "A") for row in rows if row.get("code") or row.get("symbol")]
+            rows = provider.get_a_share_list(force_refresh=True)
+            normalized_rows = [
+                self._normalize_row(row, "A")
+                for row in rows
+                if row.get("code") or row.get("symbol")
+            ]
             if normalized_rows:
                 self._write_snapshot("A", normalized_rows)
                 logger.info(f"[SearchSnapshot] Refreshed A-share snapshot with {len(normalized_rows)} rows")
@@ -134,20 +141,35 @@ class SearchSnapshotService:
             logger.warning(f"[SearchSnapshot] Failed to refresh A-share snapshot: {e}")
         return 0
 
+    @staticmethod
+    def _strip_listing_prefix(name: str) -> str:
+        """去掉新股临时代码前缀：C长鑫 → 长鑫，N泰诺 → 泰诺。"""
+        text = str(name or "").strip()
+        if len(text) >= 2 and text[0] in {"C", "N", "c", "n"} and "\u4e00" <= text[1] <= "\u9fff":
+            return text[1:]
+        return text
+
+    def _row_matches_keyword(self, row: Dict[str, str], keyword: str) -> bool:
+        lowered = keyword.lower()
+        name = row.get("name") or ""
+        bare_name = self._strip_listing_prefix(name)
+        return (
+            lowered in row["symbol"].lower()
+            or lowered in name.lower()
+            or lowered in bare_name.lower()
+            or bare_name.lower() in lowered
+            or lowered in row.get("pinyin", "")
+        )
+
     def _search_market(self, market: str, keyword: str, limit: int) -> List[Dict[str, str]]:
         trimmed = keyword.strip()
         if not trimmed:
             return []
 
         rows = self._load_snapshot(market)
-        lowered = trimmed.lower()
         results: List[Dict[str, str]] = []
         for row in rows:
-            if (
-                lowered in row["symbol"].lower()
-                or lowered in row["name"].lower()
-                or lowered in row.get("pinyin", "")
-            ):
+            if self._row_matches_keyword(row, trimmed):
                 results.append(
                     {
                         "symbol": row["symbol"],
@@ -159,6 +181,22 @@ class SearchSnapshotService:
                     break
         return results
 
+    def _resolve_a_share_name(self, symbol: str) -> str:
+        """快照缺失时用 tushare 补名称，避免搜索只显示代码。"""
+        try:
+            from services.tushare.client import tushare_client
+
+            tushare_client.ensure_initialized(log_missing_token=False)
+            if not tushare_client.is_available:
+                return ""
+            ts_code = f"{symbol}.SH" if symbol.startswith(("6", "9")) else f"{symbol}.SZ"
+            df = tushare_client.get_stock_basic(ts_code)
+            if df is not None and not df.empty:
+                return str(df.iloc[0].get("name") or "").strip()
+        except Exception as exc:
+            logger.debug(f"[SearchSnapshot] resolve name failed for {symbol}: {exc}")
+        return ""
+
     def search_a_shares(self, keyword: str, limit: int = 10) -> List[Dict[str, str]]:
         trimmed = keyword.strip()
         if trimmed.isdigit() and len(trimmed) == 6:
@@ -166,7 +204,8 @@ class SearchSnapshotService:
             for row in rows:
                 if row["symbol"] == trimmed:
                     return [{"symbol": row["symbol"], "name": row["name"], "market": "A"}]
-            return [{"symbol": trimmed, "name": trimmed, "market": "A"}]
+            name = self._resolve_a_share_name(trimmed) or trimmed
+            return [{"symbol": trimmed, "name": name, "market": "A"}]
         return self._search_market("A", trimmed, limit)
 
     def search_hk_shares(self, keyword: str, limit: int = 10) -> List[Dict[str, str]]:

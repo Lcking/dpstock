@@ -129,9 +129,10 @@ def test_lookup_stock_name_does_not_call_tushare_on_cache_miss(monkeypatch):
     namechange.assert_not_called()
 
 
-def test_get_a_share_list_initializes_tushare_before_fallback(monkeypatch):
+def test_get_a_share_list_prefers_tushare_over_akshare(monkeypatch):
     StockDataProvider._shared_a_share_list_cache = None
     provider = StockDataProvider()
+    ak_calls = {"n": 0}
 
     class _FakeTushareClient:
         def __init__(self):
@@ -144,20 +145,29 @@ def test_get_a_share_list_initializes_tushare_before_fallback(monkeypatch):
             self.is_available = True
             self.pro = SimpleNamespace(
                 stock_basic=lambda **kwargs: pd.DataFrame(
-                    [{"ts_code": "600519.SH", "name": "贵州茅台"}]
+                    [{"ts_code": "688825.SH", "name": "C长鑫"}]
                 )
             )
 
     fake_tushare = _FakeTushareClient()
 
-    monkeypatch.setattr("services.stock_data_provider.tushare_client", fake_tushare)
-    monkeypatch.setitem(sys.modules, "akshare", SimpleNamespace(stock_info_a_code_name=lambda: (_ for _ in ()).throw(RuntimeError("akshare down"))))
+    def fake_ak_list():
+        ak_calls["n"] += 1
+        raise AssertionError("akshare should not be used when tushare works")
 
-    rows = provider.get_a_share_list()
+    monkeypatch.setattr("services.stock_data_provider.tushare_client", fake_tushare)
+    monkeypatch.setitem(
+        sys.modules,
+        "akshare",
+        SimpleNamespace(stock_info_a_code_name=fake_ak_list),
+    )
+
+    rows = provider.get_a_share_list(force_refresh=True)
 
     assert fake_tushare.ensure_initialized_called is True
-    assert rows[0]["code"] == "600519"
-    assert rows[0]["name"] == "贵州茅台"
+    assert ak_calls["n"] == 0
+    assert rows[0]["code"] == "688825"
+    assert rows[0]["name"] == "C长鑫"
 
 
 def test_prod_compose_exports_tushare_token():

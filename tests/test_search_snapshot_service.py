@@ -29,7 +29,7 @@ def test_search_snapshot_service_refreshes_when_snapshot_too_small(tmp_path, mon
 
     monkeypatch.setattr(
         "services.stock_data_provider.StockDataProvider.get_a_share_list",
-        lambda self: fake_get_a_share_list(),
+        lambda self, force_refresh=False: fake_get_a_share_list(),
     )
 
     count = service.ensure_a_share_snapshot(min_count=MIN_A_SHARE_SNAPSHOT_COUNT)
@@ -64,12 +64,48 @@ def test_search_snapshot_service_reads_local_a_hk_us_snapshots(tmp_path):
     assert service.search_us_stocks("aapl") == [{"symbol": "AAPL", "name": "Apple", "market": "US"}]
 
 
-def test_search_snapshot_service_returns_direct_a_code_when_snapshot_missing(tmp_path):
+def test_search_snapshot_service_returns_direct_a_code_when_snapshot_missing(tmp_path, monkeypatch):
     from services.search_snapshot_service import SearchSnapshotService
 
     service = SearchSnapshotService(snapshot_dir=tmp_path)
+    monkeypatch.setattr(
+        SearchSnapshotService,
+        "_resolve_a_share_name",
+        lambda self, symbol: "",
+    )
 
     assert service.search_a_shares("600519") == [{"symbol": "600519", "name": "600519", "market": "A"}]
+
+
+def test_search_matches_new_listing_prefix_and_full_name(tmp_path):
+    from services.search_snapshot_service import SearchSnapshotService
+
+    _write_snapshot(
+        tmp_path,
+        "a_shares.json",
+        [{"symbol": "688825", "name": "C长鑫", "market": "A", "pinyin": "czx"}],
+    )
+    service = SearchSnapshotService(snapshot_dir=tmp_path)
+
+    assert service.search_a_shares("长鑫")[0]["symbol"] == "688825"
+    assert service.search_a_shares("长鑫科技")[0]["symbol"] == "688825"
+    assert service.search_a_shares("C长鑫")[0]["name"] == "C长鑫"
+    assert service.search_a_shares("688825")[0]["name"] == "C长鑫"
+
+
+def test_search_resolves_name_when_code_missing_from_snapshot(tmp_path, monkeypatch):
+    from services.search_snapshot_service import SearchSnapshotService
+
+    service = SearchSnapshotService(snapshot_dir=tmp_path)
+    monkeypatch.setattr(
+        SearchSnapshotService,
+        "_resolve_a_share_name",
+        lambda self, symbol: "C长鑫" if symbol == "688825" else "",
+    )
+
+    assert service.search_a_shares("688825") == [
+        {"symbol": "688825", "name": "C长鑫", "market": "A"}
+    ]
 
 
 @pytest.mark.asyncio

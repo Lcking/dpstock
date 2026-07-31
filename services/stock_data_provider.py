@@ -22,11 +22,19 @@ class StockDataProvider:
         self._a_share_list_cache = None
         self._hk_share_list_cache = None
 
-    def get_a_share_list(self) -> List[Dict[str, str]]:
+    @classmethod
+    def clear_a_share_list_cache(cls) -> None:
+        cls._shared_a_share_list_cache = None
+
+    def get_a_share_list(self, force_refresh: bool = False) -> List[Dict[str, str]]:
         """
         获取A股列表（包含代码、名称和拼音）
-        带缓存机制，akshare → tushare 降级，10s 超时保护
+        带缓存机制。优先 tushare（新股更及时、海外 IP 更稳），akshare 降级；10s 超时保护。
         """
+        if force_refresh:
+            self._a_share_list_cache = None
+            StockDataProvider.clear_a_share_list_cache()
+
         if self._a_share_list_cache:
             return self._a_share_list_cache
         if StockDataProvider._shared_a_share_list_cache:
@@ -50,24 +58,14 @@ class StockDataProvider:
                 stock_list.append({'code': code, 'name': name, 'pinyin': py_str})
             return stock_list
 
-        # --- 尝试 akshare（带 10s 超时）---
-        try:
-            import akshare as ak
-            logger.info("正在获取A股列表 (akshare)…")
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(ak.stock_info_a_code_name)
-                df = future.result(timeout=10)
-            stock_list = _build_list(df)
+        def _cache_and_return(stock_list: List[Dict[str, str]], source: str) -> List[Dict[str, str]]:
             self._a_share_list_cache = stock_list
             StockDataProvider._shared_a_share_list_cache = stock_list
-            logger.info(f"akshare 成功加载 {len(stock_list)} 只A股")
+            logger.info(f"{source} 成功加载 {len(stock_list)} 只A股")
             return stock_list
-        except Exception as e:
-            logger.warning(f"akshare 获取A股列表失败: {str(e)[:100]}，尝试 tushare…")
 
-        # --- 降级：tushare ---
+        # --- 优先 tushare：含当日新上市（如 C长鑫 688825），海外服务器更稳 ---
         try:
-            import concurrent.futures
             tushare_client.ensure_initialized(log_missing_token=False)
             if tushare_client.is_available:
                 logger.info("正在获取A股列表 (tushare)…")
@@ -78,16 +76,24 @@ class StockDataProvider:
                         list_status='L',
                         fields='ts_code,name',
                     )
-                    ts_df = future.result(timeout=10)
+                    ts_df = future.result(timeout=15)
                 if ts_df is not None and not ts_df.empty:
+                    ts_df = ts_df.copy()
                     ts_df['code'] = ts_df['ts_code'].str[:6]
-                    stock_list = _build_list(ts_df)
-                    self._a_share_list_cache = stock_list
-                    StockDataProvider._shared_a_share_list_cache = stock_list
-                    logger.info(f"tushare 成功加载 {len(stock_list)} 只A股")
-                    return stock_list
+                    return _cache_and_return(_build_list(ts_df), "tushare")
+        except Exception as e:
+            logger.warning(f"tushare 获取A股列表失败: {str(e)[:100]}，尝试 akshare…")
+
+        # --- 降级：akshare ---
+        try:
+            import akshare as ak
+            logger.info("正在获取A股列表 (akshare)…")
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(ak.stock_info_a_code_name)
+                df = future.result(timeout=10)
+            return _cache_and_return(_build_list(df), "akshare")
         except Exception as e2:
-            logger.warning(f"tushare 获取A股列表也失败: {str(e2)[:100]}")
+            logger.warning(f"akshare 获取A股列表也失败: {str(e2)[:100]}")
 
         logger.error("所有数据源均无法获取A股列表，返回空列表")
         return []
