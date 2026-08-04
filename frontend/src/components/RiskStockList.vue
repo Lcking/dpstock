@@ -133,6 +133,15 @@ const columns: DataTableColumns<RiskStockItem> = [
     ])
   },
   {
+    title: '行业',
+    key: 'industry',
+    width: 100,
+    ellipsis: { tooltip: true },
+    render: (row) => row.industry
+      ? h(NTag, { size: 'small', bordered: false, type: 'default' }, () => row.industry)
+      : '-',
+  },
+  {
     title: '风险标签',
     key: 'tags',
     render: (row) => h('div', { class: 'tag-list' }, row.tags.map(tag =>

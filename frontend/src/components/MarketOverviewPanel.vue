@@ -8,6 +8,28 @@
       <span v-if="updatedLabel" class="updated-at">快照更新 {{ updatedLabel }}</span>
     </div>
 
+    <div v-if="breadth?.status === 'ok'" class="temp-strip" :class="tempToneClass">
+      <div class="temp-main">
+        <span class="temp-label">{{ breadth.temperature_label || '中性' }}</span>
+        <span class="temp-score" v-if="breadth.temperature != null">{{ breadth.temperature }}°</span>
+      </div>
+      <div class="temp-stats">
+        <span class="stat-up">涨 {{ breadth.up ?? 0 }}</span>
+        <span class="stat-flat">平 {{ breadth.flat ?? 0 }}</span>
+        <span class="stat-down">跌 {{ breadth.down ?? 0 }}</span>
+        <span class="stat-limit">涨停 {{ breadth.limit_up ?? 0 }} / 跌停 {{ breadth.limit_down ?? 0 }}</span>
+      </div>
+      <div class="temp-bar" aria-hidden="true">
+        <div class="temp-bar-fill" :style="{ width: `${Math.min(100, Math.max(0, breadth.temperature ?? 50))}%` }" />
+      </div>
+    </div>
+
+    <div v-if="auctionBrief" class="auction-brief" :class="{ 'is-active': auctionBrief.active }">
+      <span class="auction-badge">{{ auctionPhaseLabel }}</span>
+      <span class="auction-summary">{{ auctionBrief.summary }}</span>
+      <span v-if="auctionBrief.active && auctionBrief.hint" class="auction-hint">{{ auctionBrief.hint }}</span>
+    </div>
+
     <n-grid cols="1 s:2 xl:4" :x-gap="16" :y-gap="16" responsive="screen">
       <n-grid-item v-for="item in items" :key="item.key">
         <div class="index-card" :class="statusClass(item)">
@@ -59,7 +81,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { NGrid, NGridItem, NTag } from 'naive-ui'
 import { apiService } from '@/services/api'
-import type { MarketOverviewItem } from '@/types'
+import type { AuctionBrief, MarketBreadth, MarketOverviewItem } from '@/types'
 
 const items = ref<MarketOverviewItem[]>([
   { key: 'shanghai', name: '上证指数', market: 'A', symbol: '000001.SH', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
@@ -67,6 +89,8 @@ const items = ref<MarketOverviewItem[]>([
   { key: 'hangseng', name: '恒生指数', market: 'HK', symbol: '^HSI', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
   { key: 'nasdaq', name: '纳斯达克', market: 'US', symbol: '^IXIC', price: null, change: null, change_percent: null, trend: [], status: 'unavailable' },
 ])
+const breadth = ref<MarketBreadth | null>(null)
+const auctionBrief = ref<AuctionBrief | null>(null)
 const updatedAt = ref<number | null>(null)
 const MARKET_OVERVIEW_REFRESH_MS = 60000
 let refreshTimer: number | null = null
@@ -79,11 +103,27 @@ const updatedLabel = computed(() => {
   })
 })
 
+const tempToneClass = computed(() => {
+  const label = breadth.value?.temperature_label || ''
+  if (label.includes('热') || label.includes('强')) return 'tone-hot'
+  if (label.includes('冷') || label.includes('弱')) return 'tone-cold'
+  return 'tone-neutral'
+})
+
+const auctionPhaseLabel = computed(() => {
+  const phase = auctionBrief.value?.phase
+  if (phase === 'auction') return '竞价中'
+  if (phase === 'regular') return '交易中'
+  return '竞价简报'
+})
+
 const loadOverview = async () => {
   const data = await apiService.getMarketOverview()
   if (data.items?.length) {
     items.value = data.items
   }
+  breadth.value = data.breadth ?? null
+  auctionBrief.value = data.auction_brief ?? null
   updatedAt.value = data.updated_at
 }
 
@@ -202,6 +242,116 @@ onBeforeUnmount(() => {
   color: #94a3b8;
   font-size: 0.78rem;
   white-space: nowrap;
+}
+
+.temp-strip {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.temp-strip.tone-hot {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(254, 242, 242, 0.95));
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.temp-strip.tone-cold {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(240, 253, 250, 0.95));
+  border-color: rgba(16, 185, 129, 0.18);
+}
+
+.temp-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.temp-label {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.temp-score {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.temp-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.stat-up { color: #dc2626; }
+.stat-down { color: #059669; }
+.stat-limit { color: #334155; font-weight: 600; }
+
+.temp-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.temp-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #059669, #f59e0b, #dc2626);
+  transition: width 0.35s ease;
+}
+
+.auction-brief {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(241, 245, 249, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.auction-brief.is-active {
+  background: rgba(255, 247, 237, 0.95);
+  border-color: rgba(251, 146, 60, 0.28);
+}
+
+.auction-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.12);
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.auction-brief.is-active .auction-badge {
+  background: rgba(251, 146, 60, 0.18);
+  color: #c2410c;
+}
+
+.auction-summary {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.auction-hint {
+  width: 100%;
+  color: #9a3412;
 }
 
 .index-card {

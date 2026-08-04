@@ -144,6 +144,17 @@ class RiskStockService:
 
         if tag:
             rows = [row for row in rows if tag in self._parse_tags(row.get("tags_json"))]
+
+        # 运行时挂行业标签（不落库），复用 industry_map
+        try:
+            from services.a_share_industry_lookup import AShareIndustryLookup
+
+            for row in rows:
+                industry = AShareIndustryLookup.lookup(str(row.get("ts_code") or ""))
+                if industry:
+                    row["industry"] = industry
+        except Exception as exc:
+            logger.debug(f"[RiskStockService] industry enrich skipped: {exc}")
         return rows
 
     def _classify_row(self, trade_date: str, row: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]:

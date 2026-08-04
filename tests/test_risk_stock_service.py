@@ -57,6 +57,36 @@ def test_risk_stock_service_classifies_st_and_three_limit_up(tmp_path, monkeypat
     assert "高度板" in json.loads(board_item["tags_json"])
 
 
+def test_risk_stock_get_items_attaches_industry(tmp_path, monkeypatch):
+    from services.a_share_industry_lookup import AShareIndustryLookup
+
+    db_path = tmp_path / "risk_stocks_industry.db"
+    _run_all_migrations(db_path, monkeypatch)
+    DatabaseFactory.initialize(str(db_path))
+
+    service = RiskStockService(db_path=str(db_path))
+    service.refresh_from_rows(
+        "20260618",
+        [
+            {
+                "ts_code": "600001.SH",
+                "name": "ST示例",
+                "market": "主板",
+                "limit_up_days": 0,
+            }
+        ],
+        source="unit-test",
+    )
+
+    monkeypatch.setattr(
+        AShareIndustryLookup,
+        "lookup",
+        classmethod(lambda cls, ts_code: "银行" if "600001" in ts_code else None),
+    )
+    item = service.get_items(trade_date="20260618")[0]
+    assert item["industry"] == "银行"
+
+
 def test_risk_stock_refresh_is_idempotent(tmp_path, monkeypatch):
     db_path = tmp_path / "risk_stocks_idempotent.db"
     _run_all_migrations(db_path, monkeypatch)

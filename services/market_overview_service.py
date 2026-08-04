@@ -61,13 +61,71 @@ class MarketOverviewService:
             return self._cache
 
         items = [self._fetch_index(spec) for spec in self.INDEX_SPECS]
+        breadth = self._safe_breadth()
+        auction_brief = self._build_auction_brief(items, breadth)
         payload = {
             "items": items,
+            "breadth": breadth,
+            "auction_brief": auction_brief,
             "updated_at": int(now),
         }
         self._cache = payload
         self._cache_at = now
         return payload
+
+    def _safe_breadth(self) -> Dict[str, Any]:
+        try:
+            from services.market_breadth_service import market_breadth_service
+
+            return market_breadth_service.get_breadth()
+        except Exception as exc:
+            logger.warning(f"[MarketOverview] breadth attach failed: {exc}")
+            return {"status": "unavailable"}
+
+    def _build_auction_brief(
+        self, items: List[Dict[str, Any]], breadth: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """轻量竞价简报：复用指数涨跌 + 时段，不另拉竞价盘口。"""
+        auction = (breadth or {}).get("auction") or {}
+        shanghai = next((i for i in items if i.get("key") == "shanghai"), None) or {}
+        csi300 = next((i for i in items if i.get("key") == "csi300"), None) or {}
+
+        def _side(pct: Any) -> str:
+            try:
+                value = float(pct)
+            except (TypeError, ValueError):
+                return "未知"
+            if value > 0.15:
+                return "高开"
+            if value < -0.15:
+                return "低开"
+            return "平开"
+
+        sh_pct = shanghai.get("change_percent")
+        hs_pct = csi300.get("change_percent")
+        phase = auction.get("phase") or "closed"
+        active = bool(auction.get("active"))
+
+        lines = []
+        if shanghai.get("status") == "ok" and sh_pct is not None:
+            lines.append(f"上证{_side(sh_pct)} {float(sh_pct):+.2f}%")
+        if csi300.get("status") == "ok" and hs_pct is not None:
+            lines.append(f"沪深300{_side(hs_pct)} {float(hs_pct):+.2f}%")
+        if breadth.get("status") == "ok":
+            lines.append(
+                f"涨停 {breadth.get('limit_up', 0)} / 跌停 {breadth.get('limit_down', 0)}"
+            )
+
+        summary = " · ".join(lines) if lines else "指数数据暂不可用"
+        return {
+            "phase": phase,
+            "active": active,
+            "window": auction.get("window") or "09:15–09:25",
+            "hint": auction.get("hint") or "",
+            "summary": summary,
+            "shanghai_pct": sh_pct,
+            "csi300_pct": hs_pct,
+        }
 
     def _cache_ttl_seconds(self) -> int:
         return self.INTRADAY_CACHE_TTL_SECONDS if self._is_a_share_trading_time() else self.CACHE_TTL_SECONDS

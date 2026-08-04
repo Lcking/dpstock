@@ -93,6 +93,37 @@ export interface MarketOverviewItem {
   status: 'ok' | 'unavailable';
 }
 
+export interface MarketBreadth {
+  status: 'ok' | 'unavailable';
+  up?: number;
+  down?: number;
+  flat?: number;
+  limit_up?: number;
+  limit_down?: number;
+  total?: number;
+  up_ratio?: number | null;
+  temperature?: number | null;
+  temperature_label?: string;
+  updated_at?: number;
+}
+
+export interface AuctionBrief {
+  phase: 'auction' | 'regular' | 'closed' | string;
+  active: boolean;
+  window?: string;
+  hint?: string;
+  summary?: string;
+  shanghai_pct?: number | null;
+  csi300_pct?: number | null;
+}
+
+export interface MarketOverviewResponse {
+  items: MarketOverviewItem[];
+  breadth?: MarketBreadth | null;
+  auction_brief?: AuctionBrief | null;
+  updated_at: number | null;
+}
+
 // 分析请求和响应
 export interface AnalyzeRequest {
   stock_codes: string[];

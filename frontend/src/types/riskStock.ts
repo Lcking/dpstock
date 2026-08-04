@@ -4,6 +4,7 @@ export interface RiskStockItem {
   ts_code: string
   name: string
   market?: string
+  industry?: string
   tags_json?: string
   tags: string[]
   risk_level: 'high' | 'medium' | 'low'

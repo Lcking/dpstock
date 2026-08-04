@@ -1,5 +1,11 @@
 import axios from 'axios';
-import type { AnalyzeRequest, SearchResult, LoginRequest, LoginResponse, MarketOverviewItem } from '@/types';
+import type {
+  AnalyzeRequest,
+  SearchResult,
+  LoginRequest,
+  LoginResponse,
+  MarketOverviewResponse,
+} from '@/types';
 import type {
   JournalListResponse,
   JournalRecord,
@@ -182,17 +188,21 @@ export const apiService = {
     }
   },
 
-  getMarketOverview: async (): Promise<{ items: MarketOverviewItem[]; updated_at: number | null }> => {
+  getMarketOverview: async (): Promise<MarketOverviewResponse> => {
     try {
       const response = await axiosInstance.get('/market-overview');
       return {
         items: response.data.items || [],
+        breadth: response.data.breadth ?? null,
+        auction_brief: response.data.auction_brief ?? null,
         updated_at: response.data.updated_at ?? null,
       };
     } catch (error) {
       console.error('获取首页指数概览时出错:', error);
       return {
         items: [],
+        breadth: null,
+        auction_brief: null,
         updated_at: null,
       };
     }
