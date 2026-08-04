@@ -127,6 +127,26 @@
           <div class="stat-hint">证伪/不确定时的归因</div>
         </div>
       </div>
+      <div v-if="candidateStatsRows.length" class="stats-split">
+        <div class="split-title">按候选 A/B/C</div>
+        <div class="split-grid">
+          <div v-for="row in candidateStatsRows" :key="row.key" class="split-card">
+            <div class="split-label">候选 {{ row.key }}</div>
+            <div class="split-value">{{ formatSupportRate(row.support_rate) }}</div>
+            <div class="split-hint">已复盘 {{ row.reviewed_count }} · 支持 {{ row.supported }}</div>
+          </div>
+        </div>
+      </div>
+      <div v-if="directionStatsRows.length" class="stats-split">
+        <div class="split-title">按条件方向</div>
+        <div class="split-grid">
+          <div v-for="row in directionStatsRows" :key="row.key" class="split-card">
+            <div class="split-label">{{ row.label }}</div>
+            <div class="split-value">{{ formatSupportRate(row.support_rate) }}</div>
+            <div class="split-hint">已复盘 {{ row.reviewed_count }} · 支持 {{ row.supported }}</div>
+          </div>
+        </div>
+      </div>
       <ConditionQualityLeaderboard
         v-if="conditionLeaderboard.length > 0"
         :items="conditionLeaderboard"
@@ -195,6 +215,9 @@
               @click.stop
             />
             <span class="ts-code">{{ record.ts_code }}</span>
+            <n-tag v-if="record.industry" size="small" :bordered="false">
+              {{ record.industry }}
+            </n-tag>
             <n-tag :type="candidateTagType(record.candidate)" size="small">
               候选 {{ record.candidate }}
             </n-tag>
@@ -342,6 +365,55 @@ const reviewStats = ref<JournalReviewStats | null>(null)
 const conditionLeaderboard = computed(
   () => reviewStats.value?.condition_quality_leaderboard ?? []
 )
+
+const candidateStatsRows = computed(() => {
+  const buckets = reviewStats.value?.by_candidate || {}
+  return (['A', 'B', 'C'] as const)
+    .map((key) => {
+      const bucket = buckets[key]
+      if (!bucket || !bucket.reviewed_count) return null
+      return {
+        key,
+        reviewed_count: bucket.reviewed_count,
+        supported: bucket.outcome_counts?.supported ?? 0,
+        support_rate: bucket.support_rate,
+      }
+    })
+    .filter(Boolean) as Array<{
+      key: string
+      reviewed_count: number
+      supported: number
+      support_rate: number | null
+    }>
+})
+
+const directionStatsRows = computed(() => {
+  const buckets = reviewStats.value?.by_direction || {}
+  const labels: Record<string, string> = {
+    bullish: '看多条件',
+    bearish: '看空条件',
+    neutral: '中性/震荡',
+  }
+  return (['bullish', 'bearish', 'neutral'] as const)
+    .map((key) => {
+      const bucket = buckets[key]
+      if (!bucket || !bucket.reviewed_count) return null
+      return {
+        key,
+        label: labels[key],
+        reviewed_count: bucket.reviewed_count,
+        supported: bucket.outcome_counts?.supported ?? 0,
+        support_rate: bucket.support_rate,
+      }
+    })
+    .filter(Boolean) as Array<{
+      key: string
+      label: string
+      reviewed_count: number
+      supported: number
+      support_rate: number | null
+    }>
+})
 const stockTimelineLeaderboard = computed(
   () => stockTimeline.value?.condition_quality_leaderboard ?? []
 )
@@ -971,6 +1043,49 @@ onMounted(async () => {
 .stat-hint {
   margin-top: 4px;
   font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.stats-split {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--n-border-color);
+}
+
+.split-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--n-text-color-2);
+  margin-bottom: 8px;
+}
+
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.split-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(102, 126, 234, 0.06);
+}
+
+.split-label {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+.split-value {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--n-text-color);
+}
+
+.split-hint {
+  margin-top: 2px;
+  font-size: 11px;
   color: var(--n-text-color-3);
 }
 

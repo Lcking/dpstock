@@ -308,6 +308,20 @@ class AIAnalyzer:
             # 构建 Analysis V1 prompt（统一格式，适用所有市场）
             market_name_map = {'A': 'A股', 'HK': '港股', 'US': '美股', 'ETF': 'ETF', 'LOF': 'LOF'}
             market_display = market_name_map.get(market_type, market_type)
+            market_breadth_block = ""
+            if market_type == "A":
+                try:
+                    from services.market_breadth_service import (
+                        format_market_breadth_note,
+                        market_breadth_service,
+                    )
+
+                    breadth = await asyncio.to_thread(market_breadth_service.get_breadth)
+                    note = format_market_breadth_note(breadth)
+                    if note:
+                        market_breadth_block = f"\n**市场广度（环境参考）：**\n- {note}\n"
+                except Exception as breadth_exc:
+                    logger.warning(f"[AIAnalyzer] attach market breadth failed: {breadth_exc}")
             
             prompt = f"""
 你是一个客观的市场数据呈现系统。请对 {market_display} **{name_display}** 进行结构化数据整理，严格按照 JSON schema 格式输出。
@@ -343,6 +357,7 @@ class AIAnalyzer:
 - MA5: {ma5:.2f}, MA20: {ma20:.2f}, MA60: {ma60:.2f}, MA200: {ma200:.2f}
 - RSI: {rsi:.1f}
 - 成交量状态：{volume_status}
+{market_breadth_block}
 
 **技术指标数据：**
 {technical_summary}

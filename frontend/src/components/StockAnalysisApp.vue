@@ -701,6 +701,10 @@ function handleStreamUpdate(data: StreamAnalysisUpdate) {
       stock.name = data.name;
     }
 
+    if (data.industry !== undefined) {
+      stock.industry = data.industry;
+    }
+
     if (data.recommendation !== undefined) {
       stock.recommendation = data.recommendation;
     }

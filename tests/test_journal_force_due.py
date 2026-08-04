@@ -61,25 +61,49 @@ def _insert_judgment(db_path: Path, record_id: str, status: str = "active") -> N
         conn.commit()
 
 
-def test_force_due_record_marks_active_judgment_due(tmp_path):
+def test_force_due_record_marks_active_judgment_due(tmp_path, monkeypatch):
     db_path = tmp_path / "force_due.db"
     record_id = "jr_force_due"
     DatabaseFactory.initialize(str(db_path))
     _create_judgments_table(db_path)
     _insert_judgment(db_path, record_id, status="active")
 
-    result = JournalService().force_due_record(record_id)
+    service = JournalService()
+    monkeypatch.setattr(
+        service,
+        "_auto_evaluate",
+        lambda row: (
+            "uncertain",
+            [],
+            {
+                "outcome": "uncertain",
+                "summary": "forced preview",
+                "actual_path": None,
+                "selected_condition": {"status": "missing_condition"},
+                "candidate_results": {},
+            },
+        ),
+    )
+
+    result = service.force_due_record(record_id)
 
     assert result["ok"] is True
     assert result["status"] == "due"
     assert result["previous_status"] == "active"
+    assert result["has_evaluation_preview"] is True
+
+    import json
 
     with sqlite3.connect(db_path) as conn:
-        status, validation_date = conn.execute(
-            "SELECT status, validation_date FROM judgments WHERE id = ?", (record_id,)
+        status, validation_date, constraints = conn.execute(
+            "SELECT status, validation_date, constraints FROM judgments WHERE id = ?",
+            (record_id,),
         ).fetchone()
+
     assert status == "due"
     assert datetime.fromisoformat(validation_date.replace("Z", "+00:00")).replace(tzinfo=None) < datetime.utcnow()
+    preview = json.loads(constraints).get("evaluation_preview")
+    assert preview["summary"] == "forced preview"
 
 
 def test_force_due_record_does_not_reopen_reviewed_judgment(tmp_path):

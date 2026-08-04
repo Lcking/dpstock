@@ -36,6 +36,7 @@ export interface StockInfo {
   code: string;
   name: string;
   marketType: string;
+  industry?: string;
   price?: number;
   changePercent?: number;
   marketValue?: number;
@@ -161,6 +162,7 @@ export interface StreamAnalysisUpdate {
   status: 'analyzing' | 'completed' | 'error';
   error?: string;
   name?: string;
+  industry?: string;
   price?: number;
   change_percent?: number;
   price_change?: number;

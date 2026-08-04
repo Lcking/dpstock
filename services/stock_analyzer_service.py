@@ -469,11 +469,23 @@ class StockAnalyzerService:
 
             provenance = build_data_provenance(market_type, df_with_indicators)
             
+            industry = None
+            if market_type == "A":
+                try:
+                    from services.a_share_industry_lookup import AShareIndustryLookup
+
+                    industry = await asyncio.to_thread(
+                        AShareIndustryLookup.lookup, stock_code
+                    )
+                except Exception as industry_exc:
+                    logger.debug(f"[Analyzer] industry lookup skipped: {industry_exc}")
+
             # 生成基本分析结果
             basic_result = {
                 "stock_code": stock_code,
                 "name": stock_name,  # 添加股票名称
                 "market_type": market_type,
+                "industry": industry,
                 "analysis_date": analysis_date,
                 **provenance,
                 "score": score,

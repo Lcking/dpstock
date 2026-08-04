@@ -344,4 +344,24 @@ class MarketBreadthService:
         )
 
 
+def format_market_breadth_note(breadth: Optional[Dict[str, Any]]) -> str:
+    """生成诊股 prompt 用的一行市场广度备注；不可用时返回空串。"""
+    if not breadth or breadth.get("status") != "ok":
+        return ""
+    label = breadth.get("temperature_label") or "中性"
+    temperature = breadth.get("temperature")
+    up = breadth.get("up")
+    down = breadth.get("down")
+    flat = breadth.get("flat")
+    limit_up = breadth.get("limit_up")
+    limit_down = breadth.get("limit_down")
+    temp_part = f"{temperature}°" if temperature is not None else "—"
+    return (
+        f"当日市场广度（沪深合计，客观统计）：标签 {label}，温度 {temp_part}，"
+        f"上涨 {up} 家 / 下跌 {down} 家 / 平盘 {flat} 家，"
+        f"涨停 {limit_up} / 跌停 {limit_down}。"
+        f"仅供环境参考，不构成对该股方向的判断。"
+    )
+
+
 market_breadth_service = MarketBreadthService()

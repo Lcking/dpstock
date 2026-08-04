@@ -344,6 +344,12 @@ class JournalService:
         selected_candidate_counts: Dict[str, int] = {}
         actual_path_counts: Dict[str, int] = {}
         failure_reason_counts: Dict[str, int] = {}
+        by_candidate: Dict[str, Dict[str, Any]] = {
+            key: self._empty_outcome_bucket() for key in ("A", "B", "C")
+        }
+        by_direction: Dict[str, Dict[str, Any]] = {
+            key: self._empty_outcome_bucket() for key in ("bullish", "bearish", "neutral")
+        }
         reviewed_count = 0
         pending_count = 0
         reviewed_condition_items: List[Dict[str, Any]] = []
@@ -399,6 +405,15 @@ class JournalService:
                 actual_key = str(actual_path).upper()
                 actual_path_counts[actual_key] = actual_path_counts.get(actual_key, 0) + 1
 
+            if candidate in by_candidate:
+                self._bump_outcome_bucket(by_candidate[candidate], outcome)
+
+            direction = self._resolve_judgment_direction(
+                constraints, candidate, system_evaluation
+            )
+            if direction in by_direction:
+                self._bump_outcome_bucket(by_direction[direction], outcome)
+
             failure_reason = normalize_failure_reason(review.get("failure_reason"))
             if failure_reason:
                 failure_reason_counts[failure_reason] = failure_reason_counts.get(failure_reason, 0) + 1
@@ -406,6 +421,9 @@ class JournalService:
         support_rate = None
         if reviewed_count > 0:
             support_rate = round(outcome_counts["supported"] / reviewed_count * 100, 2)
+
+        self._finalize_outcome_buckets(by_candidate)
+        self._finalize_outcome_buckets(by_direction)
 
         return {
             "limit": limit,
@@ -415,6 +433,8 @@ class JournalService:
             "outcome_counts": outcome_counts,
             "support_rate": support_rate,
             "selected_candidate_counts": selected_candidate_counts,
+            "by_candidate": by_candidate,
+            "by_direction": by_direction,
             "actual_path_counts": actual_path_counts,
             "most_common_actual_path": self._most_common_key(actual_path_counts),
             "failure_reason_counts": failure_reason_counts,
@@ -426,6 +446,55 @@ class JournalService:
                 reviewed_condition_items
             ),
         }
+
+    @staticmethod
+    def _empty_outcome_bucket() -> Dict[str, Any]:
+        return {
+            "reviewed_count": 0,
+            "outcome_counts": {"supported": 0, "falsified": 0, "uncertain": 0},
+            "support_rate": None,
+        }
+
+    @staticmethod
+    def _bump_outcome_bucket(bucket: Dict[str, Any], outcome: str) -> None:
+        bucket["reviewed_count"] += 1
+        counts = bucket["outcome_counts"]
+        if outcome not in counts:
+            outcome = "uncertain"
+        counts[outcome] += 1
+
+    @staticmethod
+    def _finalize_outcome_buckets(buckets: Dict[str, Dict[str, Any]]) -> None:
+        for bucket in buckets.values():
+            reviewed = int(bucket.get("reviewed_count") or 0)
+            supported = int((bucket.get("outcome_counts") or {}).get("supported") or 0)
+            bucket["support_rate"] = (
+                round(supported / reviewed * 100, 2) if reviewed > 0 else None
+            )
+
+    def _resolve_judgment_direction(
+        self,
+        constraints: Dict[str, Any],
+        candidate: str,
+        system_evaluation: Dict[str, Any],
+    ) -> str:
+        """从条件语义推导方向，禁止把 A/B/C 硬编码成多空。"""
+        selected = (system_evaluation or {}).get("selected_condition") or {}
+        direction = selected.get("direction")
+        if direction in ("bullish", "bearish", "neutral"):
+            return direction
+
+        from services.journal.evaluator import _parse_condition
+
+        description = extract_selected_condition_description(constraints, candidate)
+        kind = _parse_condition(description or "").get("kind")
+        if kind == "breakout":
+            return "bullish"
+        if kind == "breakdown":
+            return "bearish"
+        if kind == "range":
+            return "neutral"
+        return "neutral"
 
     def _parse_constraints(self, raw_constraints: Any) -> Dict[str, Any]:
         if not raw_constraints:
@@ -522,10 +591,19 @@ class JournalService:
         except:
             review = row.get('review')
         
+        industry = None
+        try:
+            from services.a_share_industry_lookup import AShareIndustryLookup
+
+            industry = AShareIndustryLookup.lookup(str(row.get("stock_code") or ""))
+        except Exception:
+            industry = None
+
         return {
             "id": row.get('id'),
             "user_id": row.get('user_id'),
             "ts_code": row.get('stock_code'),
+            "industry": industry,
             "candidate": row.get('candidate'),
             "selected_premises": selected_premises,
             "selected_risk_checks": selected_risk_checks,
@@ -634,12 +712,24 @@ class JournalService:
             )
             conn.commit()
 
+            cursor.execute("SELECT * FROM judgments WHERE id = ?", (record_id,))
+            due_row = cursor.fetchone()
+
+        # 与 run_due_check 对齐：强制到期后立刻生成系统初判，详情页可直接展示
+        preview = None
+        if due_row:
+            try:
+                preview = self._ensure_evaluation_preview(dict(due_row))
+            except Exception as exc:
+                logger.warning(f"[Journal] force_due preview failed for {record_id}: {exc}")
+
         return {
             "ok": True,
             "id": record_id,
             "status": "due",
             "previous_status": previous_status,
             "validation_date": forced_validation_date,
+            "has_evaluation_preview": bool(preview),
         }
     
     def review_record(

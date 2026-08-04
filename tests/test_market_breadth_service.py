@@ -1,6 +1,6 @@
 import pandas as pd
 
-from services.market_breadth_service import MarketBreadthService
+from services.market_breadth_service import MarketBreadthService, format_market_breadth_note
 from services.market_overview_service import MarketOverviewService
 
 
@@ -72,6 +72,28 @@ def test_full_spot_usable_requires_enough_rows():
     )
     assert RiskStockCollector._is_full_spot_usable(small) is False
     assert RiskStockCollector._is_full_spot_usable(large) is True
+
+
+def test_format_market_breadth_note():
+    note = format_market_breadth_note(
+        {
+            "status": "ok",
+            "temperature_label": "偏强",
+            "temperature": 65.4,
+            "up": 3448,
+            "down": 1657,
+            "flat": 170,
+            "limit_up": 66,
+            "limit_down": 0,
+        }
+    )
+    assert "偏强" in note
+    assert "65.4°" in note
+    assert "上涨 3448 家" in note
+    assert "涨停 66" in note
+    assert "不构成对该股方向的判断" in note
+    assert format_market_breadth_note({"status": "unavailable"}) == ""
+    assert format_market_breadth_note(None) == ""
 
 
 def test_temperature_label_rules():

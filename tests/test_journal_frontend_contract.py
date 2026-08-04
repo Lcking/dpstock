@@ -66,9 +66,42 @@ def test_journal_list_and_review_dialog_use_evaluation_preview():
     assert "record.evaluation_preview" in list_view
     assert "系统初判" in list_view
     assert "props.record?.evaluation_preview" in review_dialog
-    assert "effectiveSystemEvaluation" in detail_dialog
+    assert "displayEvaluation" in detail_dialog
+    assert "loadEvaluationPreview" in detail_dialog
+    assert "getRecordEvaluation" in detail_dialog
     assert "record.evaluation_preview" in detail_dialog
     assert "系统初判" in detail_dialog
+
+
+def test_journal_and_analysis_card_surface_industry_tag():
+    journal_types = (REPO_ROOT / "frontend/src/types/journal.ts").read_text(encoding="utf-8")
+    list_view = (REPO_ROOT / "frontend/src/components/Journal/JournalList.vue").read_text(encoding="utf-8")
+    detail_dialog = (REPO_ROOT / "frontend/src/components/Journal/JournalDetailDialog.vue").read_text(encoding="utf-8")
+    stock_card = (REPO_ROOT / "frontend/src/components/StockCard.vue").read_text(encoding="utf-8")
+    stock_types = (REPO_ROOT / "frontend/src/types/index.ts").read_text(encoding="utf-8")
+
+    assert "industry?: string" in journal_types
+    assert "record.industry" in list_view
+    assert "record.industry" in detail_dialog
+    assert "industry?: string" in stock_types
+    assert "stock.industry" in stock_card
+    assert "industry-tag" in stock_card
+
+
+def test_journal_stats_panel_splits_by_candidate_and_direction():
+    journal_types = (REPO_ROOT / "frontend/src/types/journal.ts").read_text(encoding="utf-8")
+    list_view = (REPO_ROOT / "frontend/src/components/Journal/JournalList.vue").read_text(encoding="utf-8")
+
+    assert "by_candidate" in journal_types
+    assert "by_direction" in journal_types
+    assert "JournalOutcomeBucket" in journal_types
+    assert "candidateStatsRows" in list_view
+    assert "directionStatsRows" in list_view
+    assert "按候选 A/B/C" in list_view
+    assert "按条件方向" in list_view
+    assert "看多条件" in list_view
+    assert "B = 看跌" not in list_view
+    assert "A = 看多" not in list_view
 
 
 def test_journal_review_captures_lesson_summary():

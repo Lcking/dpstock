@@ -139,6 +139,86 @@ def test_get_review_stats_summarizes_recent_judgment_outcomes(tmp_path):
     assert stats["support_rate"] == 33.33
     assert stats["actual_path_counts"] == {"A": 1, "C": 1}
     assert stats["most_common_actual_path"] in ("A", "C")
+    assert stats["by_candidate"]["A"]["reviewed_count"] == 2
+    assert stats["by_candidate"]["A"]["outcome_counts"]["supported"] == 1
+    assert stats["by_candidate"]["A"]["outcome_counts"]["falsified"] == 1
+    assert stats["by_candidate"]["A"]["support_rate"] == 50.0
+    assert stats["by_candidate"]["B"]["reviewed_count"] == 1
+    assert stats["by_candidate"]["B"]["outcome_counts"]["uncertain"] == 1
+    assert stats["by_candidate"]["C"]["reviewed_count"] == 0
+
+
+def test_get_review_stats_splits_by_condition_direction(tmp_path):
+    db_path = tmp_path / "journal_stats_direction.db"
+    user_id = "user_stats_direction"
+    DatabaseFactory.initialize(str(db_path))
+    _create_judgments_table(db_path)
+    _insert_judgment(
+        db_path,
+        record_id="jr_bullish",
+        user_id=user_id,
+        candidate="A",
+        status="reviewed",
+        constraints={
+            "candidates": {
+                "A": "价格突破10.13且成交量连续2日高于20日均量1.5倍。",
+            }
+        },
+        review={
+            "outcome": "supported",
+            "system_evaluation": {
+                "actual_path": "A",
+                "selected_condition": {"direction": "bullish", "status": "triggered"},
+            },
+        },
+        days_ago=1,
+    )
+    _insert_judgment(
+        db_path,
+        record_id="jr_bearish",
+        user_id=user_id,
+        candidate="B",
+        status="reviewed",
+        constraints={
+            "candidates": {
+                "B": "价格跌破9.50且成交量放大至20日均量的1.5倍以上。",
+            }
+        },
+        review={
+            "outcome": "falsified",
+            "system_evaluation": {
+                "actual_path": "A",
+                "selected_condition": {"direction": "bearish", "status": "not_triggered"},
+            },
+        },
+        days_ago=2,
+    )
+    _insert_judgment(
+        db_path,
+        record_id="jr_neutral_parsed",
+        user_id=user_id,
+        candidate="C",
+        status="reviewed",
+        constraints={
+            "candidates": {
+                "C": "价格在9.0-9.5区间震荡超过3个交易日，成交量回落至20日均量的0.8-1.2倍。",
+            }
+        },
+        review={
+            "outcome": "uncertain",
+            "system_evaluation": {"actual_path": None},
+        },
+        days_ago=3,
+    )
+
+    stats = JournalService().get_review_stats(user_id=user_id, limit=30)
+
+    assert stats["by_direction"]["bullish"]["reviewed_count"] == 1
+    assert stats["by_direction"]["bullish"]["support_rate"] == 100.0
+    assert stats["by_direction"]["bearish"]["reviewed_count"] == 1
+    assert stats["by_direction"]["bearish"]["outcome_counts"]["falsified"] == 1
+    assert stats["by_direction"]["neutral"]["reviewed_count"] == 1
+    assert stats["by_direction"]["neutral"]["outcome_counts"]["uncertain"] == 1
 
 
 def test_get_review_stats_summarizes_failure_reasons(tmp_path):

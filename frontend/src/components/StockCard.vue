@@ -6,6 +6,9 @@
           <div class="stock-info">
             <div class="stock-code">{{ stock.code }}</div>
             <div class="stock-name" v-if="stock.name">{{ stock.name }}</div>
+            <n-tag v-if="stock.industry" size="tiny" :bordered="false" class="industry-tag">
+              {{ stock.industry }}
+            </n-tag>
           </div>
           <div class="stock-price-info" v-if="stock.price !== undefined">
             <div class="stock-price">
@@ -934,6 +937,12 @@ function smoothScrollToBottom(element: HTMLElement) {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
+}
+
+.industry-tag {
+  align-self: flex-start;
+  color: #64748b;
+  background: rgba(148, 163, 184, 0.16);
 }
 
 /* Price Info */

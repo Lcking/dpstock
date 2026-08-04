@@ -12,6 +12,9 @@
         <div class="section-header">
           <span class="stock-code">{{ record.ts_code }}</span>
           <n-space>
+            <n-tag v-if="record.industry" size="medium" :bordered="false">
+              {{ record.industry }}
+            </n-tag>
             <n-tag :type="candidateTagType(record.candidate)" size="medium">
               候选 {{ record.candidate }}
             </n-tag>
@@ -85,19 +88,22 @@
       </div>
 
       <!-- System Evaluation Preview / Final -->
-      <div class="detail-section" v-if="effectiveSystemEvaluation(record)">
+      <div class="detail-section" v-if="evaluationLoading || displayEvaluation">
         <div class="section-title">
           {{ record.status === 'reviewed' ? '🧾 系统判卷' : '🔎 系统初判' }}
         </div>
-        <div class="system-evaluation-card">
-          <n-tag :type="outcomeTagType(effectiveSystemEvaluation(record)?.outcome || 'uncertain')" size="large">
-            {{ outcomeLabel(effectiveSystemEvaluation(record)?.outcome || 'uncertain') }}
+        <n-alert v-if="evaluationLoading" type="info" size="small">
+          正在加载系统初判...
+        </n-alert>
+        <div v-else-if="displayEvaluation" class="system-evaluation-card">
+          <n-tag :type="outcomeTagType(displayEvaluation.outcome || 'uncertain')" size="large">
+            {{ outcomeLabel(displayEvaluation.outcome || 'uncertain') }}
           </n-tag>
           <div class="evaluation-summary">
-            {{ effectiveSystemEvaluation(record)?.summary || '系统暂未给出明确摘要。' }}
+            {{ displayEvaluation.summary || '系统暂未给出明确摘要。' }}
           </div>
-          <div class="evaluation-path" v-if="effectiveSystemEvaluation(record)?.actual_path">
-            实际路径：{{ effectiveSystemEvaluation(record)?.actual_path }}
+          <div class="evaluation-path" v-if="displayEvaluation.actual_path">
+            实际路径：{{ displayEvaluation.actual_path }}
           </div>
         </div>
       </div>
@@ -181,6 +187,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import { NModal, NTag, NButton, NSpace, NAlert, NIcon } from 'naive-ui'
 import { 
   CalendarOutline, 
@@ -190,7 +197,8 @@ import {
   CheckmarkCircleOutline
 } from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
-import type { JournalRecord } from '@/types/journal'
+import { apiService } from '@/services/api'
+import type { JournalRecord, JournalSystemEvaluation } from '@/types/journal'
 
 interface Props {
   show: boolean
@@ -206,6 +214,56 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const evaluationLoading = ref(false)
+const previewEvaluation = ref<JournalSystemEvaluation | null>(null)
+
+const displayEvaluation = computed(() => {
+  if (!props.record) return null
+  return (
+    props.record.review?.system_evaluation
+    || props.record.evaluation_preview
+    || previewEvaluation.value
+    || null
+  )
+})
+
+watch(
+  () => [props.show, props.record?.id, props.record?.status] as const,
+  ([show]) => {
+    if (show) {
+      loadEvaluationPreview()
+    } else {
+      previewEvaluation.value = null
+      evaluationLoading.value = false
+    }
+  },
+)
+
+const loadEvaluationPreview = async () => {
+  if (!props.record) {
+    previewEvaluation.value = null
+    return
+  }
+  if (props.record.review?.system_evaluation || props.record.evaluation_preview) {
+    previewEvaluation.value = null
+    return
+  }
+  // due / reviewed 但缺预判时按需拉取；active 通常尚无判卷
+  if (props.record.status !== 'due' && props.record.status !== 'reviewed') {
+    previewEvaluation.value = null
+    return
+  }
+
+  evaluationLoading.value = true
+  try {
+    previewEvaluation.value = await apiService.getRecordEvaluation(props.record.id)
+  } catch (error) {
+    console.error('Detail evaluation preview error:', error)
+    previewEvaluation.value = null
+  } finally {
+    evaluationLoading.value = false
+  }
+}
 
 // Navigate to home to re-analyze
 const goToAnalyze = () => {
@@ -257,10 +315,6 @@ const selectedCandidateDescription = (record: JournalRecord) => {
 const candidateDescription = (record: JournalRecord) => {
   const description = selectedCandidateDescription(record)
   return description ? `候选 ${record.candidate}` : `候选 ${record.candidate}`
-}
-
-const effectiveSystemEvaluation = (record: JournalRecord) => {
-  return record.review?.system_evaluation || record.evaluation_preview || null
 }
 
 const statusTagType = (status: string) => {

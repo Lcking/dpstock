@@ -5,6 +5,7 @@ export interface JournalRecord {
     id: string
     user_id: string
     ts_code: string
+    industry?: string
     candidate: 'A' | 'B' | 'C'
     selected_premises?: string[]
     selected_risk_checks?: string[]
@@ -72,6 +73,16 @@ export interface JournalStockTimeline {
     records: JournalRecord[]
 }
 
+export interface JournalOutcomeBucket {
+    reviewed_count: number
+    outcome_counts: {
+        supported: number
+        falsified: number
+        uncertain: number
+    }
+    support_rate: number | null
+}
+
 export interface JournalReviewStats {
     limit: number
     sample_size: number
@@ -84,6 +95,8 @@ export interface JournalReviewStats {
     }
     support_rate: number | null
     selected_candidate_counts: Record<string, number>
+    by_candidate: Record<string, JournalOutcomeBucket>
+    by_direction: Record<'bullish' | 'bearish' | 'neutral' | string, JournalOutcomeBucket>
     actual_path_counts: Record<string, number>
     most_common_actual_path: string | null
     failure_reason_counts: Record<string, number>
