@@ -60,8 +60,16 @@ class MarketOverviewService:
         if self._cache and now - self._cache_at < self._cache_ttl_seconds():
             return self._cache
 
-        items = [self._fetch_index(spec) for spec in self.INDEX_SPECS]
-        breadth = self._safe_breadth()
+        # 指数与温度条并行，避免串行叠加延迟
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            items_future = pool.submit(
+                lambda: [self._fetch_index(spec) for spec in self.INDEX_SPECS]
+            )
+            breadth_future = pool.submit(self._safe_breadth)
+            items = items_future.result()
+            breadth = breadth_future.result()
         auction_brief = self._build_auction_brief(items, breadth)
         payload = {
             "items": items,
