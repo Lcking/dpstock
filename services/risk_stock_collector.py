@@ -499,13 +499,12 @@ class RiskStockCollector:
     SPOT_MAX_PAGES = 40
 
     def _fetch_spot(self, trade_date: Optional[str] = None):
-        """全市场涨跌幅快照。
+        """涨幅池专用截断快照（非全市场）。
 
-        东财 → 新浪 → tushare daily → akshare 四级回退：
-        - 服务器（海外 IP）对东财 push2 系列经常被拒连
-        - 新浪行情从服务器一直可用（实时价补丁同源），盘中主力兜底
-        - tushare daily 是积分接口、最稳，但只有收盘结算后才有当日数据，
-          用于 16:10 定稿任务的兜底（盘中返回空会自然跳过）
+        东财/新浪按涨跌幅排序后早停：只保留涨幅≥5% 与跌幅≤-15% 的样本，
+        供 5%/9% 涨幅池与创业板大波动使用。市场温度条请用 fetch_spot_full_market。
+
+        东财 → 新浪 → tushare daily → akshare 最终回退。
         """
         try:
             df = self._fetch_spot_eastmoney()
@@ -531,6 +530,58 @@ class RiskStockCollector:
         import akshare as ak
 
         return ak.stock_zh_a_spot_em()
+
+    FULL_SPOT_MAX_PAGES = 80
+    FULL_SPOT_MIN_ROWS = 2000
+
+    def fetch_spot_full_market(self, trade_date: Optional[str] = None):
+        """沪深 A 股全市场涨跌幅（不早停），供市场温度/涨跌家数使用。"""
+        try:
+            df = self._fetch_spot_eastmoney_full()
+            if self._is_full_spot_usable(df):
+                return df
+            if df is not None and not df.empty:
+                logger.warning(
+                    f"[RiskStockCollector] eastmoney full spot too small: {len(df)} rows"
+                )
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] eastmoney full spot failed: {exc}")
+
+        try:
+            df = self._fetch_spot_sina_full()
+            if self._is_full_spot_usable(df):
+                return df
+            if df is not None and not df.empty:
+                logger.warning(
+                    f"[RiskStockCollector] sina full spot too small: {len(df)} rows"
+                )
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] sina full spot failed: {exc}")
+
+        try:
+            df = self._fetch_spot_tushare(trade_date)
+            if self._is_full_spot_usable(df):
+                return df
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] tushare full spot failed: {exc}")
+
+        try:
+            import akshare as ak
+
+            df = ak.stock_zh_a_spot_em()
+            if df is not None and not df.empty and "涨跌幅" in df.columns:
+                return df
+        except Exception as exc:
+            logger.warning(f"[RiskStockCollector] akshare full spot failed: {exc}")
+        return None
+
+    @classmethod
+    def _is_full_spot_usable(cls, df) -> bool:
+        if df is None or getattr(df, "empty", True):
+            return False
+        if "涨跌幅" not in getattr(df, "columns", []):
+            return False
+        return len(df) >= cls.FULL_SPOT_MIN_ROWS
 
     def _fetch_spot_tushare(self, trade_date: Optional[str] = None):
         """tushare pro.daily 全市场单日行情（收盘结算后可用）。"""
@@ -598,8 +649,36 @@ class RiskStockCollector:
 
         return pd.DataFrame(rows, columns=["代码", "名称", "涨跌幅"])
 
+    def _fetch_spot_eastmoney_full(self):
+        """东财 clist 全量翻页，不按涨跌幅阈值早停。"""
+        import pandas as pd
+        import requests
+
+        session = requests.Session()
+        session.trust_env = False
+        rows: List[Dict[str, Any]] = []
+        seen: set = set()
+        for page in range(1, self.FULL_SPOT_MAX_PAGES + 1):
+            diff = self._fetch_spot_page(session, page=page, ascending=False)
+            if not diff:
+                break
+            for entry in diff:
+                code = str(entry.get("f12") or "").strip()
+                name = str(entry.get("f14") or "").strip()
+                pct = entry.get("f3")
+                if not code or not name or not isinstance(pct, (int, float)):
+                    continue
+                if code in seen:
+                    continue
+                seen.add(code)
+                rows.append({"代码": code, "名称": name, "涨跌幅": float(pct)})
+            if len(diff) < self.SPOT_PAGE_SIZE:
+                break
+        return pd.DataFrame(rows, columns=["代码", "名称", "涨跌幅"])
+
     SINA_PAGE_SIZE = 80
     SINA_MAX_PAGES = 40
+    SINA_FULL_MAX_PAGES = 80
 
     def _fetch_spot_sina(self):
         """新浪行情中心列表：按涨跌幅排序分页，阈值早停，与东财路径同构。"""
@@ -626,6 +705,37 @@ class RiskStockCollector:
                 seen.add(item["代码"])
                 rows.append(item)
 
+        return pd.DataFrame(rows, columns=["代码", "名称", "涨跌幅"])
+
+    def _fetch_spot_sina_full(self):
+        """新浪 hs_a 全量翻页，不按涨跌幅阈值早停。"""
+        import pandas as pd
+        import requests
+
+        session = requests.Session()
+        session.trust_env = False
+        rows: List[Dict[str, Any]] = []
+        seen: set = set()
+        for page in range(1, self.SINA_FULL_MAX_PAGES + 1):
+            data = self._fetch_sina_page(session, page=page, ascending=False)
+            if not data:
+                break
+            for entry in data:
+                code = str(entry.get("code") or "").strip()
+                name = str(entry.get("name") or "").strip()
+                pct = entry.get("changepercent")
+                try:
+                    pct = float(pct)
+                except (TypeError, ValueError):
+                    continue
+                if not code or not name or not self._is_sh_sz_a_share(code):
+                    continue
+                if code in seen:
+                    continue
+                seen.add(code)
+                rows.append({"代码": code, "名称": name, "涨跌幅": pct})
+            if len(data) < self.SINA_PAGE_SIZE:
+                break
         return pd.DataFrame(rows, columns=["代码", "名称", "涨跌幅"])
 
     def _page_spot_sina(self, session, ascending: bool):

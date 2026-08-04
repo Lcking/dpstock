@@ -18,7 +18,7 @@ def test_breadth_aggregates_up_down_and_limit(monkeypatch):
     )
 
     class _FakeCollector:
-        def _fetch_spot(self, trade_date):
+        def fetch_spot_full_market(self, trade_date=None):
             return spot
 
     monkeypatch.setattr(
@@ -37,6 +37,15 @@ def test_breadth_aggregates_up_down_and_limit(monkeypatch):
     assert payload["temperature"] == round(3 / 6 * 100, 1)
     assert "auction" in payload
     assert payload["auction"]["window"] == "09:15–09:25"
+
+
+def test_full_spot_usable_requires_enough_rows():
+    from services.risk_stock_collector import RiskStockCollector
+
+    small = pd.DataFrame([{"代码": "600000", "名称": "x", "涨跌幅": 1.0}] * 100)
+    large = pd.DataFrame([{"代码": f"{i:06d}", "名称": "x", "涨跌幅": 1.0} for i in range(2500)])
+    assert RiskStockCollector._is_full_spot_usable(small) is False
+    assert RiskStockCollector._is_full_spot_usable(large) is True
 
 
 def test_temperature_label_rules():

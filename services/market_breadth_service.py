@@ -66,7 +66,8 @@ class MarketBreadthService:
 
             collector = RiskStockCollector()
             trade_date = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d")
-            df = collector._fetch_spot(trade_date)
+            # 必须用全市场快照；风险池 _fetch_spot 会按 5%/-15% 早停，温度会失真
+            df = collector.fetch_spot_full_market(trade_date)
             if df is None or df.empty or "涨跌幅" not in df.columns:
                 return empty
 
