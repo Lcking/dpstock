@@ -967,6 +967,14 @@ Crawl-delay: 1
                 headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
                 headers["Pragma"] = "no-cache"
                 headers["Expires"] = "0"
+                from services.seo_head_injection import unwrap_ssr_placeholders
+
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return Response(
+                        content=unwrap_ssr_placeholders(f.read()),
+                        media_type="text/html",
+                        headers=headers,
+                    )
             return Response(content=open(file_path, "rb").read(), media_type=media_type, headers=headers)
             
         # 否则读取 index.html 并进行 SEO 注入
@@ -996,6 +1004,10 @@ Crawl-delay: 1
                         ).inject_article_page(html_content, article)
             except Exception as e:
                 logger.error(f"SEO Injection Error: {str(e)}")
+
+        from services.seo_head_injection import unwrap_ssr_placeholders
+
+        html_content = unwrap_ssr_placeholders(html_content)
         
         return Response(
             content=html_content,

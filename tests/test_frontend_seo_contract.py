@@ -9,6 +9,7 @@ def test_frontend_index_has_modern_seo_defaults():
     repo_root = Path(__file__).resolve().parents[1]
     index_text = (repo_root / "frontend/index.html").read_text(encoding="utf-8")
 
+    # 源码仍保留占位符，便于文章页注入；出站 HTML 必须剥掉注释标记
     assert '<!--SSR:TITLE-->免费AI在线股票分析平台系统 - 智能诊股助手_软件<!--/SSR:TITLE-->' in index_text
     assert '<meta name="description"' in index_text
     assert '<link rel="canonical"' in index_text
@@ -18,6 +19,19 @@ def test_frontend_index_has_modern_seo_defaults():
     assert 'name="twitter:card"' in index_text
     assert '<meta name="baidu-site-verification" content="codeva-m2d0KFsWXV" />' in index_text
     assert '智能股票分析' in index_text or 'AI分析' in index_text
+
+
+def test_served_spa_html_does_not_leak_ssr_title_markers():
+    with TestClient(app) as client:
+        home = client.get("/")
+        index_file = client.get("/index.html")
+
+    assert home.status_code == 200
+    assert "<!--SSR:" not in home.text
+    assert "<title>免费AI在线股票分析平台系统 - 智能诊股助手_软件</title>" in home.text
+    assert "<!--SSR:TITLE-->" not in home.text
+    assert index_file.status_code == 200
+    assert "<!--SSR:" not in index_file.text
 
 
 def test_public_index_does_not_disable_zoom():

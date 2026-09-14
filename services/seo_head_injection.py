@@ -14,6 +14,10 @@ _SSR_PATTERN = re.compile(
     r"<!--SSR:(?P<key>[A-Z0-9_]+)-->.*?<!--/SSR:\1-->",
     re.DOTALL,
 )
+_SSR_UNWRAP_PATTERN = re.compile(
+    r"<!--SSR:(?P<key>[A-Z0-9_]+)-->(?P<value>.*?)<!--/SSR:\1-->",
+    re.DOTALL,
+)
 
 
 def replace_ssr_placeholder(content: str, key: str, value: str) -> str:
@@ -49,7 +53,17 @@ def inject_ssr_fields(
             content = replace_ssr_placeholder_raw(content, key, value)
         else:
             content = replace_ssr_placeholder(content, key, value)
-    return content
+    return unwrap_ssr_placeholders(content)
+
+
+def unwrap_ssr_placeholders(content: str) -> str:
+    """Drop comment wrappers, keep the inner default/injected text.
+
+    HTML comments inside <title> and meta content are treated as literal text
+    by browsers and crawlers, so leftover <!--SSR:TITLE--> markers leak into
+    the search snippet. Serving always unwraps remaining placeholders.
+    """
+    return _SSR_UNWRAP_PATTERN.sub(lambda match: match.group("value"), content)
 
 
 def assert_no_ssr_placeholders_remain(content: str) -> None:

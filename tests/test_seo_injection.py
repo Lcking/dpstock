@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from services.article_seo_service import ArticleSeoService
-from services.seo_head_injection import assert_no_ssr_placeholders_remain
+from services.seo_head_injection import (
+    assert_no_ssr_placeholders_remain,
+    unwrap_ssr_placeholders,
+)
 
 
 def _sample_index_html() -> str:
@@ -42,6 +45,21 @@ def test_article_seo_injection_replaces_all_placeholders():
     assert "常见问题" in html
     assert "主要风险是什么？" in html
     assert "<!--SSR:" not in html
+    assert_no_ssr_placeholders_remain(html)
+
+
+def test_unwrap_ssr_placeholders_strips_title_and_meta_markers():
+    raw = _sample_index_html()
+    html = unwrap_ssr_placeholders(raw)
+
+    assert "<!--SSR:" not in html
+    assert "<title>免费AI在线股票分析平台系统 - 智能诊股助手_软件</title>" in html
+    assert (
+        'content="Agu AI 提供 A 股、港股、美股与 ETF 的智能股票分析，帮助你快速查看结构、趋势、相对强弱与风险线索。"'
+        in html
+    )
+    assert 'content="Agu AI | 智能股票分析平台"' in html
+    assert 'href="https://aguai.net/"' in html
     assert_no_ssr_placeholders_remain(html)
 
 
