@@ -822,6 +822,24 @@ async function analyzeStocks() {
           return;
         }
       }
+      if (response.status === 429 || response.status === 503) {
+        let errorMessage = response.status === 503
+          ? '分析服务暂时不可用，请稍后再试'
+          : '分析请求过于频繁，请稍后再试';
+        try {
+          const errorData = await response.json();
+          const detail = errorData.detail;
+          const detailMessage = typeof detail === 'string' ? detail : detail?.message;
+          if (typeof detailMessage === 'string' && detailMessage.trim()) {
+            errorMessage = detailMessage;
+          }
+        } catch (e) {
+          // 用上面的默认文案
+        }
+        message.error(errorMessage);
+        isAnalyzing.value = false;
+        return;
+      }
       if (response.status === 404) {
         throw new Error('服务器接口未找到，请检查服务是否正常运行');
       }

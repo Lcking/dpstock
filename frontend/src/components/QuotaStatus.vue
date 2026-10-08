@@ -27,13 +27,10 @@
             已用: {{ status?.used_quota ?? 0 }} 次
           </div>
           <div v-if="status?.is_authenticated" style="margin-top: 6px; font-size: 12px; opacity: 0.85;">
-            已绑定邮箱：基础额度 {{ status?.base_quota ?? DEFAULT_BASE_QUOTA }} 次/日
+            已绑定邮箱：基础额度 {{ status?.base_quota ?? DEFAULT_BASE_QUOTA }} 次/日。额度跟着账户走。
           </div>
           <div v-else style="margin-top: 6px; font-size: 12px; opacity: 0.85;">
-            未绑定：基础额度 {{ status?.base_quota ?? DEFAULT_BASE_QUOTA }} 次/日
-          </div>
-          <div style="margin-top: 8px; font-size: 12px; opacity: 0.8;">
-            当前额度与邀请奖励会按统一账户归集，绑定后不会因设备切换丢失
+            未登录时按当前网络计次，更换浏览器不会把今日次数清零。
           </div>
         </div>
       </n-tooltip>

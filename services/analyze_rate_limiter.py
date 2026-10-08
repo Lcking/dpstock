@@ -1,5 +1,7 @@
 """
 In-memory rate limiting for /api/analyze.
+
+Buckets are keyed only by client IP. A new anonymous id must not reset them.
 """
 from __future__ import annotations
 
@@ -25,18 +27,17 @@ def _prune(bucket: List[float], now: float, window_s: float) -> None:
         bucket.pop(0)
 
 
-def _client_key(user_id: str, client_host: str) -> str:
-    safe_user = str(user_id or "anonymous").strip() or "anonymous"
-    safe_host = str(client_host or "unknown").strip() or "unknown"
-    return f"{safe_user}:{safe_host}"
+def _client_key(client_ip: str) -> str:
+    safe_ip = str(client_ip or "unknown").strip() or "unknown"
+    return f"ip:{safe_ip}"
 
 
-def check_analyze_rate_limit(user_id: str, client_host: str) -> Tuple[bool, str]:
+def check_analyze_rate_limit(client_ip: str) -> Tuple[bool, str]:
     """
     Return (allowed, reason).
     reason is empty when allowed, otherwise a short machine-readable code.
     """
-    key = _client_key(user_id, client_host)
+    key = _client_key(client_ip)
     now = time.monotonic()
 
     minute_bucket = _window_buckets.setdefault(key, [])

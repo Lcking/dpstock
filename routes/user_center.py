@@ -3,11 +3,13 @@ User Center API Routes — uses unified auth
 """
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 
 from auth.dependencies import get_current_user, UserContext
 from services.user_service import UserService
+from services.analyze_spend_guard import AnalyzeSpendGuard
+from services.client_ip import resolve_client_ip
 from services.quota_service import QuotaService
 from services.invite_service import InviteService
 from services.watchlist import watchlist_service
@@ -40,17 +42,26 @@ def _mask_email(email: Optional[str]) -> Optional[str]:
 
 
 @router.get("/overview")
-async def get_user_center_overview(user: UserContext = Depends(get_current_user)):
+async def get_user_center_overview(
+    request: Request,
+    user: UserContext = Depends(get_current_user),
+):
     try:
         user_record = user_service.get_user(user.user_id) or {}
         watchlists = watchlist_service.get_user_watchlists(user.user_id)
         recent_judgments = journal_service.get_records(user_id=user.user_id, page=1, page_size=5)
         due_count = journal_service.get_due_count(user.user_id)
         judgment_count = journal_service.get_records_count(user.user_id)
-        quota_status = quota_service.get_quota_status(
-            user.user_id,
-            is_authenticated=user.is_authenticated,
-        )
+        if user.is_authenticated:
+            quota_status = quota_service.get_quota_status(
+                user.user_id,
+                is_authenticated=True,
+            )
+        else:
+            quota_status = AnalyzeSpendGuard().status(
+                client_ip=resolve_client_ip(request),
+                user_id=user.user_id,
+            )
         trust_stats = JudgmentAccuracyService().get_public_accuracy_stats(window_days=90)
         personal_review_stats = journal_service.get_review_stats(user.user_id, limit=50)
         risk_alert_unread_count = WatchlistRiskAlertService().get_unread_count(user.user_id)

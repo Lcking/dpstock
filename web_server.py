@@ -18,6 +18,8 @@ import asyncio
 import httpx
 from services.quota_service import QuotaService
 from services.analyze_rate_limiter import check_analyze_rate_limit
+from services.analyze_spend_guard import AnalyzeSpendGuard, SpendGuardUnavailable
+from services.client_ip import resolve_client_ip
 from services.invite_service import InviteService
 from services.user_service import UserService
 from services.verification_scheduler import start_verification_scheduler
@@ -364,29 +366,33 @@ async def analyze(
 ):
     slo_sample = analyze_slo_tracker.start()
     try:
-        logger.info("开始处理分析请求")
-        stock_codes = request.stock_codes
+        client_ip = resolve_client_ip(http_request)
+        logger.info(f"开始处理分析请求 ip={client_ip}")
         market_type = request.market_type
 
         quota_service_instance = QuotaService()
         canonical_user_id = user.user_id
-        client_host = http_request.client.host if http_request.client else "unknown"
 
-        if canonical_user_id:
-            allowed, limit_reason = check_analyze_rate_limit(canonical_user_id, client_host)
-            if not allowed:
-                raise HTTPException(
-                    status_code=429,
-                    detail={
-                        "error": limit_reason,
-                        "message": "分析请求过于频繁，请稍后再试",
-                    },
-                )
+        allowed, limit_reason = check_analyze_rate_limit(client_ip)
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": limit_reason,
+                    "message": "分析请求过于频繁，请稍后再试",
+                },
+            )
 
+        original_count = len(request.stock_codes)
+        stock_codes = list(dict.fromkeys(request.stock_codes))
+        if len(stock_codes) < original_count:
+            logger.info(f"后端去重: 从{original_count}个代码中移除了{original_count - len(stock_codes)}个重复项")
+
+        if user.is_authenticated and canonical_user_id:
             allowed, reason, details = quota_service_instance.check_quota_for_codes(
                 user_id=canonical_user_id,
                 stock_codes=stock_codes,
-                is_authenticated=user.is_authenticated,
+                is_authenticated=True,
             )
             if not allowed:
                 logger.warning(
@@ -404,13 +410,53 @@ async def analyze(
                     },
                 )
 
+        ip_extra_quota = 0
+        if not user.is_authenticated and canonical_user_id:
+            ip_extra_quota = int(
+                quota_service_instance.get_quota_status(
+                    canonical_user_id,
+                    is_authenticated=False,
+                ).get("invite_quota")
+                or 0
+            )
+        try:
+            allowed, reason, details = AnalyzeSpendGuard().reserve(
+                client_ip=client_ip,
+                stock_codes=stock_codes,
+                enforce_ip_quota=not user.is_authenticated,
+                ip_extra_quota=ip_extra_quota,
+                user_id=canonical_user_id or "",
+            )
+        except SpendGuardUnavailable:
+            logger.exception("[AnalyzeSpend] refusing analyze because the spend guard is unavailable")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "spend_guard_unavailable",
+                    "message": "分析服务暂时不可用，请稍后再试",
+                },
+            )
+        if not allowed:
+            if reason == "global_daily_exceeded":
+                raise HTTPException(
+                    status_code=429,
+                    detail={
+                        "error": "global_daily_exceeded",
+                        "message": details.get("message", "今日全站分析次数已达上限，请明天再试"),
+                    },
+                )
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "quota_exceeded",
+                    "message": details.get("message", "今日分析额度已用完"),
+                    "remaining_quota": details.get("remaining_quota", 0),
+                    "required_quota": details.get("required_quota", len(stock_codes)),
+                    "analyzed_stocks_today": details.get("analyzed_stocks_today", []),
+                },
+            )
+
         invite_service_instance = InviteService()
-        
-        # 后端再次去重，确保安全
-        original_count = len(stock_codes)
-        stock_codes = list(dict.fromkeys(stock_codes))  # 保持原有顺序的去重方法
-        if len(stock_codes) < original_count:
-            logger.info(f"后端去重: 从{original_count}个代码中移除了{original_count - len(stock_codes)}个重复项")
         
         logger.debug(f"接收到分析请求: stock_codes={stock_codes}, market_type={market_type}")
         
