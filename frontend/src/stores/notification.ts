@@ -2,10 +2,20 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiService } from '@/services/api'
 
+export interface DuePreviewItem {
+    id: string
+    ts_code: string
+    stock_name?: string | null
+    candidate?: string | null
+    premise?: string | null
+    validation_date?: string | null
+}
+
 export const useNotificationStore = defineStore('notification', () => {
     const pendingReviewCount = ref(0)
     const riskAlertCount = ref(0)
     const signalAlertCount = ref(0)
+    const duePreview = ref<DuePreviewItem[]>([])
     const isLoading = ref(false)
 
     let pollInterval: number | null = null
@@ -23,6 +33,7 @@ export const useNotificationStore = defineStore('notification', () => {
             pendingReviewCount.value = inbox.due_count || 0
             riskAlertCount.value = inbox.risk_alert_count || 0
             signalAlertCount.value = inbox.signal_alert_count || 0
+            duePreview.value = Array.isArray(inbox.due_preview) ? inbox.due_preview : []
         } catch (error) {
             console.error('Failed to check notifications:', error)
         } finally {
@@ -50,6 +61,7 @@ export const useNotificationStore = defineStore('notification', () => {
         pendingReviewCount,
         riskAlertCount,
         signalAlertCount,
+        duePreview,
         totalNotificationCount,
         checkReviews,
         startPolling,

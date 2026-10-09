@@ -1,5 +1,122 @@
 <template>
   <div class="analysis-v1-display">
+    <section class="brief-screen" aria-label="分析摘要">
+      <div class="brief-row">
+        <span class="brief-label">结构</span>
+        <span class="brief-value">{{ briefStructure }}</span>
+      </div>
+      <div class="brief-row">
+        <span class="brief-label">价位</span>
+        <span class="brief-value">{{ briefLevels }}</span>
+      </div>
+      <div class="brief-row">
+        <span class="brief-label">先看这项</span>
+        <span class="brief-value">{{ briefRisk }}</span>
+      </div>
+    </section>
+
+    <JudgmentPreReminder
+      v-if="!hideJudgmentZone"
+      :risk-flags="data.risk_of_misreading?.risk_flags || []"
+      :expand-by-default="false"
+    />
+
+    <div v-if="!hideJudgmentZone" ref="judgmentZoneRef" class="analysis-section judgment-zone">
+      <n-alert v-if="!lastSavedRecordId" type="info" :bordered="false" class="judgment-funnel-banner">
+        <template #header>下一步：保存结构化判断</template>
+        选择候选与风险检查项后保存。验证期结束后可以复盘。
+      </n-alert>
+
+      <h3 class="section-title">判断区</h3>
+
+      <n-radio-group v-model:value="selectedCandidate" class="candidates-group">
+        <n-space vertical>
+          <n-radio
+            v-for="candidate in data.judgment_zone.candidates"
+            :key="candidate.option_id"
+            :value="candidate.option_id"
+            class="candidate-radio"
+          >
+            <div class="candidate-content">
+              <strong class="candidate-id">{{ candidate.option_id }}.</strong>
+              <span class="candidate-description markdown-content" v-html="renderMarkdown(candidate.description)"></span>
+            </div>
+          </n-radio>
+        </n-space>
+      </n-radio-group>
+
+      <n-divider />
+
+      <div class="risk-checks">
+        <h4>风险检查项</h4>
+        <n-checkbox-group v-model:value="selectedRiskChecks">
+          <n-space vertical>
+            <n-checkbox
+              v-for="(check, idx) in data.judgment_zone.risk_checks"
+              :key="idx"
+              :value="check"
+            >
+              {{ check }}
+            </n-checkbox>
+          </n-space>
+        </n-checkbox-group>
+      </div>
+
+      <div class="verification-period">
+        <h4>验证周期</h4>
+        <n-radio-group v-model:value="selectedPeriod" size="small">
+          <n-radio-button :value="1">1天</n-radio-button>
+          <n-radio-button :value="3">3天</n-radio-button>
+          <n-radio-button :value="7">7天</n-radio-button>
+          <n-radio-button :value="30">30天</n-radio-button>
+        </n-radio-group>
+        <div class="period-hint">
+          <n-text depth="3" style="font-size: 12px;">验证期结束后，系统会按这个周期核对判断是否成立</n-text>
+        </div>
+      </div>
+
+      <n-alert type="info" :bordered="false" class="judgment-note">
+        {{ data.judgment_zone.note }}
+      </n-alert>
+
+      <n-button
+        v-if="!lastSavedRecordId"
+        type="primary"
+        size="large"
+        block
+        @click="handleSaveJudgment"
+        :disabled="!selectedCandidate || selectedRiskChecks.length === 0"
+        :loading="saving"
+        class="save-judgment-button"
+      >
+        <template #icon>
+          <n-icon><BookmarkOutline /></n-icon>
+        </template>
+        保存我的判断
+      </n-button>
+
+      <div v-else class="judgment-saved-panel">
+        <n-alert type="success" :bordered="false">
+          判断已保存。验证期 {{ selectedPeriod }} 天结束后可复盘，系统会自动判卷。
+        </n-alert>
+        <n-space class="judgment-saved-actions" :size="12">
+          <n-button type="primary" @click="goToJournal">去判断日记</n-button>
+          <n-button tertiary @click="goToMe">查看我的复盘表现</n-button>
+          <n-button quaternary @click="resetSavedState">继续保存另一条</n-button>
+        </n-space>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      class="report-toggle"
+      :aria-expanded="reportOpen"
+      @click="reportOpen = !reportOpen"
+    >
+      {{ reportOpen ? '收起完整报告' : '展开完整报告' }}
+    </button>
+
+    <div v-if="reportOpen" class="full-report">
     <div class="analysis-section plain-language-summary">
       <div class="plain-language-eyebrow">AI 一句话结论</div>
       <div class="plain-language-title">一句话结论</div>
@@ -128,106 +245,9 @@
 
     <!-- Tushare Enhancement Cards (新增增强数据卡片区) -->
     <div class="analysis-section enhancements-section" v-if="stockCode">
-      <h3 class="section-title">📊 数据增强</h3>
+      <h3 class="section-title">数据增强</h3>
       <EnhancementCards :stock-code="stockCode" />
     </div>
-
-    <!-- Section 5: 判断区 -->
-    <!-- Wyckoff II Pre-Judgment Reminder -->
-    <JudgmentPreReminder
-      v-if="!hideJudgmentZone"
-      :risk-flags="data.risk_of_misreading?.risk_flags || []"
-      :expand-by-default="false"
-    />
-
-    <div v-if="!hideJudgmentZone" ref="judgmentZoneRef" class="analysis-section judgment-zone">
-      <n-alert v-if="!lastSavedRecordId" type="info" :bordered="false" class="judgment-funnel-banner">
-        <template #header>下一步：保存结构化判断</template>
-        选择候选与风险检查项后保存，系统将在验证期结束后自动判卷，并提醒你复盘沉淀记录。
-        <div style="margin-top: 8px">
-          <n-button size="tiny" tertiary type="primary" @click="scrollToJudgmentZone">查看判断区</n-button>
-        </div>
-      </n-alert>
-
-      <h3 class="section-title">🎯 判断区</h3>
-      
-      <n-radio-group v-model:value="selectedCandidate" class="candidates-group">
-        <n-space vertical>
-          <n-radio
-            v-for="candidate in data.judgment_zone.candidates"
-            :key="candidate.option_id"
-            :value="candidate.option_id"
-            class="candidate-radio"
-          >
-            <div class="candidate-content">
-              <strong class="candidate-id">{{ candidate.option_id }}.</strong>
-              <span class="candidate-description markdown-content" v-html="renderMarkdown(candidate.description)"></span>
-            </div>
-          </n-radio>
-        </n-space>
-      </n-radio-group>
-
-      <n-divider />
-
-      <div class="risk-checks">
-        <h4>风险检查项</h4>
-        <n-checkbox-group v-model:value="selectedRiskChecks">
-          <n-space vertical>
-            <n-checkbox
-              v-for="(check, idx) in data.judgment_zone.risk_checks"
-              :key="idx"
-              :value="check"
-            >
-              {{ check }}
-            </n-checkbox>
-          </n-space>
-        </n-checkbox-group>
-      </div>
-
-      <div class="verification-period">
-        <h4>验证周期</h4>
-        <n-radio-group v-model:value="selectedPeriod" size="small">
-          <n-radio-button :value="1">1天</n-radio-button>
-          <n-radio-button :value="3">3天</n-radio-button>
-          <n-radio-button :value="7">7天</n-radio-button>
-          <n-radio-button :value="30">30天</n-radio-button>
-        </n-radio-group>
-        <div class="period-hint">
-          <n-text depth="3" style="font-size: 12px;">这将决定并在多长时间内追踪验证此判断是否成立</n-text>
-        </div>
-      </div>
-
-
-      <n-alert type="info" :bordered="false" class="judgment-note">
-        {{ data.judgment_zone.note }}
-      </n-alert>
-
-      <n-button
-        v-if="!lastSavedRecordId"
-        type="primary"
-        size="large"
-        block
-        @click="handleSaveJudgment"
-        :disabled="!selectedCandidate || selectedRiskChecks.length === 0"
-        :loading="saving"
-        class="save-judgment-button"
-      >
-        <template #icon>
-          <n-icon><BookmarkOutline /></n-icon>
-        </template>
-        保存我的判断
-      </n-button>
-
-      <div v-else class="judgment-saved-panel">
-        <n-alert type="success" :bordered="false">
-          判断已保存。验证期 {{ selectedPeriod }} 天结束后可复盘，系统会自动判卷。
-        </n-alert>
-        <n-space class="judgment-saved-actions" :size="12">
-          <n-button type="primary" @click="goToJournal">去判断日记</n-button>
-          <n-button tertiary @click="goToMe">查看我的复盘表现</n-button>
-          <n-button quaternary @click="resetSavedState">继续保存另一条</n-button>
-        </n-space>
-      </div>
     </div>
 
     <!-- Wyckoff II Judgment Confirm Dialog -->
@@ -350,6 +370,28 @@ const turnoverActivityLabel = computed(() => {
 
 const plainLanguageSummary = computed(() => buildPlainLanguageSummary());
 const evidenceItems = computed(() => buildEvidenceItems());
+const reportOpen = ref(Boolean(props.hideJudgmentZone));
+const briefStructure = computed(() => {
+  const structure = props.data?.structure_snapshot || {};
+  const phaseText = getPhaseName(structure.phase || 'unclear');
+  const structureText = getStructureTypeName(structure.structure_type || 'consolidation');
+  const ma200Text = getMA200PositionName(structure.ma200_position || 'no_data');
+  return `${phaseText}${structureText}，价格位于 MA200 ${ma200Text}`;
+});
+const briefLevels = computed(() => {
+  const levels = props.data?.structure_snapshot?.key_levels;
+  if (!Array.isArray(levels) || levels.length === 0) return '关键价位暂缺';
+  return levels.slice(0, 3).map((level: { label?: string; price?: number }) => {
+    const price = Number(level?.price);
+    const priceText = Number.isFinite(price) ? price.toFixed(2) : '--';
+    return `${level?.label || '关键位'} ${priceText}`;
+  }).join(' · ');
+});
+const briefRisk = computed(() => {
+  const factors = props.data?.risk_of_misreading?.risk_factors;
+  if (Array.isArray(factors) && factors[0]) return extractPlainText(String(factors[0]));
+  return extractPlainText(String(props.data?.risk_of_misreading?.caution_note || '观察关键价位、量能和结构变化'));
+});
 
 watch(
   () => props.stockCode,
@@ -357,6 +399,7 @@ watch(
     lastSavedRecordId.value = '';
     selectedCandidate.value = '';
     selectedRiskChecks.value = [];
+    reportOpen.value = Boolean(props.hideJudgmentZone);
   },
 );
 
@@ -370,10 +413,6 @@ function goToMe() {
 
 function resetSavedState() {
   lastSavedRecordId.value = '';
-}
-
-function scrollToJudgmentZone() {
-  judgmentZoneRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function buildPlainLanguageSummary(): string {
@@ -576,6 +615,7 @@ async function confirmSaveJudgment() {
         key_levels: props.data.structure_snapshot.key_levels,
         candidates,
         selected_candidate_description: selectedCandidateDescription,
+        stock_name: props.stockName,
         snapshot_time: new Date().toISOString()
       },
       validation_period_days: selectedPeriod.value
@@ -902,6 +942,66 @@ function handleBindSuccess(data: any) {
 
 .save-judgment-button {
   margin-top: 16px;
+  min-height: 48px;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.brief-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(91, 103, 241, 0.16);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.brief-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.brief-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.brief-value {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1f2937;
+}
+
+.report-toggle {
+  width: 100%;
+  min-height: 44px;
+  margin: 4px 0 14px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(91, 103, 241, 0.22);
+  background: #fff;
+  box-shadow: none;
+  color: #3730a3;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.report-toggle:hover,
+.report-toggle:active {
+  transform: none;
+  box-shadow: none;
+  background: rgba(91, 103, 241, 0.06);
+}
+
+.report-toggle:focus-visible {
+  outline: 2px solid #5b67f1;
+  outline-offset: 2px;
 }
 
 .judgment-funnel-banner {

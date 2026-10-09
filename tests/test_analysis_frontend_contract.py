@@ -8,6 +8,8 @@ def test_analysis_v1_display_surfaces_plain_language_summary_without_advice_word
     component_text = (REPO_ROOT / "frontend/src/components/AnalysisV1Display.vue").read_text(encoding="utf-8")
 
     assert "一句话结论" in component_text
+    assert "先看这项" in component_text
+    assert "展开完整报告" in component_text
     assert "plainLanguageSummary" in component_text
     assert "buildPlainLanguageSummary" in component_text
     assert "为什么这么判" in component_text

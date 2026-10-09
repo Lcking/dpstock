@@ -209,24 +209,7 @@
       <!-- 等待分析状态：显示骨架屏和进度提示 -->
       <template v-if="stock.analysisStatus === 'waiting'">
         <div class="analysis-waiting">
-          <div class="waiting-progress">
-            <div class="progress-step active">
-              <span class="step-icon">✓</span>
-              <span class="step-text">股票代码已确认</span>
-            </div>
-            <div class="progress-step pending">
-              <n-spin size="small" />
-              <span class="step-text">正在获取行情数据...</span>
-            </div>
-            <div class="progress-step pending">
-              <span class="step-icon">○</span>
-              <span class="step-text">计算技术指标</span>
-            </div>
-            <div class="progress-step pending">
-              <span class="step-icon">○</span>
-              <span class="step-text">AI深度分析</span>
-            </div>
-          </div>
+          <p class="waiting-status">正在准备行情和技术指标</p>
           <div class="skeleton-content">
             <div class="skeleton-line long"></div>
             <div class="skeleton-line medium"></div>
@@ -1287,8 +1270,22 @@ function smoothScrollToBottom(element: HTMLElement) {
 
 .analysis-thinking {
   margin: 0;
-  color: #64748b;
-  font-size: 0.9rem;
+  color: #475569;
+  font-size: 0.95rem;
+  font-weight: 600;
+  animation: thinking-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.waiting-status {
+  margin: 0 0 12px;
+  color: #334155;
+  font-size: 0.92rem;
+  font-weight: 700;
 }
 
 .analysis-streaming::after {

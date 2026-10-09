@@ -19,6 +19,31 @@ logger = get_logger()
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 
+
+def _due_preview_item(record: dict) -> dict:
+    snapshot = record.get("snapshot") if isinstance(record.get("snapshot"), dict) else {}
+    constraints = record.get("constraints") if isinstance(record.get("constraints"), dict) else {}
+    summary = snapshot.get("watchlist_summary") if isinstance(snapshot.get("watchlist_summary"), dict) else {}
+    stock_name = None
+    for source in (summary.get("name"), snapshot.get("stock_name"), constraints.get("stock_name")):
+        if isinstance(source, str) and source.strip():
+            stock_name = source.strip()
+            break
+    premise = constraints.get("selected_candidate_description")
+    premise_text = None
+    if isinstance(premise, str):
+        compact = " ".join(premise.split())
+        if compact:
+            premise_text = compact if len(compact) <= 48 else compact[:48] + "…"
+    return {
+        "id": record.get("id"),
+        "ts_code": record.get("ts_code"),
+        "stock_name": stock_name,
+        "candidate": record.get("candidate"),
+        "premise": premise_text,
+        "validation_date": record.get("validation_date"),
+    }
+
 notify_pref_service = NotifyPrefService()
 watchlist_risk_alert_service = WatchlistRiskAlertService()
 watchlist_signal_service = WatchlistSignalService()
@@ -31,12 +56,7 @@ async def get_notification_inbox(user: UserContext = Depends(get_current_user)):
     due_preview = []
     if due_count > 0:
         due_preview = [
-            {
-                "id": record.get("id"),
-                "ts_code": record.get("ts_code"),
-                "candidate": record.get("candidate"),
-                "validation_date": record.get("validation_date"),
-            }
+            _due_preview_item(record)
             for record in journal_service.get_records(
                 user_id,
                 status="due",

@@ -47,6 +47,32 @@
           <a href="/stocks" class="stock-index-entry-link">查看个股列表</a>
         </section>
 
+        <section v-if="notificationStore.pendingReviewCount > 0" class="due-strip" aria-label="待复盘">
+          <div class="due-strip-head">
+            <h2>待复盘</h2>
+            <span>{{ notificationStore.pendingReviewCount }} 条到期</span>
+          </div>
+          <div
+            v-for="item in visibleDueItems"
+            :key="item.id"
+            class="due-row"
+          >
+            <button type="button" class="due-row-main" @click="focusDueStock(item)">
+              <span class="due-name">{{ item.stock_name || item.ts_code }}</span>
+              <span class="due-meta">{{ duePremiseLabel(item) }} · {{ dueWhenLabel(item.validation_date) }}</span>
+            </button>
+            <button type="button" class="due-review" @click="openDueReview(item)">去复盘</button>
+          </div>
+          <button
+            v-if="notificationStore.pendingReviewCount > visibleDueItems.length"
+            type="button"
+            class="due-more"
+            @click="router.push('/journal?status=due')"
+          >
+            查看全部待复盘
+          </button>
+        </section>
+
         <!-- 主要内容 -->
         <n-card class="analysis-container mobile-card mobile-card-spacing mobile-shadow">
           
@@ -210,7 +236,7 @@
 import HtmlRenderer from './HtmlRenderer';
 import { h } from 'vue';
 import { ref, onMounted, nextTick, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { 
   NLayout, 
   NLayoutContent, 
@@ -247,12 +273,15 @@ import AnchorBindDialog from './AnchorBindDialog.vue';
 
 import { apiService } from '@/services/api';
 import { applyPageSeo } from '@/utils/seo';
+import { useNotificationStore, type DuePreviewItem } from '@/stores/notification';
 import { buildTrustSummary } from '@/utils/trustStats';
 import type { StockInfo, StreamInitMessage, StreamAnalysisUpdate } from '@/types';
 import { validateMultipleStockCodes, MarketType } from '@/utils/stockValidator';
 
 // 使用Naive UI的组件API
 const route = useRoute();
+const router = useRouter();
+const notificationStore = useNotificationStore();
 const message = useMessage();
 const { copy } = useClipboard();
 
@@ -276,6 +305,44 @@ const isSearching = ref(false);
 const isAnalyzing = ref(false);
 const analyzedStocks = ref<StockInfo[]>([]);
 const accuracySummary = ref('');
+
+const visibleDueItems = computed(() => notificationStore.duePreview.slice(0, 3));
+
+function duePremiseLabel(item: DuePreviewItem) {
+  const premise = (item.premise || '').trim();
+  if (premise) return premise;
+  return `前提 ${item.candidate || '—'}`;
+}
+
+function dueWhenLabel(validationDate?: string | null) {
+  if (!validationDate) return '已到验证期';
+  const day = validationDate.slice(0, 10);
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return day === today ? '今天到期' : '已到验证期';
+}
+
+async function focusDueStock(item: DuePreviewItem) {
+  const code = item.ts_code;
+  const label = item.stock_name ? `${item.stock_name} (${code})` : code;
+  marketType.value = 'A';
+  searchOptions.value = [{ label, value: code }];
+  selectedStockValues.value = [code];
+  await nextTick();
+  searchConfigRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function openDueReview(item: DuePreviewItem) {
+  router.push({
+    path: '/journal',
+    query: {
+      ts_code: item.ts_code,
+      status: 'due',
+      record: item.id,
+      action: 'review',
+    },
+  });
+}
 
 const latestProvenanceLabel = computed(() => {
   const completed = analyzedStocks.value.filter(
@@ -1134,18 +1201,20 @@ onMounted(async () => {
     });
 
     await handleInviteAcceptance();
-    
-    // 从 API 获取公告信息
-    const config = await apiService.getConfig();
-    
-    if (config.announcement) {
-      announcement.value = config.announcement;
-      // 使用通知显示公告
-      showAnnouncement(config.announcement);
+
+    const [configResult, statsResult] = await Promise.allSettled([
+      apiService.getConfig(),
+      apiService.getJudgmentAccuracyStats(90),
+    ]);
+
+    if (configResult.status === 'fulfilled' && configResult.value.announcement) {
+      announcement.value = configResult.value.announcement;
+      showAnnouncement(configResult.value.announcement);
     }
 
-    const stats = await apiService.getJudgmentAccuracyStats(90);
-    accuracySummary.value = buildTrustSummary(stats);
+    if (statsResult.status === 'fulfilled') {
+      accuracySummary.value = buildTrustSummary(statsResult.value);
+    }
   } catch (error) {
     console.error('获取配置时出错:', error);
   }
@@ -1349,12 +1418,134 @@ function handleOpenBindFromQuota() {
 
 .action-buttons {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   margin-top: 1.25rem;
 }
 
-.action-buttons .n-button {
+.action-buttons :deep(.n-button) {
+  min-height: 44px;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.action-buttons :deep(.n-button--primary-type) {
+  flex: 1.4;
+}
+
+.action-buttons :deep(.n-button:not(.n-button--primary-type)) {
+  flex: 0.8;
+}
+
+.due-strip {
+  margin: 0 0 1rem;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(91, 103, 241, 0.16);
+}
+
+.due-strip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.due-strip-head h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #1f2540;
+}
+
+.due-strip-head span {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.due-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.due-row-main {
   flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.due-row-main:hover,
+.due-row-main:active,
+.due-review:hover,
+.due-review:active,
+.due-more:hover,
+.due-more:active {
+  transform: none;
+  box-shadow: none;
+}
+
+.due-row-main:hover {
+  background: rgba(91, 103, 241, 0.06);
+}
+
+.due-name {
+  display: block;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.due-meta {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.due-review,
+.due-more {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(91, 103, 241, 0.28);
+  background: #fff;
+  box-shadow: none;
+  color: #3730a3;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.due-review:hover,
+.due-more:hover,
+.due-row-main:hover .due-name {
+  color: #312e81;
+}
+
+.due-review:focus-visible,
+.due-more:focus-visible,
+.due-row-main:focus-visible {
+  outline: 2px solid #5b67f1;
+  outline-offset: 2px;
+}
+
+.due-more {
+  margin-top: 8px;
 }
 
 /* Results Section */

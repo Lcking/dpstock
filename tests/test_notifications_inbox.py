@@ -92,4 +92,7 @@ def test_notification_inbox_returns_due_and_risk_preview(notification_client):
     assert body["due_count"] == 1
     assert body["risk_alert_count"] == 1
     assert body["due_preview"][0]["ts_code"] == "600519"
+    assert body["due_preview"][0]["candidate"] == "A"
+    assert body["due_preview"][0]["stock_name"] is None
+    assert body["due_preview"][0]["premise"] is None
     assert body["risk_preview"][0]["stock_code"] == "600519" or body["risk_preview"][0].get("ts_code") == "600519"
