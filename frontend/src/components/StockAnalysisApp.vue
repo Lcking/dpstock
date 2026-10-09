@@ -367,6 +367,7 @@ const stockTableColumns = ref<DataTableColumns<StockInfo>>([
     key: 'analysisStatus',
     width: 100,
     render(row: StockInfo) {
+      if (row.analysisStatus === 'analyzing' && !row.analysis) return '模型思考中';
       const statusMap = {
         'waiting': '等待分析',
         'analyzing': '分析中',
@@ -570,6 +571,17 @@ function processStreamData(text: string) {
 
     // 心跳包：仅用于保持连接活跃，前端无需 UI 变更
     if (data && data.event === 'heartbeat') {
+      return;
+    }
+
+    // 模型还在推理，没有正文。保持「思考中」，不要当成失败。
+    if (data && data.event === 'reasoning') {
+      analyzedStocks.value = analyzedStocks.value.map(stock => {
+        if (stock.code === data.stock_code && stock.analysisStatus === 'waiting') {
+          return { ...stock, analysisStatus: 'analyzing' as const };
+        }
+        return stock;
+      });
       return;
     }
 

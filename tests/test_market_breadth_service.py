@@ -1,3 +1,5 @@
+import time
+
 import pandas as pd
 
 from services.market_breadth_service import MarketBreadthService, format_market_breadth_note
@@ -142,9 +144,9 @@ def test_overview_attaches_breadth_and_auction_brief(monkeypatch):
     monkeypatch.setattr(
         service, "_fetch_index", lambda spec: next(i for i in fake_items if i["key"] == spec.key)
     )
-    monkeypatch.setattr(service, "_safe_breadth", lambda: fake_breadth)
-    service._cache = None
-    service._cache_at = 0.0
+    monkeypatch.setattr(service, "_breadth_for_overview", lambda: fake_breadth)
+    service._items_cache = None
+    service._items_cache_at = 0.0
 
     payload = service.get_overview()
     assert payload["breadth"]["status"] == "ok"
@@ -155,3 +157,80 @@ def test_overview_attaches_breadth_and_auction_brief(monkeypatch):
     assert "上证高开" in brief["summary"]
     assert "沪深300低开" in brief["summary"]
     assert "涨停 45" in brief["summary"]
+
+
+def test_prompt_breadth_skips_spot_and_does_not_cache_failure(monkeypatch):
+    service = MarketBreadthService()
+    service._cache = None
+    seen = {}
+
+    def fast(**kwargs):
+        seen.update(kwargs)
+        return None
+
+    def spot():
+        raise AssertionError("诊股不能走全市场回退")
+
+    monkeypatch.setattr(service, "_fetch_breadth_fast", fast)
+    monkeypatch.setattr(service, "_fetch_breadth_from_spot", spot)
+
+    payload = service.get_breadth_for_prompt()
+    assert payload["status"] == "unavailable"
+    assert seen.get("request_timeout") == service.PROMPT_FAST_TIMEOUT_SECONDS
+    assert service._cache is None
+
+
+def test_prompt_reuses_recent_success_without_fetch(monkeypatch):
+    service = MarketBreadthService()
+    service._cache = {
+        "status": "ok",
+        "temperature": 61.2,
+        "temperature_label": "偏强",
+        "up": 3000,
+        "down": 1500,
+        "flat": 100,
+        "limit_up": 10,
+        "limit_down": 1,
+    }
+    service._cache_at = time.time() - (service.INTRADAY_CACHE_TTL_SECONDS + 30)
+
+    def boom(*args, **kwargs):
+        raise AssertionError("近期成功的温度应直接复用")
+
+    monkeypatch.setattr(service, "_fetch_breadth_fast", boom)
+    monkeypatch.setattr(service, "_fetch_breadth_from_spot", boom)
+
+    payload = service.get_breadth_for_prompt()
+    assert payload["temperature"] == 61.2
+
+
+def test_overview_does_not_wait_on_breadth_fetch(monkeypatch):
+    service = MarketOverviewService()
+
+    def boom():
+        raise AssertionError("首页指数接口不能去拉温度")
+
+    monkeypatch.setattr(
+        "services.market_breadth_service.market_breadth_service.get_breadth",
+        boom,
+    )
+    monkeypatch.setattr(
+        "services.market_breadth_service.market_breadth_service.peek_fresh",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        service,
+        "_fetch_index",
+        lambda spec: {
+            "key": spec.key,
+            "name": spec.name,
+            "status": "ok",
+            "change_percent": 0.42 if spec.key == "shanghai" else -0.2,
+        },
+    )
+
+    payload = service.get_overview()
+    assert len(payload["items"]) == 4
+    assert payload["breadth"] is None
+    assert "上证高开" in payload["auction_brief"]["summary"]
+    assert "涨停" not in payload["auction_brief"]["summary"]

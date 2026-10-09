@@ -106,6 +106,12 @@ export interface MarketBreadth {
   temperature?: number | null;
   temperature_label?: string;
   updated_at?: number;
+  auction?: {
+    phase?: string;
+    active?: boolean;
+    hint?: string;
+    window?: string;
+  };
 }
 
 export interface AuctionBrief {

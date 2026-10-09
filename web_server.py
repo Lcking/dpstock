@@ -13,6 +13,7 @@ from services.stock_analyzer_service import StockAnalyzerService
 from services.us_stock_service_async import USStockServiceAsync
 from services.fund_service_async import FundServiceAsync
 from services.search_snapshot_service import SearchSnapshotService
+from services.market_breadth_service import market_breadth_service
 from services.market_overview_service import MarketOverviewService
 import asyncio
 import httpx
@@ -826,6 +827,18 @@ async def get_market_overview(response: Response, user: UserContext = Depends(re
     except Exception as e:
         logger.error(f"获取首页指数概览失败: {str(e)}")
         return {"items": [], "updated_at": None}
+
+
+@app.get("/api/market-breadth")
+async def get_market_breadth(response: Response, user: UserContext = Depends(require_login)):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    try:
+        return await asyncio.to_thread(market_breadth_service.get_breadth)
+    except Exception as e:
+        logger.error(f"获取市场温度失败: {str(e)}")
+        return {"status": "unavailable"}
 
 # 获取文章列表 (分析专栏)
 @app.get("/api/articles")

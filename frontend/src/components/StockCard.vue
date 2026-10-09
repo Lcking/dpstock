@@ -245,9 +245,9 @@
       </template>
       
       <template v-else-if="stock.analysisStatus === 'analyzing'">
-        <div class="analysis-result analysis-streaming" 
-             ref="analysisResultRef"
-             v-html="parsedAnalysis">
+        <div class="analysis-result analysis-streaming" ref="analysisResultRef">
+          <p v-if="!stock.analysis" class="analysis-thinking">模型思考中，完成后开始输出</p>
+          <div v-else v-html="parsedAnalysis"></div>
         </div>
       </template>
       
@@ -622,7 +622,7 @@ const getStatusText = computed(() => {
     case 'waiting':
       return '等待分析';
     case 'analyzing':
-      return '正在分析';
+      return props.stock.analysis ? '正在分析' : '模型思考中';
     case 'error':
       return '分析出错';
     default:
@@ -1283,6 +1283,12 @@ function smoothScrollToBottom(element: HTMLElement) {
   position: relative;
   border-left: 3px solid #667eea;
   background: linear-gradient(to right, rgba(102, 126, 234, 0.05), transparent);
+}
+
+.analysis-thinking {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
 }
 
 .analysis-streaming::after {

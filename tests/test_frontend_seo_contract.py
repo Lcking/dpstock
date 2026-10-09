@@ -175,6 +175,16 @@ def test_frontend_has_market_overview_panel_and_api_method():
     panel_text = (repo_root / "frontend/src/components/MarketOverviewPanel.vue").read_text(encoding="utf-8")
 
     assert "getMarketOverview" in api_text
+    assert "getMarketBreadth" in api_text
+    card_text = (repo_root / "frontend/src/components/StockCard.vue").read_text(encoding="utf-8")
+    app_text = (repo_root / "frontend/src/components/StockAnalysisApp.vue").read_text(encoding="utf-8")
+    server_text = (repo_root / "web_server.py").read_text(encoding="utf-8")
+    assert "模型思考中" in card_text
+    assert "event === 'reasoning'" in app_text
+    assert "const overviewTask = apiService.getMarketOverview()" in panel_text
+    assert "const breadthTask = apiService.getMarketBreadth()" in panel_text
+    assert panel_text.index("await overviewTask") < panel_text.index("await breadthTask")
+    assert '@app.get("/api/market-breadth")' in server_text
     assert "市场快照" in panel_text
     assert "快照更新" in panel_text
     assert "帮助快速了解主要指数日线变化" in panel_text

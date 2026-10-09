@@ -117,14 +117,43 @@ const auctionPhaseLabel = computed(() => {
   return '竞价简报'
 })
 
+let overviewRequestId = 0
+
+const applyBreadth = (fresh: MarketBreadth | null) => {
+  if (!fresh) return
+  if (fresh.status === 'ok') {
+    breadth.value = fresh
+  }
+  if (!auctionBrief.value) return
+  const next = { ...auctionBrief.value }
+  if (fresh.auction?.phase) next.phase = fresh.auction.phase
+  if (typeof fresh.auction?.active === 'boolean') next.active = fresh.auction.active
+  if (fresh.auction?.hint) next.hint = fresh.auction.hint
+  if (fresh.status === 'ok') {
+    const limitLine = `涨停 ${fresh.limit_up ?? 0} / 跌停 ${fresh.limit_down ?? 0}`
+    const base = (next.summary || '').replace(/\s*·\s*涨停\s+\d+\s*\/\s*跌停\s+\d+/g, '')
+    next.summary = base ? `${base} · ${limitLine}` : limitLine
+  }
+  auctionBrief.value = next
+}
+
 const loadOverview = async () => {
-  const data = await apiService.getMarketOverview()
+  const requestId = ++overviewRequestId
+  const overviewTask = apiService.getMarketOverview()
+  const breadthTask = apiService.getMarketBreadth()
+  const data = await overviewTask
+  if (requestId !== overviewRequestId) return
   if (data.items?.length) {
     items.value = data.items
   }
-  breadth.value = data.breadth ?? null
+  if (data.breadth?.status === 'ok') {
+    breadth.value = data.breadth
+  }
   auctionBrief.value = data.auction_brief ?? null
   updatedAt.value = data.updated_at
+  const freshBreadth = await breadthTask
+  if (requestId !== overviewRequestId) return
+  applyBreadth(freshBreadth)
 }
 
 const marketLabel = (market: string) => {

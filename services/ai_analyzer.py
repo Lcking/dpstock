@@ -4,6 +4,7 @@ import os
 import json
 import httpx
 import re
+import time
 from typing import AsyncGenerator, Any, Optional
 from dotenv import load_dotenv
 from utils.logger import get_logger
@@ -14,6 +15,31 @@ from services.ai_score.calculator import AiScoreCalculator
 
 # 获取日志器
 logger = get_logger()
+
+# 推理阶段没有正文。每隔几秒推一次进度，外层空闲计时才不会把思考中的模型判成超时。
+REASONING_PROGRESS_INTERVAL_S = 2.0
+
+
+def _extract_stream_delta(chunk_data: Any) -> tuple[str, str]:
+    """把一条 SSE JSON 分成正文、推理进度或可忽略。推理文本不进入分析结果。"""
+    if not isinstance(chunk_data, dict):
+        return "ignore", ""
+    choices = chunk_data.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return "ignore", ""
+    choice = choices[0]
+    if choice.get("finish_reason") == "stop":
+        return "stop", ""
+    delta = choice.get("delta") or {}
+    if not isinstance(delta, dict):
+        return "ignore", ""
+    content = delta.get("content")
+    if isinstance(content, str) and content != "":
+        return "content", content
+    reasoning = delta.get("reasoning_content")
+    if isinstance(reasoning, str) and reasoning != "":
+        return "reasoning", reasoning
+    return "ignore", ""
 
 
 def _repair_json(text: str) -> Optional[dict]:
@@ -304,7 +330,21 @@ class AIAnalyzer:
                 best_pattern_comp = 0
                 crossover_text = ""
             # -----------------------------------
-            
+
+            # 技术面先推给页面。市场温度只读缓存或短超时快路径，失败也不翻全市场。
+            analysis_date = datetime.now().strftime("%Y-%m-%d")
+            yield json.dumps({
+                "stock_code": stock_code,
+                "status": "analyzing",
+                "rsi": rsi,
+                "price": price,
+                "price_change": price_change,
+                "ma_trend": ma_trend,
+                "macd_signal": macd_signal_type,
+                "volume_status": volume_status,
+                "analysis_date": analysis_date
+            })
+
             # 构建 Analysis V1 prompt（统一格式，适用所有市场）
             market_name_map = {'A': 'A股', 'HK': '港股', 'US': '美股', 'ETF': 'ETF', 'LOF': 'LOF'}
             market_display = market_name_map.get(market_type, market_type)
@@ -316,10 +356,17 @@ class AIAnalyzer:
                         market_breadth_service,
                     )
 
-                    breadth = await asyncio.to_thread(market_breadth_service.get_breadth)
+                    breadth = await asyncio.wait_for(
+                        asyncio.to_thread(market_breadth_service.get_breadth_for_prompt),
+                        timeout=4.0,
+                    )
                     note = format_market_breadth_note(breadth)
                     if note:
                         market_breadth_block = f"\n**市场广度（环境参考）：**\n- {note}\n"
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        f"[AIAnalyzer] market breadth skipped for {stock_code}: timed out"
+                    )
                 except Exception as breadth_exc:
                     logger.warning(f"[AIAnalyzer] attach market breadth failed: {breadth_exc}")
             
@@ -504,26 +551,10 @@ class AIAnalyzer:
                 "Authorization": f"Bearer {self.API_KEY}"
             }
             
-            # 获取当前日期作为分析日期
-            analysis_date = datetime.now().strftime("%Y-%m-%d")
-            
             # 异步请求API
             async with httpx.AsyncClient(timeout=self.API_TIMEOUT) as client:
                 # 记录请求
                 logger.debug(f"发送AI请求: URL={api_url}, MODEL={self.API_MODEL}, STREAM={stream}")
-                
-                # 先发送技术指标数据
-                yield json.dumps({
-                    "stock_code": stock_code,
-                    "status": "analyzing",
-                    "rsi": rsi,
-                    "price": price,
-                    "price_change": price_change,
-                    "ma_trend": ma_trend,
-                    "macd_signal": macd_signal_type,
-                    "volume_status": volume_status,
-                    "analysis_date": analysis_date
-                })
                 
                 if stream:
                     # 流式响应处理
@@ -545,6 +576,7 @@ class AIAnalyzer:
                         collected_messages = []
                         chunk_count = 0
                         sse_line_buf = ""
+                        last_reasoning_yield_at = 0.0
 
                         async for chunk in response.aiter_text():
                             if not chunk:
@@ -566,21 +598,24 @@ class AIAnalyzer:
 
                                 try:
                                     chunk_data = json.loads(line)
-
-                                    # 检查是否有 finish_reason（一般是最后一次标记）
-                                    finish_reason = chunk_data.get("choices", [{}])[0].get("finish_reason")
-                                    if finish_reason == "stop":
+                                    kind, text = _extract_stream_delta(chunk_data)
+                                    if kind == "stop":
                                         logger.debug("收到 finish_reason=stop，流结束")
                                         continue
-
-                                    # 解析 delta
-                                    delta = chunk_data.get("choices", [{}])[0].get("delta", {})
-                                    content = delta.get("content")
-
-                                    # 过滤 None 和空字符串
-                                    if content is None or content == "":
+                                    if kind == "reasoning":
+                                        now_mono = time.monotonic()
+                                        if now_mono - last_reasoning_yield_at >= REASONING_PROGRESS_INTERVAL_S:
+                                            last_reasoning_yield_at = now_mono
+                                            yield json.dumps({
+                                                "stock_code": stock_code,
+                                                "status": "analyzing",
+                                                "event": "reasoning",
+                                            })
+                                        continue
+                                    if kind != "content":
                                         continue
 
+                                    content = text
                                     # 避免逐 token INFO 日志淹没磁盘与拖慢流式吞吐
                                     logger.debug(f"AI返回delta内容: {content[:120]}")
 
@@ -611,15 +646,23 @@ class AIAnalyzer:
                                 tail = tail[len("data: "):]
                             try:
                                 chunk_data = json.loads(tail)
-                                delta = chunk_data.get("choices", [{}])[0].get("delta", {})
-                                content = delta.get("content")
-                                if content:
+                                kind, text = _extract_stream_delta(chunk_data)
+                                if kind == "reasoning":
+                                    now_mono = time.monotonic()
+                                    if now_mono - last_reasoning_yield_at >= REASONING_PROGRESS_INTERVAL_S:
+                                        last_reasoning_yield_at = now_mono
+                                        yield json.dumps({
+                                            "stock_code": stock_code,
+                                            "status": "analyzing",
+                                            "event": "reasoning",
+                                        })
+                                elif kind == "content":
                                     chunk_count += 1
-                                    buffer += content
-                                    collected_messages.append(content)
+                                    buffer += text
+                                    collected_messages.append(text)
                                     yield json.dumps({
                                         "stock_code": stock_code,
-                                        "ai_analysis_chunk": content,
+                                        "ai_analysis_chunk": text,
                                         "status": "analyzing"
                                     })
                             except json.JSONDecodeError:

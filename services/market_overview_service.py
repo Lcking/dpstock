@@ -52,40 +52,41 @@ class MarketOverviewService:
     ]
 
     def __init__(self) -> None:
-        self._cache: Dict[str, Any] | None = None
-        self._cache_at = 0.0
+        self._items_cache: List[Dict[str, Any]] | None = None
+        self._items_cache_at = 0.0
 
     def get_overview(self) -> Dict[str, Any]:
-        now = time.time()
-        if self._cache and now - self._cache_at < self._cache_ttl_seconds():
-            return self._cache
-
-        # 指数与温度条并行，避免串行叠加延迟
-        from concurrent.futures import ThreadPoolExecutor
-
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            items_future = pool.submit(
-                lambda: [self._fetch_index(spec) for spec in self.INDEX_SPECS]
-            )
-            breadth_future = pool.submit(self._safe_breadth)
-            items = items_future.result()
-            breadth = breadth_future.result()
-        auction_brief = self._build_auction_brief(items, breadth)
-        payload = {
+        """指数先返回。温度只附带已经缓存的结果，慢路径交给单独接口。"""
+        items, fetched_at = self._load_items()
+        breadth = self._breadth_for_overview()
+        return {
             "items": items,
-            "breadth": breadth,
-            "auction_brief": auction_brief,
-            "updated_at": int(now),
+            "breadth": breadth if breadth.get("status") == "ok" else None,
+            "auction_brief": self._build_auction_brief(items, breadth),
+            "updated_at": int(fetched_at),
         }
-        self._cache = payload
-        self._cache_at = now
-        return payload
 
-    def _safe_breadth(self) -> Dict[str, Any]:
+    def _load_items(self) -> tuple[List[Dict[str, Any]], float]:
+        now = time.time()
+        if self._items_cache is not None and now - self._items_cache_at < self._cache_ttl_seconds():
+            return self._items_cache, self._items_cache_at
+
+        items = [self._fetch_index(spec) for spec in self.INDEX_SPECS]
+        self._items_cache = items
+        self._items_cache_at = now
+        return items, now
+
+    def _breadth_for_overview(self) -> Dict[str, Any]:
         try:
             from services.market_breadth_service import market_breadth_service
 
-            return market_breadth_service.get_breadth()
+            cached = market_breadth_service.peek_fresh()
+            if cached is not None:
+                return cached
+            return {
+                "status": "unavailable",
+                "auction": market_breadth_service._auction_window(),
+            }
         except Exception as exc:
             logger.warning(f"[MarketOverview] breadth attach failed: {exc}")
             return {"status": "unavailable"}

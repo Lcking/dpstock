@@ -8,6 +8,7 @@ A-share market breadth / temperature for homepage.
 from __future__ import annotations
 
 import math
+import threading
 import time
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
@@ -23,6 +24,9 @@ logger = get_logger()
 class MarketBreadthService:
     CACHE_TTL_SECONDS = 300
     INTRADAY_CACHE_TTL_SECONDS = 45
+    # 诊股只复用近期成功结果；没有缓存时快路径最多等这么久，失败就跳过。
+    PROMPT_CACHE_MAX_AGE_SECONDS = 15 * 60
+    PROMPT_FAST_TIMEOUT_SECONDS = 2.5
 
     # 主板涨跌停近似阈值；创业板/科创板用 19.5（仅全市场回退路径使用）
     LIMIT_MAIN = 9.5
@@ -41,23 +45,65 @@ class MarketBreadthService:
     def __init__(self) -> None:
         self._cache: Optional[Dict[str, Any]] = None
         self._cache_at = 0.0
+        self._lock = threading.Lock()
 
-    def get_breadth(self) -> Dict[str, Any]:
-        now = time.time()
+    def peek_fresh(self) -> Optional[Dict[str, Any]]:
+        return self._fresh_cache(time.time())
+
+    def _fresh_cache(self, now: float) -> Optional[Dict[str, Any]]:
+        if not self._cache:
+            return None
         ttl = (
             self.INTRADAY_CACHE_TTL_SECONDS
             if self._is_a_share_session()
             else self.CACHE_TTL_SECONDS
         )
-        if self._cache and now - self._cache_at < ttl:
+        if now - self._cache_at < ttl:
+            return self._cache
+        return None
+
+    def get_breadth(self) -> Dict[str, Any]:
+        fresh = self._fresh_cache(time.time())
+        if fresh is not None:
+            return fresh
+
+        with self._lock:
+            fresh = self._fresh_cache(time.time())
+            if fresh is not None:
+                return fresh
+            payload = self._build_breadth()
+            self._cache = payload
+            self._cache_at = time.time()
+            return payload
+
+    def get_breadth_for_prompt(self) -> Dict[str, Any]:
+        """诊股用：新鲜缓存、近期成功缓存，或短超时快路径。不翻全市场。"""
+        fresh = self.peek_fresh()
+        if fresh is not None:
+            return fresh
+        if (
+            self._cache
+            and self._cache.get("status") == "ok"
+            and time.time() - self._cache_at < self.PROMPT_CACHE_MAX_AGE_SECONDS
+        ):
             return self._cache
 
-        payload = self._build_breadth()
-        self._cache = payload
-        self._cache_at = now
+        payload = self._build_breadth(
+            allow_spot_fallback=False,
+            request_timeout=self.PROMPT_FAST_TIMEOUT_SECONDS,
+        )
+        if payload.get("status") == "ok":
+            with self._lock:
+                self._cache = payload
+                self._cache_at = time.time()
         return payload
 
-    def _build_breadth(self) -> Dict[str, Any]:
+    def _build_breadth(
+        self,
+        *,
+        allow_spot_fallback: bool = True,
+        request_timeout: float | None = None,
+    ) -> Dict[str, Any]:
         auction = self._auction_window()
         empty = {
             "status": "unavailable",
@@ -76,11 +122,17 @@ class MarketBreadthService:
         }
 
         try:
-            fast = self._fetch_breadth_fast()
+            if request_timeout is None:
+                fast = self._fetch_breadth_fast()
+            else:
+                fast = self._fetch_breadth_fast(request_timeout=request_timeout)
             if fast is not None:
                 return self._finalize_payload(fast, auction, source="eastmoney_ulist")
         except Exception as exc:
             logger.warning(f"[MarketBreadth] fast path failed: {exc}")
+
+        if not allow_spot_fallback:
+            return empty
 
         try:
             spot = self._fetch_breadth_from_spot()
@@ -135,13 +187,16 @@ class MarketBreadthService:
             "updated_at": int(time.time()),
         }
 
-    def _fetch_breadth_fast(self) -> Optional[Dict[str, int]]:
+    def _fetch_breadth_fast(self, request_timeout: float | None = None) -> Optional[Dict[str, int]]:
         """东财指数成分涨跌家数 + 涨停/跌停池总数，通常 <1s。"""
-        up_down = self._fetch_index_up_down_flat()
+        deadline = None
+        if request_timeout is not None:
+            deadline = time.monotonic() + max(request_timeout, 0.2)
+        up_down = self._fetch_index_up_down_flat(deadline=deadline)
         if up_down is None:
             return None
         up, down, flat = up_down
-        limit_up, limit_down = self._fetch_limit_pool_counts()
+        limit_up, limit_down = self._fetch_limit_pool_counts(deadline=deadline)
         return {
             "up": up,
             "down": down,
@@ -150,7 +205,7 @@ class MarketBreadthService:
             "limit_down": limit_down,
         }
 
-    def _fetch_index_up_down_flat(self) -> Optional[Tuple[int, int, int]]:
+    def _fetch_index_up_down_flat(self, deadline: float | None = None) -> Optional[Tuple[int, int, int]]:
         """上证 + 深证成指的 f104/f105/f106 之和 ≈ 沪深 A 股涨跌家数。"""
         session = requests.Session()
         session.trust_env = False
@@ -169,12 +224,18 @@ class MarketBreadthService:
         }
         last_error: Optional[Exception] = None
         for host in self.EM_HOSTS:
+            timeout = 8.0
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.2:
+                    break
+                timeout = min(8.0, remaining)
             try:
                 resp = session.get(
                     f"https://{host}/api/qt/ulist.np/get",
                     params=params,
                     headers=headers,
-                    timeout=8,
+                    timeout=timeout,
                     verify=False,
                 )
                 resp.raise_for_status()
@@ -196,7 +257,7 @@ class MarketBreadthService:
             logger.warning(f"[MarketBreadth] ulist failed: {last_error}")
         return None
 
-    def _fetch_limit_pool_counts(self) -> Tuple[int, int]:
+    def _fetch_limit_pool_counts(self, deadline: float | None = None) -> Tuple[int, int]:
         """涨停池 / 跌停池总数（tc）。失败时返回 0,0，不拖垮温度条。"""
         trade_date = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d")
         session = requests.Session()
@@ -206,10 +267,10 @@ class MarketBreadthService:
             "Referer": "https://quote.eastmoney.com/ztzq/",
         }
         limit_up = self._fetch_topic_pool_total(
-            session, headers, "getTopicZTPool", trade_date, sort="fbt:asc"
+            session, headers, "getTopicZTPool", trade_date, sort="fbt:asc", deadline=deadline
         )
         limit_down = self._fetch_topic_pool_total(
-            session, headers, "getTopicDTPool", trade_date, sort="fund:asc"
+            session, headers, "getTopicDTPool", trade_date, sort="fund:asc", deadline=deadline
         )
         return limit_up, limit_down
 
@@ -220,6 +281,7 @@ class MarketBreadthService:
         path: str,
         trade_date: str,
         sort: str,
+        deadline: float | None = None,
     ) -> int:
         params = {
             "ut": "7eea3edcaed734bea9cbfc24409ed989",
@@ -230,12 +292,18 @@ class MarketBreadthService:
             "date": trade_date,
         }
         for host in self.EM_EX_HOSTS:
+            timeout = 6.0
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.2:
+                    return 0
+                timeout = min(6.0, remaining)
             try:
                 resp = session.get(
                     f"https://{host}/{path}",
                     params=params,
                     headers=headers,
-                    timeout=6,
+                    timeout=timeout,
                     verify=False,
                 )
                 resp.raise_for_status()

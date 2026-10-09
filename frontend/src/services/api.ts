@@ -5,6 +5,7 @@ import type {
   LoginRequest,
   LoginResponse,
   MarketOverviewResponse,
+  MarketBreadth,
 } from '@/types';
 import type {
   JournalListResponse,
@@ -205,6 +206,16 @@ export const apiService = {
         auction_brief: null,
         updated_at: null,
       };
+    }
+  },
+
+  getMarketBreadth: async (): Promise<MarketBreadth> => {
+    try {
+      const response = await axiosInstance.get('/market-breadth');
+      return response.data;
+    } catch (error) {
+      console.error('获取市场温度时出错:', error);
+      return { status: 'unavailable' };
     }
   },
 
